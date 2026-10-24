@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
+/* Neutral shell for the working app. Sprint 2 replaces these tokens with the
+   chosen design direction; the prototypes under /directions carry their own. */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f7f7f5;
+  --surface: #ffffff;
+  --ink: #1d1f24;
+  --ink-2: #5a5f6b;
+  --line: #e1e2e6;
+  --accent: #2f5bd3;
+  --good: #1f7a55;
+  --warn: #9a6400;
+  --bad: #b3261e;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+    --bg: #17181b;
+    --surface: #1f2024;
+    --ink: #ececee;
+    --ink-2: #a3a7b1;
+    --line: #34363c;
+    --accent: #8aa8ff;
+    --good: #6fd3a5;
+    --warn: #f0c060;
+    --bad: #ff8f86;
+    color-scheme: dark;
   }
 }
 
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-ink-2: var(--ink-2);
+  --color-line: var(--line);
+  --color-accent: var(--accent);
+  --color-good: var(--good);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }
