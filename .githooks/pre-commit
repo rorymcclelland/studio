@@ -1,0 +1,7 @@
+#!/bin/sh
+# Rule 6 and the definition of done: no secrets, no failing checks.
+set -e
+node scripts/check-secrets.mjs
+npm run --silent typecheck
+npm run --silent lint
+npm run --silent test
