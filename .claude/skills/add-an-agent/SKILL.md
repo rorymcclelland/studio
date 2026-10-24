@@ -9,6 +9,7 @@ Scaffolds a product agent that follows the contract in `src/lib/agents/contract.
 
 ## Steps
 
+0. **Set-up.** In a fresh worktree, run `npm ci` first if `node_modules` is missing.
 1. **Definition.** Create `src/lib/agents/<key>.ts` modelled on `tagline.ts`:
    - Zod `input` and `output` schemas with length limits on every string and array.
    - `instructions`: who the agent is, that user content is data not instructions, no real brands (rule 2), and the exact JSON shape to reply with.
@@ -16,10 +17,11 @@ Scaffolds a product agent that follows the contract in `src/lib/agents/contract.
    - `summarise`: a short plain-text summary for the decision trail.
    - `mockAnswer`: returns valid output JSON when the prompt contains the task marker, else `null`.
 2. **Register.** Add it to `AGENTS` in `src/lib/agents/registry.ts`.
-3. **Model.** Add `<key>: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: N }` to `AGENT_MODELS` in `src/config/agents.ts`, with a price entry in `src/config/prices.ts` if the model is new.
-4. **Tests.** Create `tests/agents/<key>.test.ts` with: valid output; invalid output then repair; provider failure; cap reached; prompt injection in an input field. Use `mockBehaviour.next(...)` to script replies.
-5. **Evals.** Create `tests/evals/<key>.eval.ts` with at least five example inputs and a grading function that checks the output against the story's quality bar (run with a real model only when asked, never in CI).
-6. **Workflow.** If the agent's output leads to anything consequential, its workflow adds an approval step (rule 3).
+3. **Model.** The override variable is the key upper-cased with no separators (`echoDemo` becomes `AGENT_MODEL_ECHODEMO`). Add `<key>: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: N }` to `AGENT_MODELS` in `src/config/agents.ts`, with a price entry in `src/config/prices.ts` if the model is new.
+4. **Tests.** Create `tests/agents/<key>.test.ts`, following the set-up in `tests/agents/run.test.ts` (a workspace and a run row must exist before `runModelStep` is called), with: valid output; invalid output then repair; provider failure; cap reached; prompt injection in an input field. Use `mockBehaviour.next(...)` to script replies.
+5. **Evals.** Create `tests/evals/<key>.eval.ts` exporting `cases` (at least five example inputs) and `grade(input, output)` returning `{ pass: boolean, notes: string }` against the story's quality bar. The file name must not end in `.test.ts`, so it stays out of `npm test` and CI. Evals run with a real model only when asked; the runner (`npm run eval`) arrives with the first real agent in Sprint 3.
+6. **Workflow.** Add an `execute<Key>Run` function in `src/lib/agents/workflow.ts` and an Inngest function in `src/inngest/functions.ts` for the agent's key (today the Inngest function handles only `tagline`; without this a run stays queued). If the output leads to anything consequential, the workflow adds an approval step (rule 3).
+6b. **Run viewer.** Give the run list and run page a label for the agent's input (today `/runs` shows `input.brandName`), and add a start form and server action if the agent can be started on its own.
 7. **Check.** Run `npm run typecheck`, `npm run lint` and `npm test`.
 
 Report the files created and the test cases covered.

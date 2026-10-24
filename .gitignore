@@ -45,3 +45,6 @@ next-env.d.ts
 /test-results
 /playwright-report
 *.tmp.mjs
+
+# Claude Code worktrees
+/.claude/worktrees/

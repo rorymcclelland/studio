@@ -218,3 +218,14 @@ No acceptance criteria changed. All six stories: **Ready, Sprint 1**.
 | S1-5 | Approval timeout set by `APPROVAL_TIMEOUT` (default 7 days) | Lets tests use a short timeout without code changes |
 | S1-2 | Checks run twice: a git pre-commit hook (secret scan, typecheck, lint, tests) and Claude Code hooks (typecheck and lint after edits; secret scan and tests before `git commit`) | The git hook protects any commit; the Claude Code hook explains the block to Claude |
 | S1-6 | Directions renamed A. Press check (was Studio ledger), B. Control desk (was Signal room), C. Soft machine; working title "Studio" | The names describe each direction better once built |
+| S1-2 | Test case 1 holds for the project's own subagents (each starts "Read CLAUDE.md first"); a generic isolated subagent did not receive CLAUDE.md at start-up | Agents for this repo should be the ones in `.claude/agents/`, or be told to read CLAUDE.md |
+| S1-2 | The `add-an-agent` dry run (test case 2) passed, but found gaps; the skill now covers set-up, the override variable's naming, the test template, the eval file's shape, the workflow and Inngest function, and the run-viewer label | Without the workflow step a new agent's runs stay queued |
+| S1-2 | Reviewer subagent reads the diff and story it is given, not only `git diff main...HEAD`; `.claude/worktrees` excluded from typecheck, lint and git | Found in the dry run |
+| S1-2 | `.mcp.json` adds the Playwright MCP server; the GitHub MCP server is added once the repo exists | No repo yet |
+
+## Sprint 1 test results (24 October 2026)
+
+- Unit, database and workflow tests: 29 passed. End-to-end: 19 passed (directions at 375 and 1440 px, AA contrast in both themes, every control works, run flow approve, reject, hostile input, cross-workspace).
+- S1-2: #1 pass (project subagents); #2 pass with the skill fixes above; #3 fake key blocked by both the Claude Code hook and the git hook; #4 failing test blocked by both; #5 the reviewer flagged both unmet criteria in a planted incomplete change.
+- Waiting for the hosted set-up: S1-1 #1, #2 and #6 (preview links, production deploy, keep-awake cron) and real-model calls for S1-4.
+- Reviewer side-findings logged for Sprint 2: the run list sums cost from `agent_steps` rather than `usage_ledger`; amounts under 1p show in pence (by design, worth confirming).
