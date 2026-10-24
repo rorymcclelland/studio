@@ -1,36 +1,44 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Studio (working title)
 
-## Getting Started
+A multi-agent campaign studio for marketing teams. Three squads of AI agents (Strategy, Creative and Performance) share one Business Context store and take a campaign from a one-line objective to on-brand creative that stays above its performance threshold. A person approves every consequential move.
 
-First, run the development server:
+**Status: Sprint 1 of 10.** What works today: magic-link sign-in to your own workspace; a hello-world tagline agent that proposes three taglines, waits for your approval and records a full decision trail; a daily spending cap on every model call; and three design-direction prototypes. The Strategy, Creative and Performance squads arrive in Sprints 3 to 9. All brands and figures in the app are fictional or simulated.
+
+## Stack
+
+Next.js 16 on Vercel, Postgres on Supabase (with row-level security per workspace), Inngest for durable agent workflows, the Vercel AI SDK with Claude and Gemini behind one provider layer. See `docs/decisions/` for why.
+
+## Run it locally
+
+Needs Node 22 and a local Postgres 16 on port 54329 (trust auth for `postgres`).
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm ci
+cp .env.example .env.local     # AUTH_MODE=dev and MODEL_PROVIDER_OVERRIDE=mock need no keys
+npm run db:reset               # shim, migrations and dev seed
+npm run dev                    # app on http://localhost:3000
+npm run inngest                # workflow dev server on http://localhost:8288 (separate terminal)
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+With `MODEL_PROVIDER_OVERRIDE=mock` nothing is spent. To use real models, set `ANTHROPIC_API_KEY` (and `GOOGLE_GENERATIVE_AI_API_KEY` for Gemini) and remove the override.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Checks
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+| Command | Does |
+| --- | --- |
+| `npm run typecheck` / `npm run lint` | Types and lint, zero warnings |
+| `npm test` | Unit, database (tenancy and RLS) and agent-workflow tests |
+| `npm run test:e2e` | Playwright against a running app and Inngest dev server |
+| `npm run check:secrets` | Blocks anything key-shaped from being committed |
 
-## Learn More
+CI runs all of these on every push. A git pre-commit hook and Claude Code hooks run the same checks locally.
 
-To learn more about Next.js, take a look at the following resources:
+## Project rules
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Honest by default; fictional brands only; people approve consequential actions; every agent run is traceable; spend is capped; secrets stay out of the repo; tenancy from day one; the image model never draws text. In full in `CLAUDE.md`.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Docs
 
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+- `docs/refinement/`: each sprint's stories, test cases and agreed answers
+- `docs/decisions/`: decision records
+- `docs/design/directions.md`: the three Sprint 1 design directions
