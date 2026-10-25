@@ -10,6 +10,7 @@ import { requireMember } from "@/lib/auth/session";
 
 const NAV = [
   { href: "/", label: "Home", match: "exact" as const },
+  { href: "/brands", label: "Brands" },
   { href: "/runs", label: "Agent runs" },
 ];
 

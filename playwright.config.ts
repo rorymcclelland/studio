@@ -10,5 +10,10 @@ export default defineConfig({
     baseURL: process.env.E2E_BASE_URL ?? "http://localhost:3000",
     trace: "retain-on-failure",
   },
-  projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
+  projects: [
+    // S2-4 #5 needs an empty workspace, so it runs once, before every spec
+    // that reads the demo brands, instead of emptying it under them.
+    { name: "demo-brands", testMatch: /demo-brands\.setup\.ts/, use: { ...devices["Desktop Chrome"] } },
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, dependencies: ["demo-brands"] },
+  ],
 });
