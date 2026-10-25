@@ -5,9 +5,12 @@ import { asUser } from "@/lib/db/scoped";
 import { DemoAlreadyLoadedError, loadDemoBrands } from "@/lib/demo/load";
 import { getBrand, listBrands, updateBrand } from "@/lib/brands/repo";
 import { searchContext } from "@/lib/context/store";
+import { getCustomerSummary } from "@/lib/brands/summary";
+import { getSql } from "@/lib/db/client";
 import { createMember, truncateAll } from "../helpers/db";
 
-const REF = new Date("2026-10-25T00:00:00Z");
+// Generate as of now, so the data lines up with the summary's "last 24 months".
+const REF = new Date();
 let a: { userId: string; workspaceId: string };
 let b: { userId: string; workspaceId: string };
 
@@ -70,6 +73,24 @@ describe("demo brands and the Business Context store", () => {
     const fernJackets = await searchContext(a.userId, { query: "jacket", brandId: fern.id });
     expect(fernJackets.every((h) => h.brandId === fern.id)).toBe(true);
     expect(any.length).toBeGreaterThanOrEqual(quillOnly.length);
+  });
+
+  it("S2-3 #4: the customer summary matches direct queries on the data", async () => {
+    const fern = (await listBrands(a.userId)).find((x) => x.slug === "fernhollow")!;
+    const s = (await getCustomerSummary(a.userId, fern.id))!;
+    const sql = getSql();
+    const [d] = await sql`select (select count(*)::int from public.customers where brand_id = ${fern.id}) as c,
+      (select count(*)::int from public.orders where brand_id = ${fern.id}) as o`;
+    expect(s.customers).toBe(d.c);
+    expect(s.orders).toBe(d.o);
+    expect(s.byRegion.reduce((t, r) => t + r.count, 0)).toBe(d.c);
+    expect(s.byAgeBand.reduce((t, r) => t + r.count, 0)).toBe(d.c);
+    expect(s.ordersByMonth).toHaveLength(24);
+    // Orders within the 24 visible months: every order, since the data covers exactly that window.
+    expect(s.ordersByMonth.reduce((t, r) => t + r.count, 0)).toBe(d.o);
+    expect(s.repeatRate).toBeGreaterThan(0);
+    expect(s.repeatRate).toBeLessThan(1);
+    expect(await getCustomerSummary(b.userId, fern.id)).toBeNull();
   });
 
   it("S2-5 #4: another workspace gets nothing from search", async () => {
