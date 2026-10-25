@@ -1,4 +1,4 @@
--- Sprint 3 review fixes (findings 5, 6, 7 and 13).
+-- Sprint 3 review fixes (findings 5, 6 and 13; the rest of 7 and 13 is in 20261026000005).
 
 -- 5. A run writes at most one brief version, so a retried save step can't add a second.
 create unique index brief_versions_run_once on public.brief_versions (run_id) where run_id is not null;
@@ -27,22 +27,8 @@ $$;
 create trigger agent_runs_guard before update on public.agent_runs
 for each row execute function public.agent_runs_guard();
 
--- 7. Sprint 3 replaced the tagline-only workflow function with one for every
---    agent. A tagline run still waiting for approval under the old function
---    can never finish, so it is closed as expired, as an unanswered approval
---    would have been.
-update public.approvals set status = 'expired'
-where status = 'pending' and run_id in (select id from public.agent_runs where agent = 'tagline' and status = 'awaiting_approval');
-update public.agent_runs set status = 'expired', completed_at = now(),
-  error = 'Closed when the run framework changed (Sprint 3); no decision had been made'
-where agent = 'tagline' and status = 'awaiting_approval';
-
--- 13. History is append-only: campaigns can't be deleted (which would take
---     their versions with them), and a version can only be the campaign's
---     current one, so none can be forged ahead of or behind it.
-drop policy campaigns_delete on public.campaigns;
-revoke delete, truncate on public.campaigns from authenticated;
-
+-- 13. A version can only be the campaign's current one, so none can be
+--     forged ahead of or behind it.
 create function public.brief_versions_in_order() returns trigger
 language plpgsql set search_path = '' as $$
 declare cur integer;
