@@ -212,7 +212,7 @@ A reviewer subagent checked the whole sprint (`git diff 76936ce..HEAD`). No tena
 | 1 | S2-4 #3 failed for the shipped seed on some load dates (lapsed share as low as 13.4%) | Fixed: lifetimes and order rates retuned; tests now sweep `DEMO_SEED` over 53 weekly load dates |
 | 2 | Load time and search time never measured on production; no function time limit | `maxDuration = 60` on the Brands page; load time logged; measured on production at deploy |
 | 3 | A kit at the list limits could fail to save (banned-terms context text over 4,000 characters) | Fixed: context text capped to the column limits; test at every list limit |
-| 4 | Supabase's Data API would let a signed-in user write to the tables directly, bypassing validation and the simulated flag | Database now checks palettes and refuses changes to a brand's workspace, creator and simulated flag; **action for Rory: switch off the Data API** (the app never uses it) |
+| 4 | Supabase's Data API would let a signed-in user write to the tables directly, bypassing validation and the simulated flag | Database now checks palettes and refuses changes to a brand's workspace, creator and simulated flag; Rory switched off the Data API on 25 October 2026 (the app never uses it) |
 | 5 | Summaries and context text measured windows from today, so they go stale | Fixed: brands store `data_as_of`; every window counts back from it; the overview says "as of" |
 | 6 | Policies checked membership once per row | Fixed: membership subquery on the Sprint 2 tables |
 | 7 | Two presses of "Add demo brands" at once gave the wrong message | Fixed: advisory lock and duplicate mapped to "already loaded"; test runs two loads at once |

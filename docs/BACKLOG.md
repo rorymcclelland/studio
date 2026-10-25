@@ -15,42 +15,58 @@ The working backlog for Studio. The roadmap (Claude doc "Campaign studio build: 
 
 Nothing returned to the backlog.
 
-## Where every Sprint 1 review item now lives
+## Where every review item now lives (Sprints 1 and 2)
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
-| BUG-1 | Costs under 0.01p display as "0.00p", which reads as free | First production run | Planned, Sprint 2 (S2-1) |
-| F-1 | Run list sums cost from `agent_steps`, not `usage_ledger`, which the cap uses | Reviewer dry run | Planned, Sprint 2 (S2-6) |
-| F-2 | Supabase performance advisor: covering indexes on foreign keys; `(select auth.uid())` in policies | Hosted set-up | Planned, Sprint 2 (S2-6) |
+| BUG-1 | Costs under 0.01p display as "0.00p", which reads as free | First production run | Done, Sprint 2 (S2-1) |
+| F-1 | Run list sums cost from `agent_steps`, not `usage_ledger`, which the cap uses | Reviewer dry run | Done, Sprint 2 (S2-6) |
+| F-2 | Supabase performance advisor: covering indexes on foreign keys; `(select auth.uid())` in policies | Hosted set-up | Done, Sprint 2 (S2-6) |
 | F-3 | Production address is behind Vercel Authentication; make it public for interviewers | Hosted set-up | Folded into Sprint 4 (demo gate 1) |
-| F-4 | Inngest function, run list and start form handle only the tagline agent; generalise for any agent | `add-an-agent` dry run | Folded into Sprint 3 (first real agents) |
-| F-5 | Evals runner (`npm run eval`) and eval file shape | `add-an-agent` dry run | Folded into Sprint 3 |
-| F-6 | Remove prototypes A and B once the design system exists | Decision 0006 | Planned, Sprint 2 (S2-1) |
-| F-7 | Add the GitHub MCP server now the repo exists | S1-2 | Planned, Sprint 2 (S2-6) |
+| F-4 | Inngest function, run list and start form handle only the tagline agent; generalise for any agent | `add-an-agent` dry run | Proposed for Sprint 3 |
+| F-5 | Evals runner (`npm run eval`) and eval file shape | `add-an-agent` dry run | Proposed for Sprint 3 |
+| F-6 | Remove prototypes A and B once the design system exists | Decision 0006 | Done, Sprint 2 (S2-1) |
+| F-7 | Add the GitHub MCP server now the repo exists | S1-2 | Done, Sprint 2 (S2-6) |
 | F-8 | Preview deployments use the production database | Hosted set-up | Backlog, from Sprint 1 review. Accepted until real users arrive: previews are Rory-only and use the mock model |
 | F-9 | Dark theme (the prototype's dark palette exists) | Sprint 2 refinement, Q7 | Backlog, from Sprint 2 refinement |
 | F-10 | SVG sanitiser refuses good logos with `data:`/`https:` in any attribute, and stores logos without `xmlns` that then don't display | Sprint 2 review | Backlog, for Sprint 5 (logo upload) |
-| F-11 | Rule context items are keyed by position (`rule:dont:2`), so deleting a rule shifts the others | Sprint 2 review | Backlog, for Sprint 3 (agents link to rules) |
-| F-12 | `notFound()` inside a streamed page returns HTTP 200 (the screen is right) | Sprint 2 review | Backlog |
+| F-11 | Rule context items are keyed by position (`rule:dont:2`), so deleting a rule shifts the others | Sprint 2 review | Proposed for Sprint 3 |
+| F-12 | `notFound()` inside a streamed page returns HTTP 200 (the screen is right) | Sprint 2 review | Proposed for Sprint 3 |
+| F-13 | Switch off Supabase's Data API (the app never uses it) | Sprint 2 review, finding 4 | Done, 25 Oct 2026 (Rory) |
 
-## Sprint 2: design system and brand kits (confirmed 25 October 2026)
+## Sprint 2: design system and brand kits (closed 25 October 2026)
 
 | ID | Story | Size | Status |
 | --- | --- | --- | --- |
-| S2-6 | Housekeeping from the Sprint 1 review (F-1, F-2, F-7) | S | Ready, Sprint 2 |
-| S2-1 | Soft machine design system and app reskin (with BUG-1, F-6) | L | Ready, Sprint 2 |
-| S2-2 | Brand data model | M | Ready, Sprint 2 |
-| S2-3 | Brand kit editor and brand overview | M | Ready, Sprint 2 |
-| S2-4 | Two fictional brands with simulated first-party data | M | Ready, Sprint 2 |
-| S2-5 | Business Context store and search | M | Ready, Sprint 2 |
+| S2-6 | Housekeeping from the Sprint 1 review (F-1, F-2, F-7) | S | Done, Sprint 2 (hosted advisors clean of unindexed foreign keys and per-row `auth.uid()`) |
+| S2-1 | Soft machine design system and app reskin (with BUG-1, F-6) | L | Done, Sprint 2 (light theme; dark is F-9) |
+| S2-2 | Brand data model | M | Done, Sprint 2 (database guards added; Rory switched off the Data API, F-13) |
+| S2-3 | Brand kit editor and brand overview | M | Done, Sprint 2 |
+| S2-4 | Two fictional brands with simulated first-party data | M | Done, Sprint 2 (loaded on production in 2.7 s against a 20 s target) |
+| S2-5 | Business Context store and search | M | Done, Sprint 2 (search about 23 ms on production against 300 ms) |
 
-Detail and test cases: `docs/refinement/sprint-2.md`.
+Evidence: 82 unit and database tests and 33 end-to-end tests passing; fresh-eyes review with all nine fixable findings fixed before deploy; deploy `cb32f18` healthy with no runtime errors; demo brands loaded by Rory on production. Detail: `docs/refinement/sprint-2.md`. Nothing returned to the backlog.
+
+## Sprint 3: Strategy I, brief and audiences (proposed 25 October 2026, awaiting Rory)
+
+| ID | Item | Why now |
+| --- | --- | --- |
+| F-4 | Generalise the Inngest function, run list and start form for any agent | The two new agents need it; doing it first stops each agent adding its own wiring |
+| F-5 | Evals runner (`npm run eval`) and eval file shape | The roadmap asks for brief-quality evals this sprint; the runner has to exist first |
+| F-11 | Stable keys for rule context items | Briefs will cite brand rules; positional keys would point citations at the wrong rule after an edit |
+| S3-1 | Audience agent: segments from the simulated customer data, sized and described (SQL does the counting, the model only names and describes) | Roadmap; feeds the brief with evidenced audiences |
+| S3-2 | Campaigns and the Brief agent: objective in, structured brief out, citing context items | Roadmap; the core of the Sprint 3 demo |
+| S3-3 | Brief editor with an inline revise-with-AI prompt | Roadmap; people edit what agents propose (rule 3) |
+| F-12 | `notFound()` in a streamed page returns 200 | Small, and the new campaign and brief pages hit the same pattern |
+
+Demo: "Launch the winter range to lapsed customers" for Fernhollow becomes an evidenced brief in under a minute. To be refined with the sprint-refine skill once confirmed.
 
 ## Not yet in a sprint (ranked)
 
 1. F-8 Separate database for previews (Supabase branch or a second free project), before anyone but Rory uses the app
 2. F-9 Dark theme, once the light design system has settled
-3. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+3. F-10 SVG sanitiser false refusals, with logo upload in Sprint 5
+4. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -58,3 +74,4 @@ Detail and test cases: `docs/refinement/sprint-2.md`.
 | --- | --- |
 | 24 Oct 2026 | Web app on Vercel and Supabase (0001); Inngest (0002); model provider layer and £1-a-day cap (0003); tenancy from day one (0004); image model never draws text (0005) |
 | 25 Oct 2026 | Soft machine design direction (0006); functions run in London; redeploy by pushing to GitHub; Sprint 2 confirmed, light theme only for now |
+| 25 Oct 2026 | Sprint 2 closed; demo data windows count back from each brand's "as of" time (`data_as_of`); Sprint 3 proposed |
