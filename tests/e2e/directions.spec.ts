@@ -1,8 +1,22 @@
-// S1-6 test cases 1-4: the three design-direction prototypes.
+// S1-6 test cases 1-4: the design-direction prototype. Sprint 1 built three;
+// Sprint 2 removed A (press check) and B (control desk) and kept C, Soft
+// machine, as the design system's reference (F-6, Q4).
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Page } from "@playwright/test";
 
-const DIRECTIONS = ["press-check", "control-desk", "soft-machine"];
+const DIRECTIONS = ["soft-machine"];
+
+test("F-6: the index lists only Soft machine, and A and B are gone", async ({ page }) => {
+  await page.goto("/directions");
+  await expect(page.getByRole("heading", { level: 2 })).toHaveText(["Soft machine"]);
+  await expect(page.getByRole("link", { name: /Soft machine/ })).toHaveAttribute("href", "/directions/soft-machine");
+  const text = await page.locator("body").innerText();
+  expect(text).not.toMatch(/Press check|Control desk/);
+  for (const gone of ["/directions/press-check", "/directions/control-desk"]) {
+    await page.goto(gone);
+    await expect(page.getByRole("heading", { name: "Not found" })).toBeVisible();
+  }
+});
 const WIDTHS = [375, 1440];
 
 async function noHorizontalScroll(page: Page) {

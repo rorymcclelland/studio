@@ -12,3 +12,5 @@ Three prototypes at `/directions`, each showing the same two screens (campaign h
 | Watch out for | The print metaphor has to stretch to live data | Dense; less welcoming for a first-time user | Less detail per screen for analysts |
 
 **Choice (25 October 2026):** C. Soft machine, recorded in decision 0006. Sprint 2 builds the design system from it.
+
+**Sprint 2 (S2-1, F-6):** A and B and their fonts were removed; they remain in git history before this change. C stays at `/directions/soft-machine` as the reference until Sprint 3. The design system itself is described in decision 0007 and shown at `/design`.
