@@ -4,7 +4,9 @@ import { requireMember } from "@/lib/auth/session";
 import { getBrand } from "@/lib/brands/repo";
 import { listProducts } from "@/lib/brands/products";
 import { getCustomerSummary } from "@/lib/brands/summary";
-import { searchContext } from "@/lib/context/store";
+import { listSegments, searchContext } from "@/lib/context/store";
+import { listRuns } from "@/lib/agents/runs";
+import { listCampaigns, OBJECTIVE_MAX, OBJECTIVE_MIN } from "@/lib/brief/repo";
 import { ButtonLink, TextLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/pill";
@@ -13,6 +15,9 @@ import { formatPrice } from "@/lib/format";
 import { BrandLogo } from "../brand-logo";
 import { ContextSearch, MAX_QUERY } from "./context-search";
 import { CustomerSummary } from "./customer-summary";
+import { Segments } from "./segments";
+import { CampaignList } from "../../campaigns/campaign-list";
+import { NewCampaignForm } from "../../campaigns/new-campaign-form";
 
 async function BrandPageContent(props: PageProps<"/brands/[id]">) {
   const { id } = await props.params;
@@ -22,11 +27,15 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
   if (!brand) notFound();
 
   const query = (typeof q === "string" ? q : "").trim().slice(0, MAX_QUERY);
-  const [products, summary, hits] = await Promise.all([
+  const [products, summary, hits, segments, runs, campaigns] = await Promise.all([
     listProducts(member.userId, brand.id),
     getCustomerSummary(member.userId, brand.id),
     query ? searchContext(member.userId, { query, brandId: brand.id, limit: 10 }) : Promise.resolve([]),
+    listSegments(member.userId, brand.id),
+    listRuns(member.userId, 50, brand.id),
+    listCampaigns(member.userId, brand.id),
   ]);
+  const audienceRun = runs.find((r) => r.agent === "audience") ?? null;
 
   return (
     <div className="space-y-10">
@@ -51,6 +60,26 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
           </div>
         </Card>
       </div>
+
+      <Card as="section" aria-labelledby="campaigns">
+        <h2 id="campaigns" className="text-2xl font-strong tracking-tight">
+          Campaigns
+        </h2>
+        {campaigns.length > 0 ? (
+          <div className="mt-4">
+            <CampaignList campaigns={campaigns} showBrand={false} className="rounded-field border border-line" label={`Campaigns for ${brand.name}, newest first`} />
+          </div>
+        ) : (
+          <p className="mt-1 text-ink-2">No campaigns for {brand.name} yet.</p>
+        )}
+        <h3 className="mt-8 text-lg font-strong">New campaign for {brand.name}</h3>
+        <p className="mt-1 max-w-prose text-ink-2">
+          The Brief agent reads this brand&apos;s context store and writes the brief. This usually takes under a minute.
+        </p>
+        <NewCampaignForm brandId={brand.id} limits={{ min: OBJECTIVE_MIN, max: OBJECTIVE_MAX }} idPrefix="brand-campaign" />
+      </Card>
+
+      <Segments brandId={brand.id} segments={segments} latestRun={audienceRun} simulated={brand.isSimulated} />
 
       <ContextSearch brandName={brand.name} query={query} hits={hits} />
 

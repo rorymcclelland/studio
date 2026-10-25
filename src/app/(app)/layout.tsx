@@ -11,6 +11,7 @@ import { requireMember } from "@/lib/auth/session";
 const NAV = [
   { href: "/", label: "Home", match: "exact" as const },
   { href: "/brands", label: "Brands" },
+  { href: "/campaigns", label: "Campaigns" },
   { href: "/runs", label: "Agent runs" },
 ];
 
@@ -40,7 +41,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
             and spend meter wrap below. Source order follows the wide layout. */}
         <header className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-3 px-4 pt-5 pb-2 sm:px-8">
           <Wordmark className="order-1" />
-          <SegmentedNav items={NAV} label="Main" className="order-3 lg:order-2 lg:ml-4" />
+          <SegmentedNav items={NAV} label="Main" className="order-3 lg:order-2 lg:ml-1" />
           <div className="order-4 lg:order-3 lg:ml-auto">
             <SpendMeter userId={member.userId} />
           </div>

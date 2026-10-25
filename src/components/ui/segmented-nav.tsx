@@ -24,7 +24,7 @@ export function SegmentedNav({
   const path = usePathname();
   return (
     <nav aria-label={label} className={cx("min-w-0", className)}>
-      <ul className="flex w-max max-w-full gap-1 rounded-full bg-surface p-1">
+      <ul className="flex w-max max-w-full gap-0.5 rounded-full bg-surface p-1 sm:gap-1">
         {items.map((item) => {
           const current =
             item.match === "exact" ? path === item.href : path === item.href || path.startsWith(`${item.href}/`);
@@ -34,7 +34,8 @@ export function SegmentedNav({
                 href={item.href}
                 aria-current={current ? "page" : undefined}
                 className={cx(
-                  "inline-flex min-h-9 items-center rounded-full px-4 font-medium whitespace-nowrap transition-colors",
+                  // Smaller on narrow screens, so the main nav fits on one row at 375 px.
+                  "inline-flex min-h-9 items-center rounded-full px-2.5 text-sm font-medium whitespace-nowrap transition-colors sm:px-4 sm:text-base lg:px-3",
                   current ? "bg-primary-soft text-ink" : "text-ink-2 hover:text-ink",
                 )}
               >

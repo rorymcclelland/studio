@@ -1,19 +1,10 @@
 import Form from "next/form";
-import type { ContextHit, ContextKind } from "@/lib/context/store";
+import type { ContextHit } from "@/lib/context/store";
+import { contextKind } from "@/components/context-kind";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Pill, type PillTone } from "@/components/ui/pill";
-
-const KIND: Record<ContextKind, { label: string; tone: PillTone }> = {
-  brand_voice: { label: "Brand voice", tone: "active" },
-  brand_rule: { label: "Brand rule", tone: "active" },
-  legal: { label: "Legal", tone: "attention" },
-  product: { label: "Product", tone: "neutral" },
-  segment: { label: "Segment", tone: "good" },
-  insight: { label: "Insight", tone: "good" },
-  result: { label: "Result", tone: "neutral" },
-};
+import { Pill } from "@/components/ui/pill";
 
 /** Longest query that is searched; matches searchContext(). */
 export const MAX_QUERY = 200;
@@ -75,7 +66,7 @@ export function ContextSearch({
                 {hits.map((h) => (
                   <li key={h.id} data-search-result="" className="min-w-0 rounded-field border border-line bg-surface px-4 py-3">
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                      <Pill tone={KIND[h.kind]?.tone ?? "neutral"}>{KIND[h.kind]?.label ?? h.kind}</Pill>
+                      <Pill tone={contextKind(h.kind).tone}>{contextKind(h.kind).label}</Pill>
                       <h3 className="min-w-0 font-semibold wrap-anywhere">{h.title}</h3>
                     </div>
                     <p className="mt-1.5 text-ink-2 wrap-anywhere">{h.body}</p>

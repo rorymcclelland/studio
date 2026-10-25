@@ -85,27 +85,34 @@ test.describe("S2-1 #3: a dark operating system still gets the light theme", () 
     for (const signedIn of [false, true]) {
       if (signedIn) await signIn(page);
       for (const s of SCREENS.filter((x) => x.signedIn === signedIn)) {
-        await page.emulateMedia({ colorScheme: "light" });
-        await visit(page, s);
-        const light = await page.screenshot({ fullPage: true, mask });
+        // campaigns.spec.ts adds Fernhollow campaigns while this runs, which
+        // changes its brand page between the two captures; one fresh pair is
+        // allowed before a difference counts.
+        for (let attempt = 1; ; attempt++) {
+          await page.emulateMedia({ colorScheme: "light" });
+          await visit(page, s);
+          const light = await page.screenshot({ fullPage: true, mask });
 
-        await page.emulateMedia({ colorScheme: "dark" });
-        await visit(page, s);
-        const colours = await page.evaluate(() => {
-          const body = getComputedStyle(document.body);
-          return {
-            background: body.backgroundColor,
-            text: body.color,
-            scheme: getComputedStyle(document.documentElement).colorScheme,
-          };
-        });
-        // Soft machine light: --bg #f3f5fb and --ink #22244a.
-        expect(colours.background, s.name).toBe("rgb(243, 245, 251)");
-        expect(colours.text, s.name).toBe("rgb(34, 36, 74)");
-        expect(colours.scheme, s.name).toContain("light");
-        expect(await contrastViolations(page), `${s.name}, system dark`).toEqual([]);
-        const dark = await page.screenshot({ fullPage: true, mask });
-        expect(dark.equals(light), `${s.name} changes when the system is dark`).toBe(true);
+          await page.emulateMedia({ colorScheme: "dark" });
+          await visit(page, s);
+          const colours = await page.evaluate(() => {
+            const body = getComputedStyle(document.body);
+            return {
+              background: body.backgroundColor,
+              text: body.color,
+              scheme: getComputedStyle(document.documentElement).colorScheme,
+            };
+          });
+          // Soft machine light: --bg #f3f5fb and --ink #22244a.
+          expect(colours.background, s.name).toBe("rgb(243, 245, 251)");
+          expect(colours.text, s.name).toBe("rgb(34, 36, 74)");
+          expect(colours.scheme, s.name).toContain("light");
+          expect(await contrastViolations(page), `${s.name}, system dark`).toEqual([]);
+          const dark = await page.screenshot({ fullPage: true, mask });
+          if (!dark.equals(light) && attempt < 2) continue;
+          expect(dark.equals(light), `${s.name} changes when the system is dark`).toBe(true);
+          break;
+        }
       }
     }
   });
