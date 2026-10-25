@@ -11,4 +11,4 @@ Three prototypes at `/directions`, each showing the same two screens (campaign h
 | Strongest on | Creative review and approvals | Performance and the self-healing loop | First-time users, executives, phones |
 | Watch out for | The print metaphor has to stretch to live data | Dense; less welcoming for a first-time user | Less detail per screen for analysts |
 
-**Choice:** to be recorded here and in decision 0006 once Rory picks one direction or a blend.
+**Choice (25 October 2026):** C. Soft machine, recorded in decision 0006. Sprint 2 builds the design system from it.

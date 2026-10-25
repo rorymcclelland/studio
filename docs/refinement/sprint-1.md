@@ -227,5 +227,6 @@ No acceptance criteria changed. All six stories: **Ready, Sprint 1**.
 
 - Unit, database and workflow tests: 29 passed. End-to-end: 19 passed (directions at 375 and 1440 px, AA contrast in both themes, every control works, run flow approve, reject, hostile input, cross-workspace).
 - S1-2: #1 pass (project subagents); #2 pass with the skill fixes above; #3 fake key blocked by both the Claude Code hook and the git hook; #4 failing test blocked by both; #5 the reviewer flagged both unmet criteria in a planted incomplete change.
+- S1-6 #5: Rory chose C. Soft machine on 25 October 2026 (decision 0006).
 - Waiting for the hosted set-up: S1-1 #1, #2 and #6 (preview links, production deploy, keep-awake cron) and real-model calls for S1-4.
 - Reviewer side-findings logged for Sprint 2: the run list sums cost from `agent_steps` rather than `usage_ledger`; amounts under 1p show in pence (by design, worth confirming).
