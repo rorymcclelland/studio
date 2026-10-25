@@ -6,4 +6,4 @@
 
 **Decision.** A Next.js web app hosted on Vercel (Hobby tier while it is a showcase), with Postgres, auth and storage on Supabase's free tier. Not a downloadable executable.
 
-**Consequences.** Every branch gets a preview link. Free Supabase projects pause after a week without traffic, so a daily cron calls `/api/health`. Vercel Hobby is for non-commercial use: move to Pro before any paid use.
+**Consequences.** Functions run in London (`lhr1`, set in `vercel.json`) beside the Supabase database in eu-west-2. Every branch gets a preview link. Free Supabase projects pause after a week without traffic, so a daily cron calls `/api/health`. Vercel Hobby is for non-commercial use: move to Pro before any paid use.
