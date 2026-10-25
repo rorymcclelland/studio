@@ -23,15 +23,15 @@ Nothing returned to the backlog.
 | F-1 | Run list sums cost from `agent_steps`, not `usage_ledger`, which the cap uses | Reviewer dry run | Done, Sprint 2 (S2-6) |
 | F-2 | Supabase performance advisor: covering indexes on foreign keys; `(select auth.uid())` in policies | Hosted set-up | Done, Sprint 2 (S2-6) |
 | F-3 | Production address is behind Vercel Authentication; make it public for interviewers | Hosted set-up | Folded into Sprint 4 (demo gate 1) |
-| F-4 | Inngest function, run list and start form handle only the tagline agent; generalise for any agent | `add-an-agent` dry run | Proposed for Sprint 3 |
-| F-5 | Evals runner (`npm run eval`) and eval file shape | `add-an-agent` dry run | Proposed for Sprint 3 |
+| F-4 | Inngest function, run list and start form handle only the tagline agent; generalise for any agent | `add-an-agent` dry run | Ready, Sprint 3 |
+| F-5 | Evals runner (`npm run eval`) and eval file shape | `add-an-agent` dry run | Ready, Sprint 3 |
 | F-6 | Remove prototypes A and B once the design system exists | Decision 0006 | Done, Sprint 2 (S2-1) |
 | F-7 | Add the GitHub MCP server now the repo exists | S1-2 | Done, Sprint 2 (S2-6) |
 | F-8 | Preview deployments use the production database | Hosted set-up | Backlog, from Sprint 1 review. Accepted until real users arrive: previews are Rory-only and use the mock model |
 | F-9 | Dark theme (the prototype's dark palette exists) | Sprint 2 refinement, Q7 | Backlog, from Sprint 2 refinement |
 | F-10 | SVG sanitiser refuses good logos with `data:`/`https:` in any attribute, and stores logos without `xmlns` that then don't display | Sprint 2 review | Backlog, for Sprint 5 (logo upload) |
-| F-11 | Rule context items are keyed by position (`rule:dont:2`), so deleting a rule shifts the others | Sprint 2 review | Proposed for Sprint 3 |
-| F-12 | `notFound()` inside a streamed page returns HTTP 200 (the screen is right) | Sprint 2 review | Proposed for Sprint 3 |
+| F-11 | Rule context items are keyed by position (`rule:dont:2`), so deleting a rule shifts the others | Sprint 2 review | Ready, Sprint 3 |
+| F-12 | `notFound()` inside a streamed page returns HTTP 200 (the screen is right) | Sprint 2 review | Ready, Sprint 3 |
 | F-13 | Switch off Supabase's Data API (the app never uses it) | Sprint 2 review, finding 4 | Done, 25 Oct 2026 (Rory) |
 
 ## Sprint 2: design system and brand kits (closed 25 October 2026)
@@ -47,19 +47,19 @@ Nothing returned to the backlog.
 
 Evidence: 82 unit and database tests and 33 end-to-end tests passing; fresh-eyes review with all nine fixable findings fixed before deploy; deploy `cb32f18` healthy with no runtime errors; demo brands loaded by Rory on production. Detail: `docs/refinement/sprint-2.md`. Nothing returned to the backlog.
 
-## Sprint 3: Strategy I, brief and audiences (proposed 25 October 2026, awaiting Rory)
+## Sprint 3: Strategy I, brief and audiences (refined and confirmed 25 October 2026)
 
-| ID | Item | Why now |
-| --- | --- | --- |
-| F-4 | Generalise the Inngest function, run list and start form for any agent | The two new agents need it; doing it first stops each agent adding its own wiring |
-| F-5 | Evals runner (`npm run eval`) and eval file shape | The roadmap asks for brief-quality evals this sprint; the runner has to exist first |
-| F-11 | Stable keys for rule context items | Briefs will cite brand rules; positional keys would point citations at the wrong rule after an edit |
-| S3-1 | Audience agent: segments from the simulated customer data, sized and described (SQL does the counting, the model only names and describes) | Roadmap; feeds the brief with evidenced audiences |
-| S3-2 | Campaigns and the Brief agent: objective in, structured brief out, citing context items | Roadmap; the core of the Sprint 3 demo |
-| S3-3 | Brief editor with an inline revise-with-AI prompt | Roadmap; people edit what agents propose (rule 3) |
-| F-12 | `notFound()` in a streamed page returns 200 | Small, and the new campaign and brief pages hit the same pattern |
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-11 | Stable keys for brand rules (and legal lines, banned terms, claims) | S | Ready, Sprint 3 |
+| F-4 | Run any agent: workflow registry, one Inngest function, labels on run pages | M | Ready, Sprint 3 |
+| F-5 | Evals runner (`npm run eval`), eval database, committed reports, mock mode in CI | M | Ready, Sprint 3 |
+| S3-1 | Audience agent: SQL counts segments, Haiku names them, saved to the context store | M | Ready, Sprint 3 |
+| S3-2 | Campaigns and the Brief agent (Sonnet), with evidence checks in code | L | Ready, Sprint 3 |
+| S3-3 | Brief editor: hand edits, revise with AI (whole or per section), version history | M | Ready, Sprint 3 |
+| F-12 | Not-found pages return 404 (two-hour time-box) | S | Ready, Sprint 3 |
 
-Demo: "Launch the winter range to lapsed customers" for Fernhollow becomes an evidenced brief in under a minute. To be refined with the sprint-refine skill once confirmed.
+Demo: "Launch the winter range to lapsed customers" for Fernhollow becomes an evidenced brief in under a minute. Detail, test cases and answers: `docs/refinement/sprint-3.md`.
 
 ## Not yet in a sprint (ranked)
 
@@ -75,3 +75,4 @@ Demo: "Launch the winter range to lapsed customers" for Fernhollow becomes an ev
 | 24 Oct 2026 | Web app on Vercel and Supabase (0001); Inngest (0002); model provider layer and £1-a-day cap (0003); tenancy from day one (0004); image model never draws text (0005) |
 | 25 Oct 2026 | Soft machine design direction (0006); functions run in London; redeploy by pushing to GitHub; Sprint 2 confirmed, light theme only for now |
 | 25 Oct 2026 | Sprint 2 closed; demo data windows count back from each brand's "as of" time (`data_as_of`); Sprint 3 proposed |
+| 25 Oct 2026 | Sprint 3 refined; Rory accepted all seven recommendations (segments saved without approval, Sonnet for briefs, no chaining, section-level revise, keep every version, code-only graders, Campaigns in the nav) |
