@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { normaliseKitText } from "@/lib/context/keys";
 
 // One brand's kit: what every agent needs to stay on-brand (S2-2).
 // Limits match the database checks in migration 20261025000003.
@@ -10,6 +11,17 @@ const list = (maxItems: number, maxLen: number, label: string) =>
   z
     .array(text(maxLen, label).min(1, `${label} can't be empty.`))
     .max(maxItems, `No more than ${maxItems} ${label.toLowerCase()}s.`);
+
+/** A list whose entries must differ (ignoring case and spacing), because each one is keyed by its text (F-11). */
+const uniqueList = (maxItems: number, maxLen: number, label: string) =>
+  list(maxItems, maxLen, label).superRefine((items, ctx) => {
+    const seen = new Set<string>();
+    items.forEach((item, i) => {
+      const k = normaliseKitText(item);
+      if (seen.has(k)) ctx.addIssue({ code: "custom", path: [i], message: `This ${label.toLowerCase()} is already in the list.` });
+      seen.add(k);
+    });
+  });
 
 export const colourSchema = z.object({
   name: text(40, "Colour name").min(1, "Name the colour."),
@@ -27,12 +39,12 @@ export const brandInputSchema = z.object({
   category: text(60, "Category").default(""),
   toneWords: list(12, 30, "Tone word").default([]),
   voiceNotes: text(2000, "Voice notes").default(""),
-  doRules: list(20, 300, "Rule").default([]),
-  dontRules: list(20, 300, "Rule").default([]),
+  doRules: uniqueList(20, 300, "Rule").default([]),
+  dontRules: uniqueList(20, 300, "Rule").default([]),
   palette: z.array(colourSchema).max(12, "No more than 12 colours.").default([]),
   fontPrimary: text(60, "Font").default(""),
   fontSecondary: text(60, "Font").default(""),
-  legalLines: list(20, 500, "Legal line").default([]),
+  legalLines: uniqueList(20, 500, "Legal line").default([]),
   bannedTerms: list(50, 80, "Banned term").default([]),
   evidenceClaims: list(20, 120, "Claim").default([]),
   logoSvg: z.string().max(50_000, "The logo is too large.").nullable().optional(),

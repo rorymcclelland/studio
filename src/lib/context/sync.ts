@@ -1,4 +1,5 @@
 import type { Tx } from "@/lib/db/scoped";
+import { textKey } from "./keys";
 
 // Keeps a brand's system-maintained context items in step with its kit,
 // products and customer data (S2-5). Items are upserted by source_ref, so
@@ -25,9 +26,9 @@ export async function syncBrandContext(tx: Tx, brandId: string): Promise<void> {
   if (tone || brand.voice_notes) {
     items.push({ kind: "brand_voice", title: `${brand.name} tone of voice`, body: [tone && `Tone: ${tone}.`, brand.voice_notes].filter(Boolean).join(" "), source: "Brand kit", sourceRef: "voice" });
   }
-  (brand.do_rules as string[]).forEach((r, i) => items.push({ kind: "brand_rule", title: `Do: ${r.slice(0, 190)}`, body: r, source: "Brand kit", sourceRef: `rule:do:${i}`, tags: ["do"] }));
-  (brand.dont_rules as string[]).forEach((r, i) => items.push({ kind: "brand_rule", title: `Don't: ${r.slice(0, 186)}`, body: r, source: "Brand kit", sourceRef: `rule:dont:${i}`, tags: ["dont"] }));
-  (brand.legal_lines as string[]).forEach((l, i) => items.push({ kind: "legal", title: "Required legal line", body: l, source: "Brand kit", sourceRef: `legal:line:${i}` }));
+  (brand.do_rules as string[]).forEach((r) => items.push({ kind: "brand_rule", title: `Do: ${r.slice(0, 190)}`, body: r, source: "Brand kit", sourceRef: `rule:do:${textKey(r)}`, tags: ["do"] }));
+  (brand.dont_rules as string[]).forEach((r) => items.push({ kind: "brand_rule", title: `Don't: ${r.slice(0, 186)}`, body: r, source: "Brand kit", sourceRef: `rule:dont:${textKey(r)}`, tags: ["dont"] }));
+  (brand.legal_lines as string[]).forEach((l) => items.push({ kind: "legal", title: "Required legal line", body: l, source: "Brand kit", sourceRef: `legal:line:${textKey(l)}` }));
   if ((brand.banned_terms as string[]).length) {
     items.push({ kind: "legal", title: "Banned terms", body: `Never use: ${(brand.banned_terms as string[]).join("; ")}.`, source: "Brand kit", sourceRef: "legal:banned" });
   }
