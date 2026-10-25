@@ -190,3 +190,15 @@ Studio looks and feels like Soft machine everywhere (light theme), and two compl
 | Scope | Sprint 2 contents confirmed | F-3 stays in Sprint 4, F-4 and F-5 in Sprint 3, F-8 in the backlog |
 
 All six stories: **Ready, Sprint 2**.
+
+## Changes during the build (25 October 2026)
+
+| Story | Change | Why |
+|---|---|---|
+| S2-4 | The fintech brand is **Quillmoor Money** | "Tallymore" was too close to real fintech brands (Tally, Tally Money, TallyMint); "Quillmoor" returned no matches |
+| S2-2 | Child tables reference their parent by `(id, workspace_id)` | A row can then only attach to a brand, customer, order or product in its own workspace, even if another workspace's id is known (test in S2-2 #2) |
+| S2-2 | Logo sanitising uses `sanitize-html` 2.18.1 with an allow-list of SVG elements and attributes; `xmlns` may only be the SVG namespace | 2.18.0 carried a moderate advisory fixed in 2.18.1 |
+| S2-4 | Order targets calibrated to about 4,950 (Fernhollow) and 5,590 (Quillmoor) orders; about 29,000 rows in all | Test case 2's ±5% holds for the fixed reference date in the tests; across a year of reference dates and seeds the totals vary by up to about 7%, and the peak months and lapsed share (15% to 35%) always hold |
+| S2-5 | Search uses `websearch_to_tsquery`, so any input is valid syntax; context items are upserted by a stable `source_ref` and only system items are ever removed by a re-sync | Hostile input never errors (S2-5 #5); agent-written items in Sprint 3 will survive brand edits |
+| S2-1 | `decide()` returns `{ done }` so approvals show a toast; decision 0007 records the token structure and light-only theme | Built by the UI subagent |
+| S2-2 #7, S2-6 #3 | Hosted advisors after the migrations: no unindexed foreign keys or per-row `auth.uid()` left; only "unused index" (new tables) and the accepted security-definer functions remain. "Leaked password protection" is reported off; it does not apply, since sign-in is by email link only | Checked 25 October 2026 |
