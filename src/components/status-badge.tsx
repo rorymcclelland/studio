@@ -1,33 +1,36 @@
-const LABELS: Record<string, { text: string; tone: "neutral" | "active" | "good" | "warn" | "bad" }> = {
+import { Pill, type PillTone } from "@/components/ui/pill";
+
+const LABELS: Record<string, { text: string; tone: PillTone }> = {
   queued: { text: "Queued", tone: "neutral" },
   running: { text: "Running", tone: "active" },
-  awaiting_approval: { text: "Awaiting approval", tone: "warn" },
+  awaiting_approval: { text: "Awaiting approval", tone: "review" },
   completed: { text: "Completed", tone: "good" },
   rejected: { text: "Rejected", tone: "neutral" },
   expired: { text: "Expired", tone: "neutral" },
-  failed: { text: "Failed", tone: "bad" },
-  stopped_cap: { text: "Stopped: daily cap", tone: "bad" },
+  failed: { text: "Failed", tone: "attention" },
+  stopped_cap: { text: "Stopped: daily cap", tone: "attention" },
   succeeded: { text: "Succeeded", tone: "good" },
-  pending: { text: "Pending", tone: "warn" },
+  pending: { text: "Pending", tone: "review" },
   approved: { text: "Approved", tone: "good" },
   skipped: { text: "Skipped", tone: "neutral" },
 };
 
-const TONES = {
-  neutral: "border-line text-ink-2",
-  active: "border-accent text-accent",
-  good: "border-good text-good",
-  warn: "border-warn text-warn",
-  bad: "border-bad text-bad",
-};
-
+/** The status of a run, step or approval, in words. */
 export function StatusBadge({ status }: { status: string }) {
   const l = LABELS[status] ?? { text: status, tone: "neutral" as const };
   return (
-    <span className={`inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium ${TONES[l.tone]}`}>
+    <Pill tone={l.tone} dot>
       {l.text}
-    </span>
+    </Pill>
   );
+}
+
+/** Where a status sits on the health ring. */
+export function statusRingTone(status: string): "good" | "review" | "attention" {
+  const tone = LABELS[status]?.tone;
+  if (tone === "good") return "good";
+  if (tone === "attention") return "attention";
+  return "review";
 }
 
 export const ACTIVE_STATUSES = new Set(["queued", "running", "awaiting_approval"]);
