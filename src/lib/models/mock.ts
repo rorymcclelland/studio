@@ -15,6 +15,8 @@ class MockBehaviour {
   calls = 0;
   lastPrompt = "";
   responders: Responder[] = [];
+  /** The last prompt's message text, unescaped. */
+  lastPlainPrompt = "";
 
   reset() {
     this.queue = [];
@@ -42,6 +44,21 @@ function promptText(options: unknown): string {
   return JSON.stringify((options as { prompt?: unknown }).prompt ?? options);
 }
 
+/** The messages' text, unescaped, for offline answers that read the prompt. */
+function plainText(options: unknown): string {
+  const prompt = (options as { prompt?: unknown }).prompt;
+  if (!Array.isArray(prompt)) return promptText(options);
+  return prompt
+    .map((m: { content?: unknown }) =>
+      typeof m.content === "string"
+        ? m.content
+        : Array.isArray(m.content)
+          ? m.content.map((p: { text?: unknown }) => (typeof p.text === "string" ? p.text : "")).join("\n")
+          : "",
+    )
+    .join("\n");
+}
+
 export function createMockModel(): MockLanguageModelV4 {
   return new MockLanguageModelV4({
     modelId: "mock-model",
@@ -50,6 +67,8 @@ export function createMockModel(): MockLanguageModelV4 {
       mockBehaviour.calls += 1;
       const text = promptText(options);
       mockBehaviour.lastPrompt = text;
+      const plain = plainText(options);
+      mockBehaviour.lastPlainPrompt = plain;
       const queued = mockBehaviour.queue.shift();
       if (queued?.kind === "fail") throw new Error(queued.message);
       let out: { text: string; inputTokens: number; outputTokens: number };
@@ -57,7 +76,7 @@ export function createMockModel(): MockLanguageModelV4 {
       else {
         let answer = "";
         for (const r of mockBehaviour.responders) {
-          answer = r(text);
+          answer = r(plain);
           if (answer) break;
         }
         out = {

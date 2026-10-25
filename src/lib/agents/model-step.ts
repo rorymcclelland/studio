@@ -95,13 +95,18 @@ export async function runModelStep<I, O>(
       raw = res.text;
       const json = extractJson(res.text);
       const parsed = json === undefined ? null : agent.output.safeParse(json);
-      if (parsed?.success) {
+      const problems = parsed?.success && agent.check ? agent.check(input, parsed.data) : [];
+      if (parsed?.success && problems.length === 0) {
         await finish("succeeded", parsed.data, null);
         return { output: parsed.data, stepId };
       }
-      const issues = describeIssues(parsed ? parsed.error : null);
+      const issues = parsed?.success ? problems.slice(0, 8).join("; ") : describeIssues(parsed ? parsed.error : null);
       if (attempts >= 2) {
-        throw new AgentOutputError(`The agent's reply did not match the expected format: ${issues}`);
+        throw new AgentOutputError(
+          parsed?.success
+            ? `The agent's reply failed its checks: ${issues}`
+            : `The agent's reply did not match the expected format: ${issues}`,
+        );
       }
       currentPrompt =
         `${prompt}\n\nYour previous reply could not be used (${issues}).\n` +

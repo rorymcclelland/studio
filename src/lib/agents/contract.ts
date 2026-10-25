@@ -14,10 +14,18 @@ export type AgentDefinition<I, O> = {
   version: number;
   description: string;
   input: z.ZodType<I>;
+  /** What a person may start a run with, when the workflow adds more before the model step (e.g. a brand id, then computed facts). Defaults to `input`. */
+  start?: z.ZodType<unknown>;
   output: z.ZodType<O>;
   instructions: string;
   buildPrompt: (input: I) => string;
   summarise: (output: O) => string;
+  /**
+   * Checks in code that the schema cannot express (citations exist, numbers
+   * come from the evidence). Returns problems; any problem gets one repair
+   * attempt, then the step fails with them listed.
+   */
+  check?: (input: I, output: O) => string[];
   /** A short title for run lists, from the input alone. The caller may pass a better one (with the brand's name) to createRun. */
   label: (input: I) => string;
   /** Deterministic answer for the offline mock model, so demos run without keys. */

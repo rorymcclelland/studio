@@ -52,3 +52,38 @@ export async function listContext(userId: string, brandId: string): Promise<Cont
     where brand_id = ${brandId} order by kind, title`);
   return rows.map((r) => ({ id: r.id, brandId: r.brand_id, kind: r.kind, title: r.title, body: r.body, source: r.source, rank: 0 }));
 }
+
+export type SegmentItem = {
+  id: string;
+  title: string;
+  body: string;
+  source: string;
+  sourceRef: string | null;
+  createdBy: "system" | "person" | "agent";
+  tags: string[];
+  updatedAt: Date;
+};
+
+/** A brand's segments: the system summaries first, then the Audience agent's (S3-1). */
+export async function listSegments(userId: string, brandId: string): Promise<SegmentItem[]> {
+  if (!UUID.test(brandId)) return [];
+  const rows = await asUser(userId, (tx) => tx`
+    select id, title, body, source, source_ref, created_by_kind, tags, updated_at from public.context_items
+    where brand_id = ${brandId} and kind = 'segment'
+    order by (created_by_kind = 'system') desc, title`);
+  return rows.map((r) => ({
+    id: r.id, title: r.title, body: r.body, source: r.source, sourceRef: r.source_ref,
+    createdBy: r.created_by_kind, tags: r.tags, updatedAt: r.updated_at,
+  }));
+}
+
+/**
+ * Removes an item an agent or person added. System items are refused: they
+ * come back from the brand kit and data on the next sync.
+ */
+export async function removeContextItem(userId: string, itemId: string): Promise<boolean> {
+  if (!UUID.test(itemId)) return false;
+  const rows = await asUser(userId, (tx) => tx`
+    delete from public.context_items where id = ${itemId} and created_by_kind <> 'system' returning id`);
+  return rows.length === 1;
+}

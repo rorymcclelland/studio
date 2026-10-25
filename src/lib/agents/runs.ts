@@ -26,10 +26,10 @@ export async function createRun(
 ): Promise<string> {
   const agent = getAgent(agentKey);
   if (!agent) throw new StartRunError(`Unknown agent "${agentKey}".`);
-  const parsed = agent.input.safeParse(rawInput);
+  const parsed = (agent.start ?? agent.input).safeParse(rawInput);
   if (!parsed.success) throw new StartRunError(parsed.error.issues[0]?.message ?? "Invalid input.");
 
-  const label = (opts.label ?? agent.label(parsed.data)).slice(0, 200);
+  const label = (opts.label ?? (agent.start ? agent.name : agent.label(parsed.data))).slice(0, 200);
   const [row] = await asUser(member.userId, (tx) => tx`
     insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)
     values (${member.workspaceId}, ${agent.key}, ${agent.version}, ${tx.json(parsed.data as never)}, ${member.userId},

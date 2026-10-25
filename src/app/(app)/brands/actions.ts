@@ -5,6 +5,9 @@ import { requireMember } from "@/lib/auth/session";
 import { BrandInputError, getBrand, updateBrand } from "@/lib/brands/repo";
 import type { BrandInput } from "@/lib/brands/schema";
 import { DemoAlreadyLoadedError, loadDemoBrands } from "@/lib/demo/load";
+import { createRun, StartRunError } from "@/lib/agents/runs";
+import { removeContextItem } from "@/lib/context/store";
+import { sendEvent } from "@/inngest/client";
 import type { FormState } from "../actions";
 
 /** S2-4: adds the two simulated demo brands, or says why it didn't. */
@@ -54,4 +57,28 @@ export async function saveBrand(brandId: string, draft: BrandDraft): Promise<Sav
   revalidatePath(`/brands/${brandId}`);
   revalidatePath("/brands");
   return { ok: true, done: `Brand kit saved for ${draft.name.trim()}.` };
+}
+
+/** S3-1: starts the Audience agent for a brand; the brand page then follows the run. */
+export async function startAudienceRun(brandId: string): Promise<FormState & { runId?: string }> {
+  const member = await requireMember();
+  const brand = await getBrand(member.userId, brandId);
+  if (!brand) return { error: "That brand isn't in your workspace." };
+  try {
+    const runId = await createRun(member, "audience", { brandId }, sendEvent, { brandId, label: `${brand.name}: find audiences` });
+    revalidatePath(`/brands/${brandId}`);
+    return { done: "The Audience agent is counting and naming segments. This takes a few seconds.", runId };
+  } catch (err) {
+    if (err instanceof StartRunError) return { error: err.message };
+    console.error("[startAudienceRun] couldn't start the run", err);
+    return { error: "Couldn't start the Audience agent. Nothing was started; try again." };
+  }
+}
+
+/** Removes a segment the Audience agent added (system segments can't be removed). */
+export async function removeSegment(brandId: string, itemId: string): Promise<FormState> {
+  const member = await requireMember();
+  const removed = await removeContextItem(member.userId, itemId);
+  revalidatePath(`/brands/${brandId}`);
+  return removed ? { done: "Segment removed. Running the Audience agent again would bring it back." } : { error: "That segment can't be removed." };
 }

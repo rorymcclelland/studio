@@ -37,6 +37,8 @@ describe("agent evals", () => {
   afterAll(closeSql);
 
   it("runs the requested agents' cases and writes a report", async () => {
+    const found = modules.map((m) => m.agent);
+    expect(wanted.filter((w) => !found.includes(w)), `eval modules found: ${Object.keys(files).join(", ")}`).toEqual([]);
     if (mode === "real") {
       const total = modules.reduce((s, m) => s + estimatePence(m), 0);
       console.log(`\nReal-model evals for ${modules.map((m) => m.agent).join(", ")}: up to about ${total.toFixed(1)}p.`);

@@ -7,7 +7,7 @@ import type { EvalModule } from "@/lib/evals/types";
 type In = { brandName: string };
 type Out = { taglines: string[] };
 
-const REAL_BRANDS = /\b(patagonia|north face|monzo|revolut|starling|nike|adidas)\b/i;
+import { REAL_BRANDS } from "./real-brands";
 
 const mod: EvalModule<In, Out, null> = {
   agent: "tagline",

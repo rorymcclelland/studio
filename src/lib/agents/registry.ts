@@ -1,10 +1,12 @@
 import { mockBehaviour } from "@/lib/models/mock";
 import type { AgentDefinition } from "./contract";
+import { audienceAgent } from "./audience";
 import { taglineAgent } from "./tagline";
 
 // Every product agent, by key. The add-an-agent skill appends here.
 export const AGENTS = {
   tagline: taglineAgent,
+  audience: audienceAgent,
 } as const;
 
 export type RegisteredAgent = keyof typeof AGENTS;

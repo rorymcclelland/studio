@@ -1,5 +1,6 @@
 import { asUser } from "@/lib/db/scoped";
 import type { StepContext } from "./model-step";
+import { executeAudienceRun } from "./audience-workflow";
 import { executeTaglineRun, type StepTools } from "./workflow";
 
 /**
@@ -10,6 +11,7 @@ export type Workflow = (ctx: StepContext, step: StepTools) => Promise<string>;
 
 export const WORKFLOWS: Record<string, Workflow> = {
   tagline: executeTaglineRun,
+  audience: executeAudienceRun,
 };
 
 /** Runs the workflow for an agent; an agent without one fails its run instead of leaving it queued. */

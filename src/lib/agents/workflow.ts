@@ -30,7 +30,7 @@ function timeoutToInterval(t: string): string {
   return `${m[1]} ${unit}`;
 }
 
-async function setRun(ctx: StepContext, status: string, fields: { output?: unknown; error?: string } = {}) {
+export async function setRun(ctx: StepContext, status: string, fields: { output?: unknown; error?: string } = {}) {
   const terminal = ["completed", "rejected", "expired", "failed", "stopped_cap"].includes(status);
   await asUser(ctx.userId, (tx) => tx`
     update public.agent_runs set status = ${status}::public.run_status,
