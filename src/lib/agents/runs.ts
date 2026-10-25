@@ -58,6 +58,8 @@ export type RunDetail = {
   created_at: Date;
   updated_at: Date;
   completed_at: Date | null;
+  /** Total cost from the usage ledger, the same source the daily cap uses. */
+  cost_pence: string;
   steps: {
     id: string;
     seq: number;
@@ -94,7 +96,9 @@ export type RunDetail = {
 export async function getRun(userId: string, runId: string): Promise<RunDetail | null> {
   if (!UUID.test(runId)) return null;
   return asUser(userId, async (tx) => {
-    const [run] = await tx`select * from public.agent_runs where id = ${runId}`;
+    const [run] = await tx`
+      select r.*, coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
+      from public.agent_runs r where r.id = ${runId}`;
     if (!run) return null;
     const steps = await tx`select * from public.agent_steps where run_id = ${runId} order by seq`;
     const approvals = await tx`select * from public.approvals where run_id = ${runId} order by created_at`;
@@ -114,7 +118,7 @@ export type RunSummary = {
 export async function listRuns(userId: string, limit = 50): Promise<RunSummary[]> {
   return asUser(userId, (tx) => tx`
     select r.id, r.agent, r.status, r.input, r.created_at,
-      coalesce((select sum(s.cost_pence) from public.agent_steps s where s.run_id = r.id), 0)::text as cost_pence
+      coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
     from public.agent_runs r
     order by r.created_at desc
     limit ${limit}`) as unknown as Promise<RunSummary[]>;

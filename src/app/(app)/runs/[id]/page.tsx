@@ -17,7 +17,6 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
 
   const agent = AGENTS[run.agent as keyof typeof AGENTS];
   const pending = run.approvals.find((a) => a.status === "pending");
-  const totalCost = run.steps.reduce((s, x) => s + Number(x.cost_pence), 0);
 
   return (
     <div className="space-y-8">
@@ -30,7 +29,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
         </div>
         <p className="mt-1 text-sm text-ink-2">
           {agent?.name ?? run.agent} v{run.agent_version} · started {formatWhen(run.created_at)} · total cost{" "}
-          {formatPence(totalCost)}
+          {formatPence(run.cost_pence)}
         </p>
       </div>
 
