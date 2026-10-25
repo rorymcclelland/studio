@@ -1,45 +1,51 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useEffect } from "react";
+import { Button } from "@/components/ui/button";
+import { Field } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
+import { useToast } from "@/components/ui/toast";
 import { decide, type FormState } from "../../actions";
 
 export function ApprovalForm({ approvalId, options }: { approvalId: string; options: string[] }) {
   const [state, action, pending] = useActionState<FormState, FormData>(decide, null);
+  const toast = useToast();
+  const done = state && "done" in state ? state.done : null;
+  const error = state && "error" in state ? state.error : null;
+  useEffect(() => {
+    if (done) toast({ message: done, tone: "good" });
+  }, [done, toast]);
   return (
-    <form action={action} className="mt-4 space-y-4">
+    <form action={action} className="mt-5 space-y-5">
       <input type="hidden" name="approvalId" value={approvalId} />
-      <fieldset className="space-y-2">
+      <fieldset className="grid gap-2">
         <legend className="sr-only">Taglines</legend>
         {options.map((o, i) => (
-          <label key={i} className="flex cursor-pointer items-start gap-3 rounded-md border border-line px-3 py-2.5 has-[:checked]:border-accent">
-            <input type="radio" name="choice" value={i} className="mt-1" required={false} />
-            <span>{o}</span>
+          <label
+            key={i}
+            className="flex cursor-pointer items-start gap-3 rounded-field border-2 border-line bg-surface px-4 py-3 transition-colors hover:border-primary-soft has-checked:border-primary has-checked:bg-primary-soft"
+          >
+            <input type="radio" name="choice" value={i} className="mt-1 size-4 shrink-0 accent-primary" />
+            <span className="min-w-0 font-medium wrap-anywhere">{o}</span>
           </label>
         ))}
       </fieldset>
-      <label className="flex flex-col gap-1.5 text-sm">
-        <span className="font-medium">Note (optional)</span>
-        <input name="reason" maxLength={500} className="rounded-md border border-line bg-surface px-3 py-2" />
-      </label>
+      <Field id={`reason-${approvalId}`} label="Note (optional)" hint="Saved with the decision in the run's trail.">
+        <Input name="reason" maxLength={500} />
+      </Field>
       <div className="flex flex-wrap gap-3">
-        <button
-          name="intent"
-          value="approve"
-          disabled={pending}
-          className="rounded-md bg-accent px-4 py-2 font-medium text-white disabled:opacity-60 dark:text-black"
-        >
+        <Button name="intent" value="approve" disabled={pending}>
           Approve tagline
-        </button>
-        <button
-          name="intent"
-          value="reject"
-          disabled={pending}
-          className="rounded-md border border-line px-4 py-2 font-medium disabled:opacity-60"
-        >
+        </Button>
+        <Button name="intent" value="reject" variant="quiet" disabled={pending}>
           Reject all
-        </button>
+        </Button>
       </div>
-      {state?.error && <p role="alert" className="text-sm text-bad">{state.error}</p>}
+      {error && (
+        <p role="alert" className="font-medium text-attention-ink">
+          {error}
+        </p>
+      )}
     </form>
   );
 }

@@ -5,7 +5,8 @@ import { requireMember } from "@/lib/auth/session";
 import { ApprovalError, createRun, decideApproval, StartRunError } from "@/lib/agents/runs";
 import { sendEvent } from "@/inngest/client";
 
-export type FormState = { error: string } | null;
+/** An action's result: an error to show beside the form, or a done message for a toast. */
+export type FormState = { error: string } | { done: string } | null;
 
 export async function startTaglineRun(_prev: FormState, form: FormData): Promise<FormState> {
   const member = await requireMember();
@@ -39,5 +40,10 @@ export async function decide(_prev: FormState, form: FormData): Promise<FormStat
     console.error("[decide] couldn't record the decision", { approvalId, intent }, err);
     return { error: "Couldn't record the decision. Nothing was changed; try again." };
   }
-  return null;
+  return {
+    done:
+      intent === "approve"
+        ? "Tagline approved. The agent is finishing the run."
+        : "Taglines rejected. The run will end without one.",
+  };
 }

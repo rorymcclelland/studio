@@ -1,14 +1,13 @@
-import Link from "next/link";
+import { NotFoundCard } from "@/components/not-found-card";
+import { Wordmark } from "@/components/ui/wordmark";
 
+// Addresses that match no route. Inside the signed-in app, (app)/not-found.tsx
+// shows the same card within the shell.
 export default function NotFound() {
   return (
-    <main className="mx-auto max-w-xl px-4 py-16">
-      <h1 className="text-2xl font-semibold tracking-tight">Not found</h1>
-      <p className="mt-2 text-ink-2">
-        There&apos;s nothing at this address in your workspace. It may belong to another workspace, or the link may be
-        wrong.
-      </p>
-      <Link href="/" className="mt-6 inline-block text-accent">Go to the home page</Link>
+    <main className="mx-auto max-w-xl space-y-8 px-4 py-12 sm:py-16">
+      <Wordmark />
+      <NotFoundCard />
     </main>
   );
 }
