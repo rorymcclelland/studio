@@ -1,6 +1,6 @@
 // S2-1 test case 6 (BUG-1): tiny costs must never read as free.
 import { describe, expect, it } from "vitest";
-import { formatPence } from "@/lib/format";
+import { formatCount, formatMonth, formatPence, formatPrice, formatShare } from "@/lib/format";
 
 describe("formatPence", () => {
   it("S2-1 #6: the agreed examples", () => {
@@ -30,5 +30,24 @@ describe("formatPence", () => {
     expect(formatPence("0.0032")).toBe("under 0.01p");
     expect(formatPence("0")).toBe("0p");
     expect(formatPence("250")).toBe("£2.50");
+  });
+});
+
+describe("brand overview figures", () => {
+  it("formats a price in pence as pounds", () => {
+    expect(formatPrice(18900)).toBe("£189.00");
+    expect(formatPrice(150)).toBe("£1.50");
+    expect(formatPrice(0)).toBe("£0.00");
+  });
+
+  it("formats counts with thousands separators and shares to one place", () => {
+    expect(formatCount(2000)).toBe("2,000");
+    expect(formatShare(0.3846)).toBe("38.5%");
+    expect(formatShare(0)).toBe("0.0%");
+  });
+
+  it("names a month from its YYYY-MM key", () => {
+    expect(formatMonth("2026-03")).toBe("Mar 2026");
+    expect(formatMonth("2024-11", "long")).toBe("November 2024");
   });
 });
