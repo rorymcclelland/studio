@@ -1,0 +1,5 @@
+// Wordmark logos for the two fictional demo brands, drawn in code (Q2).
+
+export const FERNHOLLOW_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" role="img" aria-label="Fernhollow Outfitters"><path d="M14 40 L24 10 L34 40 Z" fill="#3F5B3A"/><path d="M22 40 L30 20 L38 40 Z" fill="#7A9A6B"/><text x="46" y="27" font-family="Georgia, serif" font-size="20" font-weight="700" fill="#2B2A26">Fernhollow</text><text x="47" y="41" font-family="Helvetica, Arial, sans-serif" font-size="9" letter-spacing="3" fill="#B5653A">OUTFITTERS</text></svg>`;
+
+export const QUILLMOOR_LOGO = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48" role="img" aria-label="Quillmoor Money"><circle cx="24" cy="24" r="15" fill="#1F4E79"/><path d="M17 31 C22 18 28 14 33 13 C30 20 26 27 17 31 Z" fill="#F2C14E"/><text x="48" y="31" font-family="Helvetica, Arial, sans-serif" font-size="21" font-weight="700" fill="#14213D">Quillmoor</text><text x="152" y="31" font-family="Helvetica, Arial, sans-serif" font-size="21" fill="#1F4E79">money</text></svg>`;

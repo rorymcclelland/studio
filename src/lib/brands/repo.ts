@@ -1,4 +1,5 @@
 import { asUser } from "@/lib/db/scoped";
+import { syncBrandContext } from "@/lib/context/sync";
 import { parseBrandInput, type BrandInput, type BrandKit } from "./schema";
 import { sanitizeLogoSvg } from "./svg";
 
@@ -75,11 +76,14 @@ function rethrow(err: unknown): never {
 export async function createBrand(member: Member, raw: BrandInput, opts: { simulated?: boolean } = {}): Promise<string> {
   const k = validated(raw);
   try {
-    const [row] = await asUser(member.userId, (tx) => tx`
-      insert into public.brands ${tx({ ...columns(k), workspace_id: member.workspaceId, created_by: member.userId, is_simulated: opts.simulated ?? false })}
-      returning id`);
-    await asUser(member.userId, (tx) => tx`update public.brands set palette = ${tx.json(k.palette)} where id = ${row.id}`);
-    return row.id as string;
+    return await asUser(member.userId, async (tx) => {
+      const [row] = await tx`
+        insert into public.brands ${tx({ ...columns(k), workspace_id: member.workspaceId, created_by: member.userId, is_simulated: opts.simulated ?? false })}
+        returning id`;
+      await tx`update public.brands set palette = ${tx.json(k.palette)} where id = ${row.id}`;
+      await syncBrandContext(tx, row.id);
+      return row.id as string;
+    });
   } catch (err) {
     rethrow(err);
   }
@@ -90,10 +94,14 @@ export async function updateBrand(member: Member, brandId: string, raw: BrandInp
   if (!UUID.test(brandId)) return false;
   const k = validated(raw);
   try {
-    const res = await asUser(member.userId, (tx) => tx`
-      update public.brands set ${tx(columns(k))}, palette = ${tx.json(k.palette)}
-      where id = ${brandId}`);
-    return res.count === 1;
+    return await asUser(member.userId, async (tx) => {
+      const res = await tx`
+        update public.brands set ${tx(columns(k))}, palette = ${tx.json(k.palette)}
+        where id = ${brandId}`;
+      if (res.count !== 1) return false;
+      await syncBrandContext(tx, brandId);
+      return true;
+    });
   } catch (err) {
     rethrow(err);
   }
