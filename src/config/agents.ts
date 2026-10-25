@@ -12,6 +12,7 @@ export type AgentModelConfig = {
 export const AGENT_MODELS = {
   tagline: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 600 },
   audience: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
+  brief: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 3000 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

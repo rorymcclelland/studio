@@ -10,10 +10,12 @@ import { exitCode, reportMarkdown, runEvalModule, type EvalResult } from "@/lib/
 import type { EvalEnv, EvalModule } from "@/lib/evals/types";
 import { createMember } from "../helpers/db";
 
-const files = import.meta.glob<EvalModule>("./*.eval.ts", { eager: true, import: "default" });
-const wanted = (process.env.EVAL_AGENTS ?? "").split(",").filter(Boolean);
+const wanted = (process.env.EVAL_AGENTS ?? "").split(",").filter((a) => /^[a-z][a-zA-Z0-9]*$/.test(a));
 const mode = process.env.EVAL_MODE === "real" ? "real" : "mock";
-const modules = Object.values(files).filter((m) => wanted.includes(m.agent));
+// Imported by name (scripts/eval.mjs has checked the files exist), so a new eval file is always picked up.
+const modules: EvalModule[] = await Promise.all(
+  wanted.map(async (a) => ((await import(/* @vite-ignore */ `./${a}.eval.ts`)) as { default: EvalModule }).default),
+);
 
 /** A generous estimate: 8,000 tokens in and the full output allowance, twice (one repair) per case. */
 function estimatePence(mod: EvalModule): number {
@@ -37,8 +39,8 @@ describe("agent evals", () => {
   afterAll(closeSql);
 
   it("runs the requested agents' cases and writes a report", async () => {
-    const found = modules.map((m) => m.agent);
-    expect(wanted.filter((w) => !found.includes(w)), `eval modules found: ${Object.keys(files).join(", ")}`).toEqual([]);
+    expect(modules.map((m) => m.agent), "each eval file names its own agent").toEqual(wanted);
+    expect(modules.length, "at least one agent to evaluate").toBeGreaterThan(0);
     if (mode === "real") {
       const total = modules.reduce((s, m) => s + estimatePence(m), 0);
       console.log(`\nReal-model evals for ${modules.map((m) => m.agent).join(", ")}: up to about ${total.toFixed(1)}p.`);
