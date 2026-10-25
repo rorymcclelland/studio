@@ -4,6 +4,11 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Pill } from "@/components/ui/pill";
 import { formatCount, formatMonth, formatShare } from "@/lib/format";
 
+function formatDay(iso: string | undefined): string {
+  if (!iso) return "the date it was made";
+  return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
+}
+
 /** Rule 1: every customer and order figure of a simulated brand carries this label. */
 function Simulated({ simulated }: { simulated: boolean }) {
   return simulated ? <Pill tone="review">Simulated data</Pill> : null;
@@ -18,7 +23,7 @@ export function CustomerSummary({ summary, simulated }: { summary: Summary | nul
         </h2>
         <p className="mt-1 max-w-prose text-ink-2">
           {simulated
-            ? "Generated for the demo, not real people or sales. Customers carry no names or contact details."
+            ? `Generated for the demo as of ${formatDay(summary?.asOf)}, not real people or sales. Customers carry no names or contact details.`
             : "From this brand's customers and orders. Customers carry no names or contact details."}
         </p>
       </div>
@@ -31,7 +36,7 @@ export function CustomerSummary({ summary, simulated }: { summary: Summary | nul
         <>
           <dl className="grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2 lg:grid-cols-4">
             <Stat label="Customers" value={formatCount(summary.customers)} simulated={simulated} />
-            <Stat label="Orders" value={formatCount(summary.orders)} note="in the last 24 months" simulated={simulated} />
+            <Stat label="Orders" value={formatCount(summary.orders)} note={simulated ? "in the 24 months to the data date" : "in the last 24 months"} simulated={simulated} />
             <Stat
               label="Repeat-purchase rate"
               value={formatShare(summary.repeatRate)}

@@ -11,7 +11,9 @@ export type CustomerSummary = {
   lapsed: number; // customers with no order in the last 12 months
   byRegion: { label: string; count: number }[];
   byAgeBand: { label: string; count: number }[];
-  ordersByMonth: { month: string; count: number }[]; // "2026-03", last 24 months, oldest first
+  ordersByMonth: { month: string; count: number }[]; // "2026-03", 24 months to asOf, oldest first
+  /** The date the windows count back from: the data date, or today for real data. */
+  asOf: string;
 };
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -19,20 +21,23 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export async function getCustomerSummary(userId: string, brandId: string): Promise<CustomerSummary | null> {
   if (!UUID.test(brandId)) return null;
   return asUser(userId, async (tx) => {
-    const [brand] = await tx`select id from public.brands where id = ${brandId}`;
+    const [brand] = await tx`select id, data_as_of from public.brands where id = ${brandId}`;
     if (!brand) return null;
+    // Windows count back from the data date, not today (review finding 5).
+    const asOf: Date = brand.data_as_of ? new Date(brand.data_as_of) : new Date();
+    const from = tx`date_trunc('month', ${asOf}::timestamptz - interval '1 millisecond') - interval '23 months'`;
     const [base] = await tx`
       with per as (select customer_id, count(*) as n, max(ordered_at) as last_at from public.orders where brand_id = ${brandId} group by customer_id)
       select
         (select count(*)::int from public.customers where brand_id = ${brandId}) as customers,
-        (select count(*)::int from public.orders where brand_id = ${brandId}) as orders,
+        (select count(*)::int from public.orders where brand_id = ${brandId} and ordered_at >= ${from}) as orders,
         (select count(*)::int from per where n >= 2) as repeaters,
-        (select count(*)::int from per where last_at < now() - interval '12 months') as lapsed`;
+        (select count(*)::int from per where last_at < ${asOf}::timestamptz - interval '12 months') as lapsed`;
     const byRegion = await tx`select region as label, count(*)::int as count from public.customers where brand_id = ${brandId} group by region order by count desc, region`;
     const byAgeBand = await tx`select age_band as label, count(*)::int as count from public.customers where brand_id = ${brandId} group by age_band order by age_band`;
     const ordersByMonth = await tx`
       with months as (
-        select to_char(date_trunc('month', now() at time zone 'UTC') - make_interval(months => g), 'YYYY-MM') as month
+        select to_char(date_trunc('month', (${asOf}::timestamptz - interval '1 millisecond') at time zone 'UTC') - make_interval(months => g), 'YYYY-MM') as month
         from generate_series(23, 0, -1) g)
       select m.month, coalesce(count(o.id), 0)::int as count
       from months m left join public.orders o
@@ -46,6 +51,7 @@ export async function getCustomerSummary(userId: string, brandId: string): Promi
       byRegion: byRegion.map((r) => ({ label: r.label, count: r.count })),
       byAgeBand: byAgeBand.map((r) => ({ label: r.label, count: r.count })),
       ordersByMonth: ordersByMonth.map((r) => ({ month: r.month, count: r.count })),
+      asOf: asOf.toISOString(),
     };
   });
 }

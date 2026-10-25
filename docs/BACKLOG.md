@@ -29,6 +29,9 @@ Nothing returned to the backlog.
 | F-7 | Add the GitHub MCP server now the repo exists | S1-2 | Planned, Sprint 2 (S2-6) |
 | F-8 | Preview deployments use the production database | Hosted set-up | Backlog, from Sprint 1 review. Accepted until real users arrive: previews are Rory-only and use the mock model |
 | F-9 | Dark theme (the prototype's dark palette exists) | Sprint 2 refinement, Q7 | Backlog, from Sprint 2 refinement |
+| F-10 | SVG sanitiser refuses good logos with `data:`/`https:` in any attribute, and stores logos without `xmlns` that then don't display | Sprint 2 review | Backlog, for Sprint 5 (logo upload) |
+| F-11 | Rule context items are keyed by position (`rule:dont:2`), so deleting a rule shifts the others | Sprint 2 review | Backlog, for Sprint 3 (agents link to rules) |
+| F-12 | `notFound()` inside a streamed page returns HTTP 200 (the screen is right) | Sprint 2 review | Backlog |
 
 ## Sprint 2: design system and brand kits (confirmed 25 October 2026)
 

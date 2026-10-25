@@ -11,9 +11,13 @@ import { BrandLogo } from "./brand-logo";
 
 export const metadata = { title: "Brands" };
 
+// Loading the demo brands writes about 29,000 rows in one transaction. Its
+// server action runs under this page's limit (S2-4 #6; review finding 2).
+export const maxDuration = 60;
+
 async function BrandsPageContent() {
   const member = await requireMember();
-  const brands = await listBrands(member.userId);
+  const brands = await listBrands(member.userId, member.workspaceId);
   return (
     <div className="space-y-10">
       <div>

@@ -11,8 +11,10 @@ import type { FormState } from "../actions";
 export async function addDemoBrands(): Promise<FormState> {
   const member = await requireMember();
   let names: string[];
+  const started = Date.now();
   try {
     names = await loadDemoBrands(member);
+    console.log(`[addDemoBrands] loaded ${names.length} brands in ${Date.now() - started} ms`);
   } catch (err) {
     if (err instanceof DemoAlreadyLoadedError) return { error: `${err.message} Nothing was added.` };
     console.error("[addDemoBrands] couldn't load the demo brands", err);

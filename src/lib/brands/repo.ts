@@ -16,6 +16,8 @@ export type Brand = BrandKit & {
   workspaceId: string;
   logoSvg: string | null;
   isSimulated: boolean;
+  /** When simulated customer data was generated; time windows count back from it. */
+  dataAsOf: string | null;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -61,6 +63,7 @@ function toBrand(r: Record<string, unknown>): Brand {
     bannedTerms: r.banned_terms as string[],
     evidenceClaims: r.evidence_claims as string[],
     isSimulated: r.is_simulated as boolean,
+    dataAsOf: r.data_as_of ? new Date(r.data_as_of as string).toISOString() : null,
     createdAt: r.created_at as Date,
     updatedAt: r.updated_at as Date,
   };
@@ -113,8 +116,12 @@ export async function getBrand(userId: string, brandId: string): Promise<Brand |
   return row ? toBrand(row) : null;
 }
 
-export async function listBrands(userId: string): Promise<Brand[]> {
-  const rows = await asUser(userId, (tx) => tx`select * from public.brands order by name`);
+/** Brands in one workspace (all of the user's workspaces when none is given). */
+export async function listBrands(userId: string, workspaceId?: string): Promise<Brand[]> {
+  const rows = await asUser(userId, (tx) => tx`
+    select * from public.brands
+    ${workspaceId ? tx`where workspace_id = ${workspaceId}` : tx``}
+    order by name`);
   return rows.map(toBrand);
 }
 

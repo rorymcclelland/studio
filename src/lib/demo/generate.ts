@@ -34,8 +34,11 @@ function monthStart(ref: Date, monthsBack: number): Date {
 
 export function generateDemoBrand(brief: DemoBrief, opts: { seed: number; refDate: Date }): DemoData {
   const rng = makeRng(seedFrom(brief.kit.slug, opts.seed));
-  // Month 0 is 24 months ago; month 23 is the current, possibly partial, month.
-  const starts = Array.from({ length: MONTHS }, (_, i) => monthStart(opts.refDate, MONTHS - 1 - i));
+  // Month 0 is 24 months ago; month 23 is the month containing the instant just
+  // before refDate, so it always has some length, even when refDate is the
+  // first of a month at midnight.
+  const lastInstant = new Date(opts.refDate.getTime() - 1);
+  const starts = Array.from({ length: MONTHS }, (_, i) => monthStart(lastInstant, MONTHS - 1 - i));
   const season = starts.map((d) => brief.monthWeights[d.getUTCMonth()]);
   // Gentle growth: newer months win slightly more new customers.
   const acquisition = season.map((w, i) => w * (0.75 + (0.5 * i) / (MONTHS - 1)));

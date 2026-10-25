@@ -198,7 +198,26 @@ All six stories: **Ready, Sprint 2**.
 | S2-4 | The fintech brand is **Quillmoor Money** | "Tallymore" was too close to real fintech brands (Tally, Tally Money, TallyMint); "Quillmoor" returned no matches |
 | S2-2 | Child tables reference their parent by `(id, workspace_id)` | A row can then only attach to a brand, customer, order or product in its own workspace, even if another workspace's id is known (test in S2-2 #2) |
 | S2-2 | Logo sanitising uses `sanitize-html` 2.18.1 with an allow-list of SVG elements and attributes; `xmlns` may only be the SVG namespace | 2.18.0 carried a moderate advisory fixed in 2.18.1 |
-| S2-4 | Order targets calibrated to about 4,950 (Fernhollow) and 5,590 (Quillmoor) orders; about 29,000 rows in all | Test case 2's ±5% holds for the fixed reference date in the tests; across a year of reference dates and seeds the totals vary by up to about 7%, and the peak months and lapsed share (15% to 35%) always hold |
+| S2-4 | Order targets calibrated to about 5,150 (Fernhollow) and 5,970 (Quillmoor) orders; about 31,000 rows in all | After the review, test cases 2 to 4 are checked with the seed the app ships (`DEMO_SEED`) on every week of a year: orders stay within ±5% of target, every month has orders, the peak month holds and the lapsed share stays between 15% and 35% (16% to 28% in practice). The first calibration had claimed this without checking the shipped seed; it did not hold |
 | S2-5 | Search uses `websearch_to_tsquery`, so any input is valid syntax; context items are upserted by a stable `source_ref` and only system items are ever removed by a re-sync | Hostile input never errors (S2-5 #5); agent-written items in Sprint 3 will survive brand edits |
 | S2-1 | `decide()` returns `{ done }` so approvals show a toast; decision 0007 records the token structure and light-only theme | Built by the UI subagent |
 | S2-2 #7, S2-6 #3 | Hosted advisors after the migrations: no unindexed foreign keys or per-row `auth.uid()` left; only "unused index" (new tables) and the accepted security-definer functions remain. "Leaked password protection" is reported off; it does not apply, since sign-in is by email link only | Checked 25 October 2026 |
+
+## Fresh-eyes review before deploy (25 October 2026)
+
+A reviewer subagent checked the whole sprint (`git diff 76936ce..HEAD`). No tenancy breach. Findings and what happened:
+
+| # | Finding | Action |
+|---|---|---|
+| 1 | S2-4 #3 failed for the shipped seed on some load dates (lapsed share as low as 13.4%) | Fixed: lifetimes and order rates retuned; tests now sweep `DEMO_SEED` over 53 weekly load dates |
+| 2 | Load time and search time never measured on production; no function time limit | `maxDuration = 60` on the Brands page; load time logged; measured on production at deploy |
+| 3 | A kit at the list limits could fail to save (banned-terms context text over 4,000 characters) | Fixed: context text capped to the column limits; test at every list limit |
+| 4 | Supabase's Data API would let a signed-in user write to the tables directly, bypassing validation and the simulated flag | Database now checks palettes and refuses changes to a brand's workspace, creator and simulated flag; **action for Rory: switch off the Data API** (the app never uses it) |
+| 5 | Summaries and context text measured windows from today, so they go stale | Fixed: brands store `data_as_of`; every window counts back from it; the overview says "as of" |
+| 6 | Policies checked membership once per row | Fixed: membership subquery on the Sprint 2 tables |
+| 7 | Two presses of "Add demo brands" at once gave the wrong message | Fixed: advisory lock and duplicate mapped to "already loaded"; test runs two loads at once |
+| 8 | Two reads not limited to the current workspace | Fixed: `listBrands` and the loader's check take the workspace |
+| 9 | Test gaps (context tables in the anonymous test, cross-workspace inserts per table, S2-3 #4 figures, S2-5 #3 filter) | Fixed: tests added or tightened |
+| 10 | SVG sanitiser refuses some good logos (`data:` or `https:` in any attribute; no `xmlns`) | Backlog F-10, for Sprint 5 when uploads arrive (safe today; logos are shown only as images) |
+| 11 | Rule context items are keyed by position | Backlog F-11, for Sprint 3 when agents link to rules |
+| 12 | Not-found inside a streamed page returns HTTP 200 | Backlog F-12 (screen is correct) |

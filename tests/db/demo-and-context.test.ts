@@ -9,8 +9,9 @@ import { getCustomerSummary } from "@/lib/brands/summary";
 import { getSql } from "@/lib/db/client";
 import { createMember, truncateAll } from "../helpers/db";
 
-// Generate as of now, so the data lines up with the summary's "last 24 months".
-const REF = new Date();
+// A past load date: every window must count back from the data's own date,
+// not from today (review finding 5).
+const REF = new Date("2026-03-15T10:30:00Z");
 let a: { userId: string; workspaceId: string };
 let b: { userId: string; workspaceId: string };
 
@@ -69,7 +70,8 @@ describe("demo brands and the Business Context store", () => {
     expect(quillOnly.every((h) => h.brandId === quill.id)).toBe(true);
     const products = await searchContext(a.userId, { query: "plan", brandId: quill.id, kinds: ["product"] });
     expect(products.every((h) => h.kind === "product")).toBe(true);
-    expect(products.length).toBeLessThanOrEqual(quillOnly.length);
+    expect(products.length).toBeGreaterThan(0);
+    expect(products.length).toBeLessThan(quillOnly.length);
     const fernJackets = await searchContext(a.userId, { query: "jacket", brandId: fern.id });
     expect(fernJackets.every((h) => h.brandId === fern.id)).toBe(true);
     expect(any.length).toBeGreaterThanOrEqual(quillOnly.length);
@@ -86,12 +88,39 @@ describe("demo brands and the Business Context store", () => {
     expect(s.byRegion.reduce((t, r) => t + r.count, 0)).toBe(d.c);
     expect(s.byAgeBand.reduce((t, r) => t + r.count, 0)).toBe(d.c);
     expect(s.ordersByMonth).toHaveLength(24);
+    expect(s.ordersByMonth[23].month).toBe("2026-03");
+    expect(s.ordersByMonth[0].month).toBe("2024-04");
+    expect(s.asOf).toBe(REF.toISOString());
     // Orders within the 24 visible months: every order, since the data covers exactly that window.
     expect(s.ordersByMonth.reduce((t, r) => t + r.count, 0)).toBe(d.o);
-    expect(s.repeatRate).toBeGreaterThan(0);
-    expect(s.repeatRate).toBeLessThan(1);
+    const monthly = await sql`select to_char(ordered_at at time zone 'UTC', 'YYYY-MM') as month, count(*)::int as n
+      from public.orders where brand_id = ${fern.id} group by 1`;
+    for (const m of monthly) expect(s.ordersByMonth.find((x) => x.month === m.month)?.count, m.month).toBe(m.n);
+    const [direct] = await sql`with per as (select customer_id, count(*) n, max(ordered_at) last_at from public.orders where brand_id = ${fern.id} group by 1)
+      select (select count(*)::int from per where n >= 2) as repeaters,
+             (select count(*)::int from per where last_at < ${REF}::timestamptz - interval '12 months') as lapsed`;
+    expect(s.repeatRate).toBeCloseTo(direct.repeaters / d.c, 6);
+    expect(s.lapsed).toBe(direct.lapsed);
+    expect(s.lapsed / d.c).toBeGreaterThanOrEqual(0.15);
     expect(await getCustomerSummary(b.userId, fern.id)).toBeNull();
   });
+
+  it("review 5: the lapsed context item counts back from the data date", async () => {
+    const fern = (await listBrands(a.userId)).find((x) => x.slug === "fernhollow")!;
+    const s = (await getCustomerSummary(a.userId, fern.id))!;
+    const [hit] = await searchContext(a.userId, { query: "lapsed", brandId: fern.id, kinds: ["segment"] });
+    expect(hit.body).toContain(s.lapsed.toLocaleString("en-GB"));
+    expect(hit.body).toContain("15 March 2026");
+  });
+
+  it("review 7: two loads at once add the brands once; the other is told they are already there", async () => {
+    const c = await createMember();
+    const results = await Promise.allSettled([loadDemoBrands(c, { refDate: REF }), loadDemoBrands(c, { refDate: REF })]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const failed = results.find((r) => r.status === "rejected") as PromiseRejectedResult;
+    expect(failed.reason).toBeInstanceOf(DemoAlreadyLoadedError);
+    expect(await listBrands(c.userId, c.workspaceId)).toHaveLength(2);
+  }, 120_000);
 
   it("S2-5 #4: another workspace gets nothing from search", async () => {
     expect(await searchContext(b.userId, { query: "lapsed" })).toEqual([]);

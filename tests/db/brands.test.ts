@@ -6,6 +6,7 @@ import { createBrand, deleteBrand, getBrand, listBrands, updateBrand } from "@/l
 import { createMember, truncateAll } from "../helpers/db";
 
 const NEW_TABLES = ["brands", "products", "customers", "orders", "order_lines"];
+const ALL_NEW_TABLES = [...NEW_TABLES, "context_items", "context_edges"];
 
 const input = (name = "Fernhollow Outfitters", slug = "fernhollow") => ({
   name, slug, description: "Outdoor clothing.", category: "Outdoor apparel",
@@ -68,10 +69,46 @@ describe("brand data model", () => {
     expect(await getBrand(b.userId, bBrand)).not.toBeNull();
   });
 
+  it("S2-2 #2b: no new table accepts a row for another workspace", async () => {
+    const a = await createMember();
+    const b = await createMember();
+    const bBrand = await createBrand(b, input());
+    await addCatalogue(b.userId, b.workspaceId, bBrand);
+    const [ids] = await asUser(b.userId, (tx) => tx`select
+      (select id from public.customers limit 1) as customer, (select id from public.orders limit 1) as "order",
+      (select id from public.products limit 1) as product, (select id from public.context_items limit 1) as item`);
+    const attempts: [string, (tx: Parameters<Parameters<typeof asUser>[1]>[0]) => Promise<unknown>][] = [
+      ["customers", (tx) => tx`insert into public.customers (workspace_id, brand_id, external_ref) values (${b.workspaceId}, ${bBrand}, 'X-1')`],
+      ["orders", (tx) => tx`insert into public.orders (workspace_id, brand_id, customer_id, ordered_at, channel) values (${b.workspaceId}, ${bBrand}, ${ids.customer}, now(), 'web')`],
+      ["order_lines", (tx) => tx`insert into public.order_lines (workspace_id, order_id, product_id, quantity, price_pence) values (${b.workspaceId}, ${ids.order}, ${ids.product}, 1, 1)`],
+      ["context_items", (tx) => tx`insert into public.context_items (workspace_id, brand_id, kind, title, source) values (${b.workspaceId}, ${bBrand}, 'insight', 'x', 'x')`],
+      ["context_edges", (tx) => tx`insert into public.context_edges (workspace_id, from_item, to_item, relation) values (${b.workspaceId}, ${ids.item}, ${ids.item}, 'mentions')`],
+    ];
+    for (const [table, write] of attempts) {
+      await expect(asUser(a.userId, write), table).rejects.toThrow(/row-level security/);
+    }
+  });
+
+  it("review 4: the simulated flag, creator and workspace cannot change; the database checks palettes", async () => {
+    const m = await createMember();
+    const id = await createBrand(m, input(), { simulated: true });
+    await expect(asUser(m.userId, (tx) => tx`update public.brands set is_simulated = false where id = ${id}`)).rejects.toThrow(/cannot be changed/);
+    await expect(asUser(m.userId, (tx) => tx`update public.brands set palette = ${tx.json([{ name: "x", hex: "red;background:url(x)" }])} where id = ${id}`)).rejects.toThrow(/brands_palette_valid/);
+    await expect(asUser(m.userId, (tx) => tx`update public.brands set palette = ${tx.json([{ name: "x", hex: "#112233", extra: "y" }])} where id = ${id}`)).rejects.toThrow(/brands_palette_valid/);
+    expect((await getBrand(m.userId, id))!.isSimulated).toBe(true);
+  });
+
+  it("review 3: a kit at every list limit still saves (context text is capped)", async () => {
+    const m = await createMember();
+    const big = { ...input(), bannedTerms: Array.from({ length: 50 }, (_, i) => `${i}`.padEnd(80, "x")),
+      doRules: Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(300, "d")) };
+    await expect(createBrand(m, big)).resolves.toBeTruthy();
+  });
+
   it("S2-2 #3: the anonymous role reads nothing from any new table", async () => {
     const m = await createMember();
     await addCatalogue(m.userId, m.workspaceId, await createBrand(m, input()));
-    for (const t of NEW_TABLES) {
+    for (const t of ALL_NEW_TABLES) {
       const r = await asAnon((tx) => tx.unsafe(`select 1 from public.${t}`)).catch((e: Error) => e);
       if (r instanceof Error) expect(r.message).toMatch(/permission denied/);
       else expect(r.length, t).toBe(0);

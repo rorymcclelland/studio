@@ -10,7 +10,7 @@ export class DemoAlreadyLoadedError extends Error {}
 
 export type Member = { userId: string; workspaceId: string };
 
-const SEED = 2026;
+export const DEMO_SEED = 2026;
 const CHUNK = 2000;
 
 function chunks<T>(rows: T[], size = CHUNK): T[][] {
@@ -26,11 +26,30 @@ function chunks<T>(rows: T[], size = CHUNK): T[][] {
  */
 export async function loadDemoBrands(member: Member, opts: { refDate?: Date } = {}): Promise<string[]> {
   const refDate = opts.refDate ?? new Date();
-  const datasets = DEMO_BRIEFS.map((b) => generateDemoBrand(b, { seed: SEED, refDate }));
+  const datasets = DEMO_BRIEFS.map((b) => generateDemoBrand(b, { seed: DEMO_SEED, refDate }));
 
+  try {
+    return await load(member, datasets, refDate);
+  } catch (err) {
+    // Two presses at once: the second waits on the lock, then finds the brands
+    // (or, if it raced past the check, hits the unique short name). Either way
+    // the right answer is "already loaded" (review finding 7).
+    if ((err as { code?: string }).code === "23505") {
+      throw new DemoAlreadyLoadedError("The demo brands are already in this workspace.");
+    }
+    throw err;
+  }
+}
+
+async function load(member: Member, datasets: ReturnType<typeof generateDemoBrand>[], refDate: Date): Promise<string[]> {
   return asUser(member.userId, async (tx) => {
+    // One load at a time per workspace.
+    await tx`select pg_advisory_xact_lock(hashtextextended(${member.workspaceId}::text, 7))`;
     const slugs = datasets.map((d) => d.kit.slug);
-    const existing = await tx`select name from public.brands where slug = any(${slugs})`;
+    const existing = await tx`
+      select name from public.brands
+      where workspace_id = ${member.workspaceId} and slug = any(${slugs})
+      order by name`;
     if (existing.length) {
       throw new DemoAlreadyLoadedError(
         `The demo brands are already in this workspace (${existing.map((e) => e.name).join(" and ")}).`,
@@ -46,6 +65,7 @@ export async function loadDemoBrands(member: Member, opts: { refDate?: Date } = 
       const ws = member.workspaceId;
       await tx`insert into public.brands ${tx({
         id: brandId, workspace_id: ws, created_by: member.userId, is_simulated: true,
+        data_as_of: refDate,
         name: k.name, slug: k.slug, description: k.description, category: k.category,
         tone_words: k.toneWords, voice_notes: k.voiceNotes, do_rules: k.doRules, dont_rules: k.dontRules,
         font_primary: k.fontPrimary, font_secondary: k.fontSecondary, logo_svg: sanitizeLogoSvg(d.kit.logoSvg),

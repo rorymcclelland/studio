@@ -15,6 +15,9 @@ export async function syncBrandContext(tx: Tx, brandId: string): Promise<void> {
   const [brand] = await tx`select * from public.brands where id = ${brandId}`;
   if (!brand) return;
   const simulated = brand.is_simulated ? " Simulated data." : "";
+  // Windows count back from when the data was made (review finding 5).
+  const asOf: Date = brand.data_as_of ? new Date(brand.data_as_of) : new Date();
+  const asOfNote = brand.data_as_of ? ` As of ${asOf.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" })}.` : "";
   const items: Item[] = [];
 
   // Kit: voice, rules, legal.
@@ -45,12 +48,13 @@ export async function syncBrandContext(tx: Tx, brandId: string): Promise<void> {
     select
       (select count(*)::int from public.customers where brand_id = ${brandId}) as customers,
       (select count(*)::int from public.customers where brand_id = ${brandId} and marketing_consent) as consenting,
-      (select count(*)::int from last where last_at < now() - interval '12 months') as lapsed,
+      (select count(*)::int from last where last_at < ${asOf} - interval '12 months') as lapsed,
       (select count(*)::int from last where n >= 2) as repeaters,
-      (select count(*)::int from public.orders where brand_id = ${brandId}) as orders`;
+      (select count(*)::int from public.orders where brand_id = ${brandId}
+         and ordered_at >= date_trunc('month', ${asOf}::timestamptz - interval '1 millisecond') - interval '23 months') as orders`;
   if (base.customers > 0) {
-    items.push({ kind: "insight", title: `${brand.name} customer base`, body: `${num(base.customers)} customers and ${num(base.orders)} orders over the last 24 months; ${pct(base.consenting, base.customers)} have agreed to marketing.${simulated}`, source: "Customer summary", sourceRef: "insight:base" });
-    items.push({ kind: "segment", title: "Lapsed customers (no order in 12 months)", body: `${num(base.lapsed)} of ${num(base.customers)} customers (${pct(base.lapsed, base.customers)}) have not ordered in the last 12 months.${simulated}`, source: "Customer summary", sourceRef: "segment:lapsed", tags: ["lapsed", "win-back"] });
+    items.push({ kind: "insight", title: `${brand.name} customer base`, body: `${num(base.customers)} customers and ${num(base.orders)} orders in the 24 months to the data date; ${pct(base.consenting, base.customers)} have agreed to marketing.${asOfNote}${simulated}`, source: "Customer summary", sourceRef: "insight:base" });
+    items.push({ kind: "segment", title: "Lapsed customers (no order in 12 months)", body: `${num(base.lapsed)} of ${num(base.customers)} customers (${pct(base.lapsed, base.customers)}) have not ordered in the 12 months to the data date.${asOfNote}${simulated}`, source: "Customer summary", sourceRef: "segment:lapsed", tags: ["lapsed", "win-back"] });
     items.push({ kind: "segment", title: "Repeat customers (two or more orders)", body: `${num(base.repeaters)} customers (${pct(base.repeaters, base.customers)}) have ordered more than once.${simulated}`, source: "Customer summary", sourceRef: "segment:repeat", tags: ["loyal"] });
 
     const regions = await tx`select region, count(*)::int as n from public.customers where brand_id = ${brandId} group by region order by n desc, region limit 3`;
@@ -70,9 +74,11 @@ export async function syncBrandContext(tx: Tx, brandId: string): Promise<void> {
     }
   }
 
-  // Upsert, then remove system items whose source no longer exists.
+  // Upsert, then remove system items whose source no longer exists. Text is
+  // capped to the column limits, so a valid kit can always be saved (finding 3).
   const refs = items.map((i) => i.sourceRef);
-  for (const i of items) {
+  for (const raw of items) {
+    const i = { ...raw, title: raw.title.slice(0, 200), body: raw.body.length > 4000 ? `${raw.body.slice(0, 3997)}...` : raw.body };
     await tx`
       insert into public.context_items (workspace_id, brand_id, kind, title, body, source, source_ref, tags, created_by_kind)
       values (${brand.workspace_id}, ${brandId}, ${i.kind}, ${i.title}, ${i.body}, ${i.source}, ${i.sourceRef}, ${i.tags ?? []}, 'system')
