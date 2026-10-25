@@ -22,6 +22,7 @@ describe("campaigns tenancy", () => {
     [{ id: brandB }] = await asUser(b.userId, (tx) => tx`insert into public.brands (workspace_id, name, slug, created_by) values (${b.workspaceId}, 'B', 'b', ${b.userId}) returning id`) as unknown as [{ id: string }];
     [{ id: campaignA }] = await asUser(a.userId, (tx) => tx`
       insert into public.campaigns (workspace_id, brand_id, objective, created_by) values (${a.workspaceId}, ${brandA}, 'Win back lapsed walkers', ${a.userId}) returning id`) as unknown as [{ id: string }];
+    await asUser(a.userId, (tx) => tx`update public.campaigns set current_version = 1 where id = ${campaignA}`);
     await asUser(a.userId, (tx) => tx`
       insert into public.brief_versions (workspace_id, campaign_id, version, brief, source, created_by)
       values (${a.workspaceId}, ${campaignA}, 1, ${tx.json(briefJson)}, 'agent', ${a.userId})`);
@@ -53,6 +54,23 @@ describe("campaigns tenancy", () => {
   it("versions are append-only, even for the workspace's own members", async () => {
     await expect(asUser(a.userId, (tx) => tx`update public.brief_versions set source = 'person' where campaign_id = ${campaignA}`)).rejects.toThrow();
     await expect(asUser(a.userId, (tx) => tx`delete from public.brief_versions where campaign_id = ${campaignA}`)).rejects.toThrow();
+  });
+
+  it("review 13: a version must be the campaign's current one, and campaigns can't be deleted", async () => {
+    await expect(asUser(a.userId, (tx) => tx`
+      insert into public.brief_versions (workspace_id, campaign_id, version, brief, source, created_by)
+      values (${a.workspaceId}, ${campaignA}, 7, ${tx.json(briefJson)}, 'person', ${a.userId})`)).rejects.toThrow(/current version/);
+    await asUser(a.userId, (tx) => tx`delete from public.campaigns where id = ${campaignA}`).catch(() => {});
+    expect(await asUser(a.userId, (tx) => tx`select id from public.campaigns where id = ${campaignA}`)).toHaveLength(1);
+  });
+
+  it("review 6: a finished run's output can only gain a person's mark; its input never changes", async () => {
+    const [run] = await asUser(a.userId, (tx) => tx`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, status, output)
+      values (${a.workspaceId}, 'brief', 1, '{"mode":"revise"}', ${a.userId}, 'completed', '{"proposal":{"title":"x"}}') returning id`);
+    await expect(asUser(a.userId, (tx) => tx`update public.agent_runs set output = '{"proposal":{"title":"forged"}}' where id = ${run.id}`)).rejects.toThrow(/cannot be changed/);
+    await expect(asUser(a.userId, (tx) => tx`update public.agent_runs set input = '{}' where id = ${run.id}`)).rejects.toThrow(/cannot be changed/);
+    await asUser(a.userId, (tx) => tx`update public.agent_runs set output = output || '{"resolution":"discarded"}' where id = ${run.id}`);
   });
 
   it("a campaign's workspace, brand and creator can't be changed", async () => {

@@ -78,12 +78,13 @@ export async function listSegments(userId: string, brandId: string): Promise<Seg
 }
 
 /**
- * Removes an item an agent or person added. System items are refused: they
- * come back from the brand kit and data on the next sync.
+ * Removes a segment the Audience agent added. Anything else is refused:
+ * system items come back from the kit and data on the next sync, and other
+ * kinds have no remove control (S3-1).
  */
 export async function removeContextItem(userId: string, itemId: string): Promise<boolean> {
   if (!UUID.test(itemId)) return false;
   const rows = await asUser(userId, (tx) => tx`
-    delete from public.context_items where id = ${itemId} and created_by_kind <> 'system' returning id`);
+    delete from public.context_items where id = ${itemId} and kind = 'segment' and created_by_kind = 'agent' returning id`);
   return rows.length === 1;
 }

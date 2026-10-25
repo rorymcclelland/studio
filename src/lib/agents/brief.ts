@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { evidenceProblems } from "@/lib/brief/checks";
+import { evidenceProblems, proseOf } from "@/lib/brief/checks";
 import { BRIEF_SECTIONS, briefCore, CHANNELS, KPI_METRICS, type BriefCore } from "@/lib/brief/schema";
 import { defineAgent } from "./contract";
 
@@ -42,9 +42,13 @@ const REVISE_MARKER = "Task: revise a campaign brief.";
 export function checkBrief(input: BriefInput, output: BriefCore): string[] {
   const context = input.context.map((c) => ({ ref: c.tag, kind: c.kind, title: c.title, text: c.text }));
   const r = input.revise;
-  // Figures already in the current brief (a person may have typed them) stay allowed in a revision.
-  const allowed = r ? `${input.objective} ${JSON.stringify(r.current)}` : input.objective;
-  const problems = evidenceProblems(output, context, input.kit, { objective: allowed });
+  // Figures already in the current brief's words (a person may have typed them) stay allowed in a
+  // revision; citation tags are not words, so "C37" never makes 37 allowed.
+  const allowed = r ? `${input.objective} \n ${proseOf(r.current)}` : input.objective;
+  // A section revision is checked on that section: the rest must be copied exactly (below),
+  // so a source removed since can't block it.
+  const sections = r?.section ? [r.section] : undefined;
+  const problems = evidenceProblems(output, context, input.kit, { objective: allowed, sections });
   if (r?.section) {
     for (const s of BRIEF_SECTIONS) {
       if (s !== r.section && JSON.stringify(output[s]) !== JSON.stringify(r.current[s])) {
@@ -80,7 +84,7 @@ export const briefAgent = defineAgent({
     "Evidence rules:",
     "- Every insight cites the context items it rests on, by tag. Never cite a tag you were not given.",
     "- Choose one to three audiences, each by the tag of a segment item. If no segment items are given, choose none.",
-    "- Use a number only if it appears in the item you cite (for insights) or in the context. Never estimate or invent figures, prices, dates or percentages.",
+    "- Use a number only if it appears in the item you cite (for insights) or in the context, written as it is there, with the same unit (%, £, months, customers). Never estimate or invent figures, prices, dates or percentages, and never write quantities in words (\"half of\", \"one in four\").",
     "- Never use the brand's banned terms, and never make a claim on its list of claims that need evidence.",
     "- Follow the brand's do and don't rules and its tone of voice.",
     "- Do not mention real companies, competitors or trademarks.",

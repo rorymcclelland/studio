@@ -146,9 +146,12 @@ export async function executeBriefRun(ctx: StepContext, step: StepTools): Promis
     const href = `/campaigns/${prepared.campaignId}`;
     if (prepared.start.mode === "draft") {
       try {
-        const version = await asUser(ctx.userId, (tx) =>
-          addVersion(tx, { userId: ctx.userId, workspaceId: ctx.workspaceId }, prepared.campaignId, prepared.baseVersion, brief, "agent", { runId: ctx.runId }),
-        );
+        const version = await asUser(ctx.userId, async (tx) => {
+          // A retried step finds the version it already wrote (one per run, enforced by an index).
+          const [done] = await tx`select version from public.brief_versions where run_id = ${ctx.runId}`;
+          if (done) return done.version as number;
+          return addVersion(tx, { userId: ctx.userId, workspaceId: ctx.workspaceId }, prepared.campaignId, prepared.baseVersion, brief, "agent", { runId: ctx.runId });
+        });
         await setRun(ctx, "completed", { output: { summary: `Version ${version}: ${brief.title}`, version, href, hrefLabel: "Open the brief" } });
         return "completed";
       } catch (err) {

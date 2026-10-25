@@ -6,7 +6,7 @@ import { runModelStep, type StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
 
 type Found =
-  | { ok: true; set: CandidateSet; brandName: string; voice: string; isSimulated: boolean }
+  | { ok: true; set: CandidateSet; brandName: string; voice: string; bannedTerms: string[]; isSimulated: boolean }
   | { ok: false; message: string };
 
 type Named = { ok: true; output: AudienceOutput } | { ok: false; reason: "cap" | "error"; message: string };
@@ -24,7 +24,7 @@ export async function executeAudienceRun(ctx: StepContext, step: StepTools): Pro
       const started = Date.now();
       const [run] = await tx`select input from public.agent_runs where id = ${ctx.runId}`;
       const brandId = String(run.input.brandId ?? "");
-      const [brand] = await tx`select id, name, tone_words, voice_notes, is_simulated from public.brands where id = ${brandId}`;
+      const [brand] = await tx`select id, name, tone_words, voice_notes, banned_terms, is_simulated from public.brands where id = ${brandId}`;
       const set = brand ? await computeCandidates(tx, brandId) : null;
       const message = !brand
         ? "The brand no longer exists, or isn't in this workspace."
@@ -41,7 +41,7 @@ export async function executeAudienceRun(ctx: StepContext, step: StepTools): Pro
           duration_ms = excluded.duration_ms, finished_at = now()`;
       if (message || !set) return { ok: false, message: message ?? "No candidates." };
       const voice = [(brand.tone_words as string[]).join(", "), brand.voice_notes as string].filter(Boolean).join(". ").slice(0, 2500);
-      return { ok: true, set, brandName: brand.name as string, voice, isSimulated: brand.is_simulated as boolean };
+      return { ok: true, set, brandName: brand.name as string, voice, bannedTerms: brand.banned_terms as string[], isSimulated: brand.is_simulated as boolean };
     });
   });
   if (!found.ok) {
@@ -54,7 +54,7 @@ export async function executeAudienceRun(ctx: StepContext, step: StepTools): Pro
       const { output } = await runModelStep(
         ctx,
         audienceAgent,
-        { brandId: found.set.brandId, brandName: found.brandName, voice: found.voice, candidates: found.set.candidates },
+        { brandId: found.set.brandId, brandName: found.brandName, voice: found.voice, bannedTerms: found.bannedTerms, candidates: found.set.candidates },
         2,
         "Name and describe segments",
       );

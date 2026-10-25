@@ -258,3 +258,38 @@ Both tables get composite foreign keys, RLS through the membership subquery, no 
 
 All seven recommendations accepted: Q1 (a) segments saved straight away, labelled and removable; Q2 (a) Sonnet 5.5 for the brief; Q3 (a) no chaining, the brief uses the segments that exist; Q4 (a) revise the whole brief or any section; Q5 (a) keep every version, with restore; Q6 (a) deterministic graders only; Q7 (a) Campaigns in the main nav and "New campaign" on each brand page. No acceptance criteria changed.
 
+## Changes during the build (25 October 2026)
+
+| Story | Change | Why |
+|---|---|---|
+| F-4 | Runs carry `label` and `brand_id` (composite foreign key); `agent_runs` gains `unique (id, workspace_id)` so campaigns and versions can reference runs within their workspace only. Agents may declare `start` (what a person starts a run with) and `check` (code checks, with the usual one repair) | Labels without brand look-ups; the honesty checks live with each agent |
+| F-4 | The old `tagline-run` Inngest function is replaced by `agent-run`. Tagline runs still waiting for approval are closed as expired by migration 20261026000004 (one Sprint 1 test run on production) | A run waiting under a removed function could never finish |
+| F-5 | Mock evals run in CI. Real-model evals need a key in `.env.local`; none is kept locally (keys live only in Vercel), so no real-model eval report exists yet | Rule 6 |
+| S3-2 | The must-include and avoid lists are copied from the kit by code, never written by the model. Claims on the brand's "needs evidence" list are refused as well as banned terms | No instruction can drop a legal line; unevidenced superlatives are a rule 1 risk too |
+| S3-3 #6 | Was "a revision asking to remove the legal lines fails validation and the person sees why". Now: the proposal still carries every legal line, because code adds them | A consequence of the change above; stronger than refusing. **For Rory to confirm** |
+| S3-3 | Hand edits check only the sections that changed; a typed figure is allowed and marked; restores take today's kit lists and are re-checked | Found while building the screens |
+| F-12 | Malformed ids on `/brands`, `/runs` and `/campaigns` pages answer 404 from the proxy. A well-formed id that doesn't exist shows the not-found screen with HTTP 200 and `noindex` (test case 2's agreed fallback): the app shell streams, and so commits to 200, before the page can look the record up (Next.js streaming guide, "The HTTP contract") | Known limit, recorded |
+| S3-2 #7 | Timing a real brief on production happens after deploy (below) | Needs the real model |
+
+## Fresh-eyes review (25 October 2026)
+
+A reviewer subagent checked `git diff main..sprint-3`. Tenancy, kit keys, prompt quoting and the eval database guard held. Findings and what happened:
+
+| # | Finding | Action |
+|---|---|---|
+| 1 | In a revision, any number in the current brief's JSON was allowed, including citation tags (C37 made "37%" pass) | Fixed: only the current brief's words count, never tags |
+| 2 | The number check ignored units ("45%" passed on a £45.00 price; "12%" on "12 months"), and quantities in words were not checked | Fixed: unit-aware figures; quantities in words refused in model text |
+| 3 | Banned terms matched only the exact phrase ("returns are guaranteed", "risk free" passed) | Fixed: hyphens, word endings and word order; test #5 restored to "never mentions a guarantee" |
+| 4 | A cited item deleted since blocked every later revision and hand edit | Fixed: section revisions and edits are checked on the parts that change |
+| 5 | A retried save step could mark a run failed after writing version 1 | Fixed: the save finds its own version; one version per run (unique index) |
+| 6 | Accept and restore skipped the checks and used old kit lists; a finished run's output could be rewritten | Fixed: both re-checked against today's kit; a guard fixes finished runs' output and every run's input |
+| 7 | Tagline runs waiting under the removed function would hang | Fixed: closed as expired by migration |
+| 8 | The eval cap reset with each fresh eval database; no key check | Fixed: today's eval spend carries over; real runs refuse to start without a key |
+| 9 | F-12 #2 spec uncommitted and the limit unrecorded | Fixed: spec committed; limit recorded above |
+| 10 | S3-2 #7 timing and a real eval report missing | Timing on production after deploy; real eval report not possible without a local key (above) |
+| 11 | S3-3 #6 criterion changed without agreement | Recorded above for Rory to confirm |
+| 12 | Audience names weren't checked for banned terms or quantities in words | Fixed |
+| 13 | Deleting a campaign erased its history; versions could be inserted out of order | Fixed: no delete policy; a version must be its campaign's current one |
+| 14 | Kit key case folding is ASCII-only | Accepted and documented (decision 0009) |
+| 15 | `removeContextItem` could delete any non-system item | Fixed: only the Audience agent's segments |
+

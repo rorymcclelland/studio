@@ -31,7 +31,7 @@ const mod: EvalModule<In, AudienceOutput, CandidateSet> = {
     return { runId, output: named.output as AudienceOutput, context: set };
   },
   grade(_input, output, set) {
-    const problems = checkAudience({ brandId: set.brandId, brandName: "", voice: "", candidates: set.candidates }, output);
+    const problems = checkAudience({ brandId: set.brandId, brandName: "", voice: "", bannedTerms: [], candidates: set.candidates }, output);
     const names = output.segments.map((s) => s.name.toLowerCase());
     if (new Set(names).size !== names.length) problems.push("two segments share a name");
     for (const s of output.segments) {

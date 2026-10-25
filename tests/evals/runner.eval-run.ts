@@ -5,6 +5,7 @@ import { AGENT_MODELS, type AgentKey } from "@/config/agents";
 import { PRICES } from "@/config/prices";
 import { listBrands } from "@/lib/brands/repo";
 import { closeSql } from "@/lib/db/client";
+import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
 import { exitCode, reportMarkdown, runEvalModule, type EvalResult } from "@/lib/evals/runner";
 import type { EvalEnv, EvalModule } from "@/lib/evals/types";
@@ -32,6 +33,13 @@ describe("agent evals", () => {
 
   beforeAll(async () => {
     const member = await createMember();
+    // Today's earlier eval spend (scripts/eval.mjs carries it over), so the daily cap covers every eval run today.
+    const carried = Number(process.env.EVAL_CARRIED_PENCE ?? 0);
+    if (carried > 0) {
+      await asUser(member.userId, (tx) => tx`
+        insert into public.usage_ledger (workspace_id, agent, provider, model, input_tokens, output_tokens, cost_pence)
+        values (${member.workspaceId}, 'eval-carried', 'carried', 'earlier eval runs today', 0, 0, ${carried})`);
+    }
     await loadDemoBrands(member, { refDate: new Date("2026-10-01T09:00:00Z") });
     const brands = Object.fromEntries((await listBrands(member.userId)).map((b) => [b.slug, b.id]));
     env = { member, brands };

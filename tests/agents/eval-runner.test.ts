@@ -69,11 +69,20 @@ describe("F-5 evals runner", () => {
   it("#5 a real-model run prints its estimate and runs nothing without --yes", () => {
     const r = spawnSync("node", ["scripts/eval.mjs", "tagline"], {
       encoding: "utf8",
-      env: { ...process.env, MODEL_PROVIDER_OVERRIDE: "" },
+      env: { ...process.env, MODEL_PROVIDER_OVERRIDE: "", ANTHROPIC_API_KEY: "test-placeholder-not-used" },
       timeout: 120_000,
     });
     expect(r.status).not.toBe(0);
     expect(r.stdout).toMatch(/Real-model evals for tagline: up to about [\d.]+p\./);
     expect(r.stdout).toContain("Nothing was run. Add --yes");
   }, 120_000);
+
+  it("#5 a real-model run without a provider key refuses to start", () => {
+    const env: Record<string, string | undefined> = { ...process.env, MODEL_PROVIDER_OVERRIDE: "" };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const r = spawnSync("node", ["scripts/eval.mjs", "tagline", "--yes"], { encoding: "utf8", env: env as NodeJS.ProcessEnv });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("need a provider key");
+  });
 });

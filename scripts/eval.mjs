@@ -23,6 +23,24 @@ if (unknown.length) {
 const agents = named.length ? named : available;
 const base = process.env.EVAL_DATABASE_URL ?? "postgres://postgres@localhost:54329/campaign_studio_eval";
 
+if (!mock && !process.env.ANTHROPIC_API_KEY && !process.env.GOOGLE_GENERATIVE_AI_API_KEY) {
+  console.error("Real-model evals need a provider key in .env.local (ANTHROPIC_API_KEY). Use --mock to run them free.");
+  process.exit(2);
+}
+
+// The eval database is rebuilt every run, so today's real-model eval spend is
+// carried over into the new one: the daily cap covers all of today's eval runs.
+let carried = 0;
+try {
+  const { default: postgres } = await import("postgres");
+  const old = postgres(base, { onnotice: () => {}, connect_timeout: 3 });
+  const [r] = await old`select public.spend_today_pence('Europe/London')::float as p`;
+  carried = Number(r.p);
+  await old.end();
+} catch {
+  carried = 0; // no eval database yet
+}
+
 execFileSync("node", ["scripts/db-reset.mjs"], { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, DATABASE_URL: base } });
 
 const env = {
@@ -31,6 +49,7 @@ const env = {
   EVAL_AGENTS: agents.join(","),
   EVAL_MODE: mock ? "mock" : "real",
   EVAL_CONFIRMED: yes ? "1" : "",
+  EVAL_CARRIED_PENCE: String(carried),
   DAILY_CAP_PENCE: process.env.DAILY_CAP_PENCE ?? "100",
 };
 if (mock) env.MODEL_PROVIDER_OVERRIDE = "mock";

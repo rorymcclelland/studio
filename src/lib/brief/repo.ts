@@ -1,6 +1,6 @@
 import { createRun, type Member, type SendEvent, StartRunError } from "@/lib/agents/runs";
-import { asUser } from "@/lib/db/scoped";
-import { evidenceProblems, kitListsFor, unsourcedNumbers } from "./checks";
+import { asUser, type Tx } from "@/lib/db/scoped";
+import { changedSections, evidenceProblems, kitListsFor, type KitLists, unsourcedNumbers } from "./checks";
 import { contextById } from "./gather";
 import { BRIEF_SECTIONS, briefCore, storedBrief, type BriefSection, type StoredBrief } from "./schema";
 import { addVersion, StaleBriefError } from "./versions";
@@ -202,7 +202,10 @@ export async function saveBriefEdit(member: Member, campaignId: string, baseVers
     if (!c) throw new CampaignError("That campaign isn't in your workspace.");
     const kit = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims };
     const context = await contextById(tx, c.brand_id);
-    const problems = evidenceProblems(parsed.data, context, kit, { objective: c.objective, allowUnsourcedNumbers: true });
+    // Only the parts the person changed are checked, so a source removed since can't block an edit elsewhere.
+    const [base] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
+    const sections = base ? changedSections(storedBrief.parse(base.brief), parsed.data) : undefined;
+    const problems = evidenceProblems(parsed.data, context, kit, { objective: c.objective, allowUnsourcedNumbers: true, sections });
     if (problems.length) throw new BriefEditError(problems);
     const brief = storedBrief.parse({ ...parsed.data, ...kitListsFor(kit) });
     return addVersion(tx, member, campaignId, baseVersion, brief, "person", { note: note?.trim().slice(0, 500) || null });
@@ -237,7 +240,9 @@ export async function acceptProposal(member: Member, campaignId: string, runId: 
       where id = ${runId} and agent = 'brief' and status = 'completed' and input ->> 'campaignId' = ${campaignId}
       for update`;
     if (!r?.output?.proposal || r.output.resolution) throw new CampaignError("That proposal is no longer open.");
-    const brief = storedBrief.parse(r.output.proposal);
+    const proposal = storedBrief.parse(r.output.proposal);
+    const [base] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${r.output.baseVersion}`;
+    const brief = await recheck(tx, campaignId, proposal, base ? changedSections(storedBrief.parse(base.brief), proposal) : undefined);
     const version = await addVersion(tx, member, campaignId, r.output.baseVersion, brief, "revision", {
       runId,
       note: String(r.output.instruction ?? "").slice(0, 500) || null,
@@ -266,15 +271,27 @@ export async function dismissRevision(member: Member, campaignId: string, runId:
     where id = ${runId} and agent = 'brief' and input ->> 'campaignId' = ${campaignId} and status <> 'completed'`);
 }
 
+/**
+ * Before an accepted proposal or a restored version becomes current: the
+ * kit's lists as they are today, and the evidence checks against today's kit
+ * and context (a term banned since, or a source removed since, is refused).
+ * Figures are not re-checked: the version they come from already passed.
+ */
+async function recheck(tx: Tx, campaignId: string, brief: StoredBrief, sections?: BriefSection[]): Promise<StoredBrief> {
+  const [b] = await tx`select c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+    from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
+  if (!b) throw new CampaignError("That campaign isn't in your workspace.");
+  const kit: KitLists = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims };
+  const problems = evidenceProblems(brief, await contextById(tx, b.brand_id), kit, { objective: b.objective, allowUnsourcedNumbers: true, sections });
+  if (problems.length) throw new BriefEditError(problems);
+  return storedBrief.parse({ ...brief, ...kitListsFor(kit) });
+}
+
 /** S3-3 #5: makes an old version current again, as a new version (history is never rewritten). */
 export async function restoreVersion(member: Member, campaignId: string, version: number, baseVersion: number): Promise<number> {
   const old = await getVersion(member.userId, campaignId, version);
   if (!old) throw new CampaignError("That version doesn't exist.");
   return asUser(member.userId, async (tx) => {
-    // The kit's lists come from the kit as it is now, so a restored brief carries today's legal lines.
-    const [b] = await tx`select b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
-      from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
-    const kit = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims };
-    return addVersion(tx, member, campaignId, baseVersion, { ...old, ...kitListsFor(kit) }, "restore", { restoredFrom: version });
+    return addVersion(tx, member, campaignId, baseVersion, await recheck(tx, campaignId, old), "restore", { restoredFrom: version });
   });
 }
