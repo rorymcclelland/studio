@@ -3,7 +3,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { getRun } from "@/lib/agents/runs";
 import { executeRun } from "@/lib/agents/workflows";
 import type { StepTools } from "@/lib/agents/workflow";
-import { listBrands } from "@/lib/brands/repo";
+import { getBrand, listBrands, updateBrand } from "@/lib/brands/repo";
 import {
   acceptProposal,
   BriefEditError,
@@ -145,6 +145,31 @@ describe("S3-3 brief editor", () => {
     await expect(acceptProposal(a, id, proposal.runId)).rejects.toThrow(StaleBriefError);
     await expect(startRevision(a, id, 1, null, "Anything", async () => {})).rejects.toThrow(StaleBriefError);
     expect((await getCampaign(a.userId, id))!.proposals).toHaveLength(0); // proposals for old versions are not offered
+  });
+
+  it("review: a figure a person typed does not block a later revision of another section", async () => {
+    const id = await newBrief();
+    const c = (await getCampaign(a.userId, id))!;
+    await saveBriefEdit(a, id, 1, { ...core(c.brief), story: "A plain story about 47 walkers coming home to the hills." });
+    const r = await revise(id, "summary", "Shorter please");
+    expect(r.run.status).toBe("completed");
+    expect(r.campaign.proposals[0].brief.story).toContain("47 walkers");
+  });
+
+  it("review: restoring an old version carries the kit's legal lines as they are now", async () => {
+    const id = await newBrief();
+    const v1 = (await getVersion(a.userId, id, 1))!;
+    await saveBriefEdit(a, id, 1, { ...core(v1), title: "Another title" });
+    const kit = (await getBrand(a.userId, fern))!;
+    await updateBrand(a, fern, { ...kit, legalLines: [...kit.legalLines, "Offer ends Sunday."] });
+    try {
+      await restoreVersion(a, id, 1, 2);
+      const c = (await getCampaign(a.userId, id))!;
+      expect(c.brief!.mustInclude).toContain("Offer ends Sunday.");
+      expect(c.brief!.title).toBe(v1.title);
+    } finally {
+      await updateBrand(a, fern, kit);
+    }
   });
 
   it("S3-1: a segment the Audience agent added can be removed; a system segment can't", async () => {

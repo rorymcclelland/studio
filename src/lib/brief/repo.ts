@@ -270,5 +270,11 @@ export async function dismissRevision(member: Member, campaignId: string, runId:
 export async function restoreVersion(member: Member, campaignId: string, version: number, baseVersion: number): Promise<number> {
   const old = await getVersion(member.userId, campaignId, version);
   if (!old) throw new CampaignError("That version doesn't exist.");
-  return asUser(member.userId, (tx) => addVersion(tx, member, campaignId, baseVersion, old, "restore", { restoredFrom: version }));
+  return asUser(member.userId, async (tx) => {
+    // The kit's lists come from the kit as it is now, so a restored brief carries today's legal lines.
+    const [b] = await tx`select b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+      from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
+    const kit = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims };
+    return addVersion(tx, member, campaignId, baseVersion, { ...old, ...kitListsFor(kit) }, "restore", { restoredFrom: version });
+  });
 }

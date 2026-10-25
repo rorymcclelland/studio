@@ -1,0 +1,16 @@
+# 0009 Strategy agents: code counts and checks, models name and write
+
+**Date:** 25 October 2026. **Status:** accepted (built in Sprint 3: F-4, F-5, S3-1, S3-2, S3-3).
+
+**Context.** The Strategy squad's output is only useful if it is honest (rule 1). A model asked for a brief will happily invent a statistic, cite a source it was never given, or drop a legal line when told to. Sprint 3 had to make the first real agents trustworthy without a person reading every word.
+
+**Decision.**
+- **One run path for every agent.** A single Inngest function (`agent-run`) looks each agent's workflow up in `WORKFLOWS` (`src/lib/agents/workflows.ts`). Runs carry a label and, when they are about a brand, its id (a composite foreign key, so only a brand in the run's workspace). An agent whose start input differs from its model input declares `start` (for example `{ brandId }`), and the workflow adds the computed facts.
+- **Agents may declare `check(input, output)`**, problems the schema cannot express. Any problem gets the one repair attempt `runModelStep` already gives bad JSON, then the step fails with the problems listed. Checks live with the agent, so tests, evals and the live path share them.
+- **Audience agent:** SQL and code count every candidate segment (`src/lib/audience/candidates.ts`); the model only names and describes them, may not write a digit, and must return each candidate exactly once. Sizes and traits saved to the context store always come from code. Segments are saved without approval (saving spends and publishes nothing), labelled as proposed by the agent and removable.
+- **Brief agent:** code gathers up to 40 context items and tags them C1 to Cn. The model cites tags; code maps them back to item ids. The evidence checks (`src/lib/brief/checks.ts`) refuse a citation outside the context, an audience that is not a segment, a number that is not in the cited item (insights) or the context (elsewhere), a banned term, and any claim on the brand's "needs evidence" list. The must-include (legal lines) and avoid (banned terms, don't rules) lists are copied from the kit by code, never written by the model, so no instruction can remove them.
+- **Hand edits** pass the same checks, except that a person may type a figure; the page marks it "added by a person, not from the context".
+- **Versions are append-only** (no update or delete policy, and grants revoked). Every save checks the version it was based on, so a stale tab is refused rather than overwriting. Revisions wait as proposals in the run's output until a person uses or discards them.
+- **Evals** (`npm run eval`) run each agent's cases through its real workflow against a fresh local database with the demo brands, graded in code only. Mock mode runs in CI and costs nothing; real-model runs need `--yes`, stay inside the daily cap, and commit their report to `evals/reports/`.
+
+**Consequences.** Briefs are less free than a model would write them: a strategist cannot add a market figure the store does not hold (the Market agent, Sprint 4, will add sourced ones). The number check is literal, so a figure written differently from its source ("5.1k" for "5,116") fails and is repaired. Prompts grow with the context; at 40 items a brief costs about 3p on Sonnet.

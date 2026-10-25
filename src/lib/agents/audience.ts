@@ -117,7 +117,7 @@ export const audienceAgent = defineAgent({
         return {
           key: c.key,
           name: `${title.charAt(0).toUpperCase()}${title.slice(1)} customers`,
-          description: `A group to reach with care: ${c.definition.replace(/\d+/g, "some").slice(0, 200)}`,
+          description: `A group drawn from the brand's own customer data, best reached in its own words. ${/\d/.test(c.definition) ? "" : c.definition}`.trim().slice(0, 300),
           use: uses[c.key] ?? "cross-sell",
         };
       }),

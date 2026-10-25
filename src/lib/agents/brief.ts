@@ -41,8 +41,10 @@ const REVISE_MARKER = "Task: revise a campaign brief.";
 /** Code checks on a reply: evidence (all modes), and in section revisions, nothing else changed. */
 export function checkBrief(input: BriefInput, output: BriefCore): string[] {
   const context = input.context.map((c) => ({ ref: c.tag, kind: c.kind, title: c.title, text: c.text }));
-  const problems = evidenceProblems(output, context, input.kit, { objective: input.objective });
   const r = input.revise;
+  // Figures already in the current brief (a person may have typed them) stay allowed in a revision.
+  const allowed = r ? `${input.objective} ${JSON.stringify(r.current)}` : input.objective;
+  const problems = evidenceProblems(output, context, input.kit, { objective: allowed });
   if (r?.section) {
     for (const s of BRIEF_SECTIONS) {
       if (s !== r.section && JSON.stringify(output[s]) !== JSON.stringify(r.current[s])) {
@@ -137,7 +139,7 @@ export const briefAgent = defineAgent({
     const segments = context.filter((c) => c.kind === "segment");
     const lapsed = segments.find((s) => /lapsed/i.test(s.title)) ?? segments[0];
     const pick = (i: number) => evidence[i % Math.max(evidence.length, 1)];
-    const safe = (s: string) => s.replace(/\d[\d,.]*%?/g, "").replace(/\s+/g, " ").trim();
+    const safe = (s: string) => s.replace(/\s*\([^)]*\d[^)]*\)/g, "").replace(/\d[\d,.]*%?/g, "").replace(/\s+/g, " ").trim();
     return JSON.stringify({
       title: `${brand}: campaign brief`.slice(0, 100),
       summary: `A campaign for ${brand} built on what the context store shows about its customers and kit. It follows the brand's voice and rules.`,
