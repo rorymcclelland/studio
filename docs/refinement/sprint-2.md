@@ -221,3 +221,12 @@ A reviewer subagent checked the whole sprint (`git diff 76936ce..HEAD`). No tena
 | 10 | SVG sanitiser refuses some good logos (`data:` or `https:` in any attribute; no `xmlns`) | Backlog F-10, for Sprint 5 when uploads arrive (safe today; logos are shown only as images) |
 | 11 | Rule context items are keyed by position | Backlog F-11, for Sprint 3 when agents link to rules |
 | 12 | Not-found inside a streamed page returns HTTP 200 | Backlog F-12 (screen is correct) |
+
+## Production check (25 October 2026)
+
+| Test case | Target | Measured on production | Result |
+|---|---|---|---|
+| S2-4 #6 | Demo load under 20 s | 2.7 s (`[addDemoBrands] loaded 2 brands in 2746 ms`, London region); 4,000 customers, 11,087 orders, 73 context items, both brands marked simulated | Pass |
+| S2-5 #6 | Search under 300 ms | About 23 ms in the database (22.9 ms planning, 0.4 ms execution) for "lapsed customers" as a signed-in member, with row-level security applied | Pass |
+
+Deploy `cb32f18` is healthy (`/api/health` ok, no runtime errors). With 73 items, Postgres scans the table rather than using the search index; the GIN index takes over as the store grows.
