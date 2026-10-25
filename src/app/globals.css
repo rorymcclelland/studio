@@ -1,46 +1,101 @@
 @import "tailwindcss";
 
-/* Neutral shell for the working app. Sprint 2 replaces these tokens with the
-   chosen design direction; the prototypes under /directions carry their own. */
-:root {
-  --bg: #f7f7f5;
-  --surface: #ffffff;
-  --ink: #1d1f24;
-  --ink-2: #5a5f6b;
-  --line: #e1e2e6;
-  --accent: #2f5bd3;
-  --good: #1f7a55;
-  --warn: #9a6400;
-  --bad: #b3261e;
-  color-scheme: light;
-}
+/* Soft machine design system (decision 0006, S2-1).
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #17181b;
-    --surface: #1f2024;
-    --ink: #ececee;
-    --ink-2: #a3a7b1;
-    --line: #34363c;
-    --accent: #8aa8ff;
-    --good: #6fd3a5;
-    --warn: #f0c060;
-    --bad: #ff8f86;
-    color-scheme: dark;
-  }
+   Two layers:
+   1. Theme tokens: the raw palette for one theme, as CSS custom properties.
+      Light is the only theme for now (Sprint 2 refinement, Q7). A dark set
+      (F-9) is added later as a second block, for example
+      `:root[data-theme="dark"] { ... }`, redefining the same names. No
+      component changes when it arrives.
+   2. Tailwind theme names (`@theme inline`) that point at the tokens.
+      Components use only these names (bg-surface, text-ink-2, bg-primary...),
+      never hex values.
+
+   The app ignores the operating system's dark setting rather than half
+   supporting it: there is no prefers-color-scheme block, and
+   `color-scheme: only light` (with the matching meta tag from the root
+   layout's viewport) stops browsers darkening the page on their own. */
+
+:root {
+  /* Surfaces and text */
+  --bg: #f3f5fb;
+  --surface: #ffffff;
+  --surface-2: #eef0f8;
+  --ink: #22244a;
+  --ink-2: #5f6288;
+  --line: #e2e5f1;
+  --field-line: #8589ad; /* control borders: 3:1 against surface and bg */
+
+  /* Brand */
+  --primary: #4f50cf;
+  --primary-soft: #e6e6fb;
+  --on-primary: #ffffff;
+
+  /* Status: the fill colour (rings, meters, dots), a soft background and
+     the ink used for text on that background (all AA). */
+  --good: #23a37a;
+  --good-soft: #dcf4ea;
+  --good-ink: #10694c;
+  --review: #c99400;
+  --review-soft: #fbf0cf;
+  --review-ink: #7a5a00;
+  --attention: #dd6a3d;
+  --attention-soft: #fde3d7;
+  --attention-ink: #a13d16;
+
+  /* Danger actions use the attention ink as a solid fill. */
+  --danger: #a13d16;
+  --on-danger: #ffffff;
+
+  --focus: #4f50cf;
+  color-scheme: only light;
 }
 
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
   --color-ink: var(--ink);
   --color-ink-2: var(--ink-2);
   --color-line: var(--line);
-  --color-accent: var(--accent);
+  --color-field-line: var(--field-line);
+  --color-primary: var(--primary);
+  --color-primary-soft: var(--primary-soft);
+  --color-on-primary: var(--on-primary);
   --color-good: var(--good);
-  --color-warn: var(--warn);
-  --color-bad: var(--bad);
-  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --color-good-soft: var(--good-soft);
+  --color-good-ink: var(--good-ink);
+  --color-review: var(--review);
+  --color-review-soft: var(--review-soft);
+  --color-review-ink: var(--review-ink);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-attention-ink: var(--attention-ink);
+  --color-danger: var(--danger);
+  --color-on-danger: var(--on-danger);
+  --color-focus: var(--focus);
+
+  --font-sans: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  /* Type scale: Tailwind's defaults plus the large summary line. */
+  --text-display: clamp(1.875rem, 1.2rem + 2.6vw, 2.875rem);
+  --text-display--line-height: 1.12;
+  --text-display--letter-spacing: -0.025em;
+  --text-title: clamp(1.625rem, 1.3rem + 1.4vw, 2.25rem);
+  --text-title--line-height: 1.15;
+  --text-title--letter-spacing: -0.02em;
+
+  /* Soft forms */
+  --radius-field: 0.875rem;
+  --radius-card: 1.75rem;
+  --radius-hero: 2.25rem;
+  --radius-pebble: 55% 45% 50% 50% / 60% 55% 45% 40%;
+  --radius-logo: 42% 58% 55% 45% / 50% 45% 55% 50%;
+  --font-weight-strong: 650;
+
+  /* Motion: gentle, and switched off entirely under reduced motion. */
+  --ease-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 html,
@@ -48,19 +103,48 @@ body {
   background: var(--bg);
   color: var(--ink);
   font-family: var(--font-sans);
+  line-height: 1.55;
   -webkit-font-smoothing: antialiased;
 }
 
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 3px solid var(--focus);
   outline-offset: 2px;
 }
 
+/* Motion is opt-in: animations live inside no-preference blocks in the
+   components, and this rule catches anything else. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
   *::after {
-    animation-duration: 0.01ms !important;
-    transition-duration: 0.01ms !important;
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Health ring: segments appear one after another, once. */
+@keyframes ring-in {
+  from {
+    opacity: 0;
+  }
+}
+
+/* Toast: rises in from below. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .ring-seg {
+    animation: ring-in 0.4s var(--ease-soft) both;
+    animation-delay: calc(var(--i, 0) * 35ms);
+  }
+  .toast-in {
+    animation: toast-in 0.25s var(--ease-soft) both;
   }
 }

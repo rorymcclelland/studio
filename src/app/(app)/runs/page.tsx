@@ -4,6 +4,9 @@ import { requireMember } from "@/lib/auth/session";
 import { listRuns } from "@/lib/agents/runs";
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/status-badge";
 import { AutoRefresh } from "@/components/auto-refresh";
+import { ButtonLink } from "@/components/ui/button";
+import { EmptyState } from "@/components/ui/empty-state";
+import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatPence, formatWhen } from "@/lib/format";
 import { AGENTS } from "@/lib/agents/registry";
 
@@ -16,38 +19,72 @@ async function RunsPageContent() {
   return (
     <div>
       <AutoRefresh active={anyActive} intervalMs={3000} />
-      <h1 className="text-2xl font-semibold tracking-tight">Agent runs</h1>
-      <p className="mt-2 text-ink-2">Every run in your workspace, newest first.</p>
+      <h1 className="text-title font-strong">Agent runs</h1>
+      <p className="mt-2 text-lg text-ink-2">Every run in your workspace, newest first.</p>
       {runs.length === 0 ? (
-        <p className="mt-6 text-ink-2">
-          No runs yet. <Link href="/" className="text-accent">Start one from the home page.</Link>
-        </p>
+        <EmptyState
+          title="No runs yet"
+          headingLevel={2}
+          className="mt-8"
+          action={
+            <ButtonLink href="/" variant="quiet" size="sm">
+              Start a run from the home page
+            </ButtonLink>
+          }
+        >
+          Runs appear here as soon as an agent starts, with their cost and every step they take.
+        </EmptyState>
       ) : (
-        <div className="mt-6 overflow-x-auto rounded-lg border border-line bg-surface">
-          <table className="w-full text-left text-sm">
-            <thead className="border-b border-line text-ink-2">
+        <div className="mt-8 overflow-hidden rounded-card bg-surface">
+          <table className="w-full table-fixed text-left">
+            <caption className="sr-only">Agent runs, newest first</caption>
+            <thead className="border-b border-line text-sm text-ink-2">
               <tr>
-                <th scope="col" className="px-4 py-2 font-medium">Input</th>
-                <th scope="col" className="px-4 py-2 font-medium">Agent</th>
-                <th scope="col" className="px-4 py-2 font-medium">Status</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Cost</th>
-                <th scope="col" className="px-4 py-2 text-right font-medium">Started</th>
+                <th scope="col" className="px-4 py-3 font-semibold sm:px-6">
+                  <span className="sm:hidden">Run</span>
+                  <span className="hidden sm:inline">Input</span>
+                </th>
+                <th scope="col" className="hidden w-40 px-4 py-3 font-semibold md:table-cell">
+                  Agent
+                </th>
+                <th scope="col" className="hidden w-48 px-4 py-3 font-semibold sm:table-cell">
+                  Status
+                </th>
+                <th scope="col" className="hidden w-28 px-4 py-3 text-right font-semibold sm:table-cell">
+                  Cost
+                </th>
+                <th scope="col" className="hidden w-36 px-4 py-3 text-right font-semibold sm:table-cell sm:pr-6">
+                  Started
+                </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
+            <tbody>
               {runs.map((r) => (
-                <tr key={r.id} className="hover:bg-bg">
-                  <td className="px-4 py-2.5">
-                    <Link href={`/runs/${r.id}`} className="font-medium hover:text-accent">
+                <tr key={r.id} className="border-line align-top not-first:border-t hover:bg-surface-2">
+                  <td className="px-4 py-3.5 sm:px-6">
+                    <Link href={`/runs/${r.id}`} className="font-semibold wrap-anywhere hover:text-primary">
                       {String(r.input.brandName ?? "(no input)")}
                     </Link>
+                    {/* On narrow screens the hidden columns' facts sit under the name. */}
+                    <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 sm:hidden">
+                      <StatusBadge status={r.status} />
+                      <span className="text-sm text-ink-2 tabular-nums">
+                        {formatPence(r.cost_pence)} · {formatWhen(r.created_at)}
+                      </span>
+                    </div>
                   </td>
-                  <td className="px-4 py-2.5 text-ink-2">
+                  <td className="hidden px-4 py-3.5 text-ink-2 md:table-cell">
                     {AGENTS[r.agent as keyof typeof AGENTS]?.name ?? r.agent}
                   </td>
-                  <td className="px-4 py-2.5"><StatusBadge status={r.status} /></td>
-                  <td className="px-4 py-2.5 text-right tabular-nums">{formatPence(r.cost_pence)}</td>
-                  <td className="px-4 py-2.5 text-right tabular-nums text-ink-2">{formatWhen(r.created_at)}</td>
+                  <td className="hidden px-4 py-3.5 sm:table-cell">
+                    <StatusBadge status={r.status} />
+                  </td>
+                  <td className="hidden px-4 py-3.5 text-right tabular-nums sm:table-cell">
+                    {formatPence(r.cost_pence)}
+                  </td>
+                  <td className="hidden px-4 py-3.5 text-right text-ink-2 tabular-nums sm:table-cell sm:pr-6">
+                    {formatWhen(r.created_at)}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -60,8 +97,8 @@ async function RunsPageContent() {
 
 export default function RunsPage() {
   return (
-    <Suspense fallback={<p className="text-ink-2">Loading…</p>}>
-      <RunsPageContent  />
+    <Suspense fallback={<PageSkeleton />}>
+      <RunsPageContent />
     </Suspense>
   );
 }

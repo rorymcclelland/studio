@@ -41,5 +41,5 @@ Honest by default; fictional brands only; people approve consequential actions; 
 
 - `docs/refinement/`: each sprint's stories, test cases and agreed answers
 - `docs/decisions/`: decision records
-- `docs/design/directions.md`: the three Sprint 1 design directions
+- `docs/design/directions.md`: the Sprint 1 design directions (Soft machine chosen; see decision 0007 and `/design` for the design system)
 - `docs/hosting.md`: setting up Supabase, Vercel, Inngest and the model keys
