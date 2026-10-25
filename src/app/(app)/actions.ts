@@ -36,6 +36,7 @@ export async function decide(_prev: FormState, form: FormData): Promise<FormStat
     }
   } catch (err) {
     if (err instanceof ApprovalError) return { error: err.message };
+    console.error("[decide] couldn't record the decision", { approvalId, intent }, err);
     return { error: "Couldn't record the decision. Nothing was changed; try again." };
   }
   return null;

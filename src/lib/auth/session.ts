@@ -1,5 +1,6 @@
 import "server-only";
 import { cookies } from "next/headers";
+import { connection } from "next/server";
 import { redirect } from "next/navigation";
 import { asUser } from "@/lib/db/scoped";
 import { authMode, isEmailAllowed } from "@/lib/env";
@@ -16,6 +17,10 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
     if (!s || !isEmailAllowed(s.email)) return null;
     return { id: s.userId, email: s.email };
   }
+  // The Supabase client reads the clock (Date.now) while checking the session.
+  // Under Cache Components that must happen at request time, not while
+  // prerendering, so mark this as request-time work first.
+  await connection();
   const supabase = await supabaseServer();
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
