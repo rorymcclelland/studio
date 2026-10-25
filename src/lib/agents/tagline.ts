@@ -33,6 +33,7 @@ export const taglineAgent = defineAgent({
     "Each tagline has at most 8 words.",
   ].join("\n"),
   buildPrompt: (input) => `${MARKER}\nBrand name: ${JSON.stringify(input.brandName)}`,
+  label: (input) => input.brandName,
   summarise: (output) => output.taglines.map((t, i) => `${i + 1}. ${t}`).join("\n"),
   mockAnswer: (prompt) => {
     if (!prompt.includes(MARKER)) return null;

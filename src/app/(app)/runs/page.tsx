@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireMember } from "@/lib/auth/session";
-import { listRuns } from "@/lib/agents/runs";
+import { listRuns, runTitle } from "@/lib/agents/runs";
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/status-badge";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { ButtonLink } from "@/components/ui/button";
@@ -63,7 +63,7 @@ async function RunsPageContent() {
                 <tr key={r.id} className="border-line align-top not-first:border-t hover:bg-surface-2">
                   <td className="px-4 py-3.5 sm:px-6">
                     <Link href={`/runs/${r.id}`} className="font-semibold wrap-anywhere hover:text-primary">
-                      {String(r.input.brandName ?? "(no input)")}
+                      {runTitle(r, AGENTS[r.agent as keyof typeof AGENTS]?.name)}
                     </Link>
                     {/* On narrow screens the hidden columns' facts sit under the name. */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 sm:hidden">

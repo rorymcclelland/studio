@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { Suspense } from "react";
 import { requireMember } from "@/lib/auth/session";
-import { listRuns } from "@/lib/agents/runs";
+import { listRuns, runTitle } from "@/lib/agents/runs";
+import { AGENTS } from "@/lib/agents/registry";
 import { StatusBadge, statusRingTone } from "@/components/status-badge";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
@@ -63,7 +64,7 @@ async function HomePageContent() {
                   className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-4 hover:bg-surface-2 sm:px-6"
                 >
                   <span className="min-w-0 basis-full font-semibold wrap-anywhere sm:flex-1 sm:basis-auto">
-                    {String(r.input.brandName ?? r.agent)}
+                    {runTitle(r, AGENTS[r.agent as keyof typeof AGENTS]?.name)}
                   </span>
                   <StatusBadge status={r.status} />
                   <span className="ml-auto text-sm text-ink-2 tabular-nums">

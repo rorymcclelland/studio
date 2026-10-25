@@ -22,15 +22,18 @@ export async function createRun(
   agentKey: string,
   rawInput: unknown,
   send: SendEvent,
+  opts: { label?: string; brandId?: string | null } = {},
 ): Promise<string> {
   const agent = getAgent(agentKey);
   if (!agent) throw new StartRunError(`Unknown agent "${agentKey}".`);
   const parsed = agent.input.safeParse(rawInput);
   if (!parsed.success) throw new StartRunError(parsed.error.issues[0]?.message ?? "Invalid input.");
 
+  const label = (opts.label ?? agent.label(parsed.data)).slice(0, 200);
   const [row] = await asUser(member.userId, (tx) => tx`
-    insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by)
-    values (${member.workspaceId}, ${agent.key}, ${agent.version}, ${tx.json(parsed.data as never)}, ${member.userId})
+    insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)
+    values (${member.workspaceId}, ${agent.key}, ${agent.version}, ${tx.json(parsed.data as never)}, ${member.userId},
+            ${label}, ${opts.brandId ?? null})
     returning id`);
   const runId = row.id as string;
 
@@ -51,6 +54,8 @@ export type RunDetail = {
   id: string;
   agent: string;
   agent_version: number;
+  label: string | null;
+  brand_id: string | null;
   status: string;
   input: Record<string, unknown>;
   output: Record<string, unknown> | null;
@@ -109,17 +114,20 @@ export async function getRun(userId: string, runId: string): Promise<RunDetail |
 export type RunSummary = {
   id: string;
   agent: string;
+  label: string | null;
   status: string;
   input: Record<string, unknown>;
   created_at: Date;
   cost_pence: string;
 };
 
-export async function listRuns(userId: string, limit = 50): Promise<RunSummary[]> {
+export async function listRuns(userId: string, limit = 50, brandId?: string): Promise<RunSummary[]> {
+  if (brandId !== undefined && !UUID.test(brandId)) return [];
   return asUser(userId, (tx) => tx`
-    select r.id, r.agent, r.status, r.input, r.created_at,
+    select r.id, r.agent, r.label, r.status, r.input, r.created_at,
       coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
     from public.agent_runs r
+    where ${brandId === undefined ? tx`true` : tx`r.brand_id = ${brandId}`}
     order by r.created_at desc
     limit ${limit}`) as unknown as Promise<RunSummary[]>;
 }
@@ -127,6 +135,11 @@ export async function listRuns(userId: string, limit = 50): Promise<RunSummary[]
 export type Decision =
   | { decision: "approved"; choice: number; reason?: string }
   | { decision: "rejected"; reason?: string };
+
+/** What a run is called in lists: its label, else its agent's name. */
+export function runTitle(run: { label: string | null; agent: string; input: Record<string, unknown> }, agentName?: string): string {
+  return run.label || (typeof run.input.brandName === "string" ? run.input.brandName : "") || agentName || run.agent;
+}
 
 /**
  * Records a decision and wakes the waiting workflow. The update and the event

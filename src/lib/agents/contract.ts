@@ -18,6 +18,8 @@ export type AgentDefinition<I, O> = {
   instructions: string;
   buildPrompt: (input: I) => string;
   summarise: (output: O) => string;
+  /** A short title for run lists, from the input alone. The caller may pass a better one (with the brand's name) to createRun. */
+  label: (input: I) => string;
   /** Deterministic answer for the offline mock model, so demos run without keys. */
   mockAnswer?: (prompt: string) => string | null;
 };

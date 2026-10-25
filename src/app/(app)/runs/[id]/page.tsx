@@ -1,7 +1,8 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireMember } from "@/lib/auth/session";
-import { getRun } from "@/lib/agents/runs";
+import { getRun, runTitle } from "@/lib/agents/runs";
+import { getAgent } from "@/lib/agents/registry";
 import { AGENTS } from "@/lib/agents/registry";
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/status-badge";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -28,7 +29,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
           <span aria-hidden>← </span>All runs
         </TextLink>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="min-w-0 text-title font-strong wrap-anywhere">{String(run.input.brandName ?? "Run")}</h1>
+          <h1 className="min-w-0 text-title font-strong wrap-anywhere">{runTitle(run, agent?.name)}</h1>
           <StatusBadge status={run.status} />
         </div>
         <p className="mt-2 text-ink-2">
@@ -37,14 +38,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
         </p>
       </div>
 
-      {run.status === "completed" && run.output && (
-        <Card as="section" tone="good" aria-labelledby="result" className="bg-good-soft">
-          <h2 id="result" className="font-semibold text-good-ink">
-            Chosen tagline
-          </h2>
-          <p className="mt-1 text-2xl font-strong tracking-tight wrap-anywhere">{String(run.output.tagline)}</p>
-        </Card>
-      )}
+      {run.status === "completed" && run.output && <RunResult agent={run.agent} output={run.output} />}
       {run.error && (
         <Card as="section" tone="attention" aria-labelledby="problem" className="bg-attention-soft">
           <h2 id="problem" className="font-semibold text-attention-ink">
@@ -111,6 +105,44 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
         )}
       </section>
     </div>
+  );
+}
+
+/** The run's result. Tagline runs show the chosen line; other agents link to what they made, or summarise it. */
+function RunResult({ agent, output }: { agent: string; output: Record<string, unknown> }) {
+  if (agent === "tagline") {
+    return (
+      <Card as="section" tone="good" aria-labelledby="result" className="bg-good-soft">
+        <h2 id="result" className="font-semibold text-good-ink">
+          Chosen tagline
+        </h2>
+        <p className="mt-1 text-2xl font-strong tracking-tight wrap-anywhere">{String(output.tagline)}</p>
+      </Card>
+    );
+  }
+  const def = getAgent(agent);
+  const href = typeof output.href === "string" && output.href.startsWith("/") ? output.href : null;
+  const summary = typeof output.summary === "string" ? output.summary : null;
+  let text = summary;
+  if (!text && def) {
+    try {
+      text = def.summarise(output);
+    } catch {
+      text = null;
+    }
+  }
+  return (
+    <Card as="section" tone="good" aria-labelledby="result" className="bg-good-soft">
+      <h2 id="result" className="font-semibold text-good-ink">
+        Result
+      </h2>
+      {text && <p className="mt-1 whitespace-pre-line wrap-anywhere">{text}</p>}
+      {href && (
+        <p className="mt-3">
+          <TextLink href={href}>{typeof output.hrefLabel === "string" ? output.hrefLabel : "Open the result"}</TextLink>
+        </p>
+      )}
+    </Card>
   );
 }
 
