@@ -9,15 +9,21 @@ import postgres from "postgres";
 import {
   DEV_EMAIL,
   contrastViolations,
+  demoBrandId,
+  expectedStops,
   expectNoHorizontalScroll,
   settle,
   signIn,
   startRunAwaitingApproval,
+  tabThrough,
 } from "./helpers";
 
 const WIDTHS = [375, 1440];
 
 let awaitingRun = "";
+// Fernhollow is only read by the e2e specs, never edited, so these screens
+// look the same on every visit (brands.spec.ts edits Quillmoor).
+let fernhollow = "";
 
 type Screen = { name: string; path: () => string; signedIn: boolean };
 const SCREENS: Screen[] = [
@@ -26,6 +32,12 @@ const SCREENS: Screen[] = [
   { name: "runs", path: () => "/runs", signedIn: true },
   { name: "run detail with approval form", path: () => awaitingRun, signedIn: true },
   { name: "components (/design)", path: () => "/design", signedIn: true },
+  { name: "brands", path: () => "/brands", signedIn: true },
+  { name: "brand overview", path: () => `/brands/${fernhollow}`, signedIn: true },
+  { name: "brand overview with search results", path: () => `/brands/${fernhollow}?q=lapsed`, signedIn: true },
+  { name: "brand overview with no search results", path: () => `/brands/${fernhollow}?q=zzzqqq`, signedIn: true },
+  { name: "brand kit editor", path: () => `/brands/${fernhollow}/edit`, signedIn: true },
+  { name: "brand not found", path: () => "/brands/11111111-1111-4111-8111-111111111111", signedIn: true },
   { name: "not found in the app", path: () => "/runs/11111111-1111-4111-8111-111111111111", signedIn: true },
   { name: "not found (no such address)", path: () => "/no-such-page", signedIn: false },
   { name: "design direction index", path: () => "/directions", signedIn: false },
@@ -35,6 +47,7 @@ test.beforeAll(async ({ browser }) => {
   const page = await browser.newPage();
   await signIn(page);
   awaitingRun = await startRunAwaitingApproval(page, "Fernhollow Outfitters");
+  fernhollow = await demoBrandId(page, "Fernhollow Outfitters");
   await page.close();
 });
 
@@ -46,6 +59,7 @@ async function visit(page: Page, s: Screen) {
 test.describe("S2-1 #1 and #2: layout and contrast on every screen", () => {
   for (const width of WIDTHS) {
     test(`every screen fits ${width}px with no sideways scroll and passes AA contrast`, async ({ page }) => {
+      test.setTimeout(180_000);
       await page.setViewportSize({ width, height: 900 });
       for (const signedIn of [false, true]) {
         if (signedIn) await signIn(page);
@@ -63,13 +77,17 @@ test.describe("S2-1 #3: a dark operating system still gets the light theme", () 
   test.use({ reducedMotion: "reduce" });
 
   test("every screen looks the same with the system set to dark", async ({ page }) => {
+    test.setTimeout(240_000); // two visits, two screenshots and an axe check for every screen
     await page.setViewportSize({ width: 1440, height: 900 });
+    // Today's AI spend in the header moves when other specs' runs finish
+    // between the two captures, so it is masked in both.
+    const mask = [page.locator('[title^="AI spend today"]')];
     for (const signedIn of [false, true]) {
       if (signedIn) await signIn(page);
       for (const s of SCREENS.filter((x) => x.signedIn === signedIn)) {
         await page.emulateMedia({ colorScheme: "light" });
         await visit(page, s);
-        const light = await page.screenshot({ fullPage: true });
+        const light = await page.screenshot({ fullPage: true, mask });
 
         await page.emulateMedia({ colorScheme: "dark" });
         await visit(page, s);
@@ -86,57 +104,12 @@ test.describe("S2-1 #3: a dark operating system still gets the light theme", () 
         expect(colours.text, s.name).toBe("rgb(34, 36, 74)");
         expect(colours.scheme, s.name).toContain("light");
         expect(await contrastViolations(page), `${s.name}, system dark`).toEqual([]);
-        const dark = await page.screenshot({ fullPage: true });
+        const dark = await page.screenshot({ fullPage: true, mask });
         expect(dark.equals(light), `${s.name} changes when the system is dark`).toBe(true);
       }
     }
   });
 });
-
-/** Tabs through the page and returns what took focus, with whether its focus ring shows. */
-async function tabThrough(page: Page) {
-  await page.evaluate(() => {
-    (document.activeElement as HTMLElement | null)?.blur();
-    window.scrollTo(0, 0);
-  });
-  const seen: { key: string; ring: boolean }[] = [];
-  for (let i = 0; i < 80; i++) {
-    await page.keyboard.press("Tab");
-    const info = await page.evaluate(() => {
-      const el = document.activeElement as HTMLElement | null;
-      if (!el || el === document.body) return null;
-      if (!el.dataset.kb) el.dataset.kb = String(document.querySelectorAll("[data-kb]").length);
-      const cs = getComputedStyle(el);
-      const ring = cs.outlineStyle !== "none" && parseFloat(cs.outlineWidth) >= 2;
-      return { key: el.dataset.kb, ring };
-    });
-    if (!info) break;
-    if (seen.some((x) => x.key === info.key)) break;
-    seen.push(info);
-  }
-  return seen;
-}
-
-/** Every control a keyboard user should reach: one stop per radio group. */
-async function expectedStops(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const sel = "a[href], button:not([disabled]), input:not([type=hidden]):not([disabled]), select, textarea, summary, [tabindex='0']";
-    const radioGroups = new Set<string>();
-    let n = 0;
-    for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
-      if (el.getClientRects().length === 0) continue; // not rendered
-      const closed = el.closest("details:not([open])");
-      if (closed && el.tagName !== "SUMMARY") continue;
-      if (el.closest("[popover]:not(:popover-open)")) continue;
-      if (el instanceof HTMLInputElement && el.type === "radio") {
-        if (radioGroups.has(el.name)) continue;
-        radioGroups.add(el.name);
-      }
-      n++;
-    }
-    return n;
-  });
-}
 
 test.describe("S2-1 #4: keyboard", () => {
   test("every control on home, runs and run detail is reachable with Tab and shows a focus ring", async ({ page }) => {
@@ -308,6 +281,7 @@ test.describe("S2-1 #9: no real brands", () => {
   const pattern = new RegExp(`\\b(${DENY.map((d) => d.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|")})\\b`, "i");
 
   test("no real brand or trademark appears on any screen or the component page", async ({ page }) => {
+    test.setTimeout(120_000);
     await page.setViewportSize({ width: 1440, height: 900 });
     for (const signedIn of [false, true]) {
       if (signedIn) await signIn(page);
