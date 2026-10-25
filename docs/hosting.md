@@ -50,3 +50,9 @@ In Supabase, **Authentication → URL Configuration**:
 ## 6. Check it works
 
 Open the production URL, sign in with the email from 1.3, follow the link in the email, and start a tagline run. It should propose three taglines, wait for your approval and complete, with its cost shown in the spend meter. Then Claude checks the rest: preview links per branch, the production deploy from `main`, and the daily keep-awake cron (Vercel → Settings → Cron Jobs lists `/api/health`).
+
+## Notes from the first set-up (25 October 2026)
+
+- **Redeploy by pushing to GitHub, or with Vercel's own Redeploy button after changing a variable.** A redeploy made through the Vercel API from an earlier deployment reuses that deployment's environment variables, so a changed `DATABASE_URL` is not picked up.
+- If the database check fails, `/api/health` logs the user, host and port it tried (never the password) in Vercel's runtime logs.
+- Functions run in London (`lhr1`) beside the database.
