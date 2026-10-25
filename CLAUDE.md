@@ -58,7 +58,7 @@ Local Postgres: `postgres://postgres@localhost:54329/<db>` (see `.env.example`).
 - The story's agreed test cases exist and pass (write them first).
 - `typecheck`, `lint`, `test` and the relevant e2e specs pass; no new `npm audit` high findings.
 - Rules 1 to 8 checked; any new table has `workspace_id`, RLS and a cross-workspace test.
-- UI checked by screenshot at 375 px and 1440 px, light and dark, with AA contrast.
+- UI checked by screenshot at 375 px and 1440 px with AA contrast (light theme only until the dark theme, F-9, is built).
 - Decisions recorded in `docs/decisions/`; README updated if setup changed.
 - British English in all copy and docs.
 
