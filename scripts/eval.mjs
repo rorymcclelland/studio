@@ -1,0 +1,40 @@
+#!/usr/bin/env node
+// Runs agent evals (F-5).
+//   npm run eval                       every agent with an eval file, mock model (free)
+//   npm run eval -- brief --mock       one agent, mock model
+//   npm run eval -- brief              one agent, real model: prints the estimate and stops
+//   npm run eval -- brief --yes        one agent, real model, within the daily AI cap
+// Real-model runs need the provider key in .env.local. Each run rebuilds a
+// local eval database with the demo brands, so it never touches the hosted one.
+import { execFileSync, spawnSync } from "node:child_process";
+import { readdirSync } from "node:fs";
+
+const args = process.argv.slice(2);
+const mock = args.includes("--mock") || args.length === 0;
+const yes = args.includes("--yes");
+const named = args.filter((a) => !a.startsWith("--"));
+const available = readdirSync("tests/evals").filter((f) => f.endsWith(".eval.ts")).map((f) => f.replace(/\.eval\.ts$/, "")).sort();
+
+const unknown = named.filter((n) => !available.includes(n));
+if (unknown.length) {
+  console.error(`No eval file for: ${unknown.join(", ")}. Agents with evals: ${available.join(", ") || "none"}.`);
+  process.exit(2);
+}
+const agents = named.length ? named : available;
+const base = process.env.EVAL_DATABASE_URL ?? "postgres://postgres@localhost:54329/campaign_studio_eval";
+
+execFileSync("node", ["scripts/db-reset.mjs"], { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, DATABASE_URL: base } });
+
+const env = {
+  ...process.env,
+  DATABASE_URL: base,
+  EVAL_AGENTS: agents.join(","),
+  EVAL_MODE: mock ? "mock" : "real",
+  EVAL_CONFIRMED: yes ? "1" : "",
+  DAILY_CAP_PENCE: process.env.DAILY_CAP_PENCE ?? "100",
+};
+if (mock) env.MODEL_PROVIDER_OVERRIDE = "mock";
+else delete env.MODEL_PROVIDER_OVERRIDE;
+
+const r = spawnSync("npx", ["vitest", "run", "--config", "vitest.eval.config.ts", "--reporter", "dot"], { stdio: "inherit", env });
+process.exit(r.status ?? 1);

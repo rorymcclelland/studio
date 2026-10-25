@@ -48,3 +48,6 @@ next-env.d.ts
 
 # Claude Code worktrees
 /.claude/worktrees/
+
+# eval reports from the mock model (real-model reports are committed)
+/evals/reports/mock/

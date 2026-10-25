@@ -13,7 +13,8 @@
     "test:e2e": "playwright test",
     "db:reset": "node --env-file-if-exists=.env.local scripts/db-reset.mjs --seed",
     "check:secrets": "node scripts/check-secrets.mjs",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "prepare": "git config core.hooksPath .githooks || true",
+    "eval": "node --env-file-if-exists=.env.local scripts/eval.mjs"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^4.0.87",

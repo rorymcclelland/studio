@@ -33,6 +33,8 @@ jobs:
       - run: npm run lint
       - name: Unit and database tests (plain Postgres with the Supabase shim)
         run: npm test
+      - name: Agent evals against the mock model (checks the runner and graders, costs nothing)
+        run: npm run eval -- --mock
       - run: npm audit --omit=dev --audit-level=high
       - run: npx next build
 
