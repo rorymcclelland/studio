@@ -28,6 +28,10 @@ export async function addVersion(
     where id = ${campaignId} and current_version = ${baseVersion}
     returning current_version, workspace_id`;
   if (!c) throw new StaleBriefError();
+  // A sign-off asked for an older version no longer applies (S4-1).
+  await tx`
+    update public.approvals set status = 'expired', reason = 'A newer version was saved before it was signed off', decided_at = now()
+    where campaign_id = ${campaignId} and kind = 'brief_signoff' and status = 'pending'`;
   await tx`
     insert into public.brief_versions (workspace_id, campaign_id, version, brief, source, restored_from, note, run_id, created_by)
     values (${c.workspace_id}, ${campaignId}, ${c.current_version}, ${tx.json(brief as never)}, ${source},
