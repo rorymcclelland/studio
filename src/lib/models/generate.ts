@@ -176,26 +176,28 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
     (input.webSearch ? searchCostPence(cfg.provider, input.webSearch.maxUses) : 0);
   const ids = { runId: input.runId, stepId: input.stepId };
   const reservation = await reserve(input.userId, input.workspaceId, estimate, ids);
-  let settled = false;
-  const release = async (row: LedgerRow | null) => {
-    settled = true;
-    await settle(input.userId, input.workspaceId, reservation, ids, row);
-  };
+  const row = (inputTokens: number, outputTokens: number, searches: number, cost: number): LedgerRow =>
+    ({ agent: input.agent, provider: cfg.provider, model: cfg.model, inputTokens, outputTokens, searches, cost });
 
+  // Only the provider call is inside the retry (review finding 1): a ledger
+  // write that fails must not look like a model failure and call the model
+  // again. Settling happens once, after the loop.
+  let result: ({ text: string; usage: { inputTokens?: number; outputTokens?: number } } & SearchResultShape) | null = null;
+  let lastError: unknown;
+  let started = Date.now();
+  // A search call is not retried here (the searches may already have been charged), and gets longer.
+  const attemptsAllowed = input.webSearch ? 1 : ATTEMPTS;
   try {
     const model = getLanguageModel(cfg.provider, cfg.model);
     const tools = input.webSearch ? { web_search: getWebSearchTool(cfg.provider, input.webSearch.maxUses) } : undefined;
     const messages: ModelMessage[] | null = input.images?.length
       ? [{ role: "user", content: [{ type: "text", text: input.prompt }, ...input.images.map((i) => ({ type: "file" as const, data: i.data, mediaType: i.mediaType }))] }]
       : null;
-    let lastError: unknown;
-    // A search call is not retried here (the searches may already have been charged), and gets longer.
-    const attemptsAllowed = input.webSearch ? 1 : ATTEMPTS;
     const timeout = input.webSearch ? SEARCH_TIMEOUT_MS : TIMEOUT_MS;
-    for (let attempt = 1; attempt <= attemptsAllowed; attempt++) {
-      const started = Date.now();
+    for (let attempt = 1; attempt <= attemptsAllowed && !result; attempt++) {
+      started = Date.now();
       try {
-        const result = await generateText({
+        result = await generateText({
           model,
           instructions: input.instructions,
           ...(messages ? { messages } : { prompt: input.prompt }),
@@ -204,41 +206,67 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
           maxRetries: 0,
           abortSignal: AbortSignal.timeout(timeout),
         });
-        const inputTokens = result.usage.inputTokens ?? 0;
-        const outputTokens = result.usage.outputTokens ?? 0;
-        const { searches, sources } = input.webSearch ? readSearch(result, input.webSearch.maxUses) : { searches: 0, sources: [] };
-        const cost = costPence(cfg.provider, cfg.model, inputTokens, outputTokens) + searchCostPence(cfg.provider, searches);
-        await release(
-          inputTokens + outputTokens > 0 || searches > 0
-            ? { agent: input.agent, provider: cfg.provider, model: cfg.model, inputTokens, outputTokens, searches, cost }
-            : null,
-        );
-        return {
-          text: result.text,
-          provider: cfg.provider,
-          model: cfg.model,
-          inputTokens,
-          outputTokens,
-          costPence: cost,
-          durationMs: Date.now() - started,
-          searches,
-          sources,
-        };
       } catch (err) {
         if (err instanceof MissingKeyError) throw err;
         lastError = err;
-        if (input.webSearch) {
-          // The provider may have run and charged the searches before failing: record the full allowance, so the meter never under-counts.
-          const uses = input.webSearch.maxUses;
-          await release({ agent: input.agent, provider: cfg.provider, model: cfg.model, inputTokens: 0, outputTokens: 0, searches: uses, cost: searchCostPence(cfg.provider, uses) });
-        }
       }
+    }
+  } catch (err) {
+    // Nothing reached the provider (a missing key): drop the reservation.
+    await dropReservation(input.userId, input.workspaceId, reservation, ids);
+    throw err;
+  }
+
+  if (!result) {
+    if (input.webSearch) {
+      // The provider may have run and charged the searches before failing: record the full allowance, so the meter never under-counts.
+      // If this write fails, the reservation stays (spend still counts for 10 minutes) and the write's error is thrown.
+      const uses = input.webSearch.maxUses;
+      await settle(input.userId, input.workspaceId, reservation, ids, row(0, 0, uses, searchCostPence(cfg.provider, uses)));
+    } else {
+      await dropReservation(input.userId, input.workspaceId, reservation, ids);
     }
     const message = lastError instanceof Error ? lastError.message : String(lastError);
     throw new ProviderError(`${cfg.provider} failed after ${attemptsAllowed} attempt${attemptsAllowed === 1 ? "" : "s"}: ${message}`);
-  } finally {
-    // Whatever happened, the call holds no reservation once it is over.
-    if (!settled) await settle(input.userId, input.workspaceId, reservation, ids, null);
+  }
+
+  const inputTokens = result.usage.inputTokens ?? 0;
+  const outputTokens = result.usage.outputTokens ?? 0;
+  const { searches, sources } = input.webSearch ? readSearch(result, input.webSearch.maxUses) : { searches: 0, sources: [] };
+  const cost = costPence(cfg.provider, cfg.model, inputTokens, outputTokens) + searchCostPence(cfg.provider, searches);
+  // The call was paid for. If the charge can't be written, the reservation is
+  // left in place (its transaction rolls back), so the spend still counts until
+  // it expires, and the error is thrown rather than the call made again.
+  await settle(
+    input.userId,
+    input.workspaceId,
+    reservation,
+    ids,
+    inputTokens + outputTokens > 0 || searches > 0 ? row(inputTokens, outputTokens, searches, cost) : null,
+  );
+  return {
+    text: result.text,
+    provider: cfg.provider,
+    model: cfg.model,
+    inputTokens,
+    outputTokens,
+    costPence: cost,
+    durationMs: Date.now() - started,
+    searches,
+    sources,
+  };
+}
+
+/**
+ * Drops a reservation for a call that was never charged. A failure here is
+ * logged, not thrown: the reservation then only over-counts until it expires,
+ * and the caller's own error is the one worth reporting.
+ */
+async function dropReservation(userId: string, workspaceId: string, reservationId: string, ids: { runId?: string; stepId?: string }): Promise<void> {
+  try {
+    await settle(userId, workspaceId, reservationId, ids, null);
+  } catch (err) {
+    console.error("Could not drop a spend reservation; it expires in 10 minutes", err);
   }
 }
 
@@ -294,68 +322,60 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
   const estimate = imageCostPence(cfg.provider, cfg.model, cfg.size, 1);
   const ids = { runId: input.runId, stepId: input.stepId };
   const reservation = await reserve(input.userId, input.workspaceId, estimate, ids);
-  let settled = false;
   const started = Date.now();
+  const charge = (inputTokens: number, outputTokens: number): LedgerRow =>
+    ({ agent: input.agent, provider: cfg.provider, model: cfg.model, inputTokens, outputTokens, images: 1, cost: estimate });
+
+  // Only the provider call is inside the try (review finding 1); settling comes
+  // after it, so a failed ledger write is never mistaken for a failed picture.
+  let image: { uint8Array: Uint8Array; mediaType: string };
+  let usage: { inputTokens?: number; outputTokens?: number };
   try {
     const model = getImageModel(cfg.provider, cfg.model);
-    try {
-      const result = await sdkGenerateImage({
-        model,
-        prompt: input.prompt,
-        n: 1,
-        aspectRatio: input.aspect,
-        ...(input.seed !== undefined ? { seed: input.seed } : {}),
-        providerOptions: {
-          google: { imageConfig: { imageSize: cfg.size } },
-          ...(cfg.provider === "mock" ? { mock: { palette: input.palette ?? [] } } : {}),
-        },
-        maxRetries: 0,
-        abortSignal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
-      });
-      const image = result.images[0];
-      if (!image) throw new Error("The image model returned no picture.");
-      const inputTokens = result.usage.inputTokens ?? 0;
-      settled = true;
-      await settle(input.userId, input.workspaceId, reservation, ids, {
-        agent: input.agent,
-        provider: cfg.provider,
-        model: cfg.model,
-        inputTokens,
-        outputTokens: result.usage.outputTokens ?? 0,
-        images: 1,
-        cost: estimate,
-      });
-      return {
-        bytes: image.uint8Array,
-        mediaType: image.mediaType,
-        provider: cfg.provider,
-        model: cfg.model,
-        size: cfg.size,
-        inputTokens,
-        costPence: estimate,
-        durationMs: Date.now() - started,
-        simulated: cfg.provider === "mock",
-      };
-    } catch (err) {
-      if (err instanceof MissingKeyError) throw err;
-      if (!settled && imageFailureMayBeBilled(err)) {
-        settled = true;
-        await settle(input.userId, input.workspaceId, reservation, ids, {
-          agent: input.agent,
-          provider: cfg.provider,
-          model: cfg.model,
-          inputTokens: 0,
-          outputTokens: 0,
-          images: 1,
-          cost: estimate,
-        });
-      }
-      const message = err instanceof Error ? err.message : String(err);
-      throw new ProviderError(`${cfg.provider} image call failed (not retried): ${message}`);
+    const result = await sdkGenerateImage({
+      model,
+      prompt: input.prompt,
+      n: 1,
+      aspectRatio: input.aspect,
+      ...(input.seed !== undefined ? { seed: input.seed } : {}),
+      providerOptions: {
+        google: { imageConfig: { imageSize: cfg.size } },
+        ...(cfg.provider === "mock" ? { mock: { palette: input.palette ?? [] } } : {}),
+      },
+      maxRetries: 0,
+      abortSignal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+    });
+    if (!result.images[0]) throw new Error("The image model returned no picture.");
+    image = result.images[0];
+    usage = result.usage;
+  } catch (err) {
+    if (err instanceof MissingKeyError) {
+      await dropReservation(input.userId, input.workspaceId, reservation, ids);
+      throw err;
     }
-  } finally {
-    if (!settled) await settle(input.userId, input.workspaceId, reservation, ids, null);
+    // A failure that may have been billed is charged in full. If that write
+    // fails, the reservation stays and the write's error is thrown.
+    if (imageFailureMayBeBilled(err)) await settle(input.userId, input.workspaceId, reservation, ids, charge(0, 0));
+    else await dropReservation(input.userId, input.workspaceId, reservation, ids);
+    const message = err instanceof Error ? err.message : String(err);
+    throw new ProviderError(`${cfg.provider} image call failed (not retried): ${message}`);
   }
+
+  const inputTokens = usage.inputTokens ?? 0;
+  // The picture was paid for: if the charge can't be written, the reservation
+  // stays in place (spend still counts for 10 minutes) and the error is thrown.
+  await settle(input.userId, input.workspaceId, reservation, ids, charge(inputTokens, usage.outputTokens ?? 0));
+  return {
+    bytes: image.uint8Array,
+    mediaType: image.mediaType,
+    provider: cfg.provider,
+    model: cfg.model,
+    size: cfg.size,
+    inputTokens,
+    costPence: estimate,
+    durationMs: Date.now() - started,
+    simulated: cfg.provider === "mock",
+  };
 }
 
 type SearchResultShape = {
