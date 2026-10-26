@@ -1,8 +1,8 @@
 import { CREATIVE_KEY, CREATIVE_VERSION, MAKE_BUSY, makeCreativeRefusal } from "@/lib/agents/creative-workflow";
 import { createWorkflowRun, type Member, type SendEvent } from "@/lib/agents/runs";
-import { asUser } from "@/lib/db/scoped";
+import { asUser, type Tx } from "@/lib/db/scoped";
 import { loadCopyContext, rulesFor } from "./copy-context";
-import { CopyEditError, CopyError, listCopySets, saveCopyEdit, startNewWords, type CopySetView } from "./copy";
+import { CopyEditError, CopyError, listCopySets, saveCopyEditIn, startNewWords, type CopySetView } from "./copy";
 import { EDIT_COPY, setProblems, type AnyCopy } from "./copy-rules";
 import { makeCreativeEstimate, newPictureEstimate, newWordsEstimate, type Estimate } from "./costs";
 import { NOT_SIGNED_OFF } from "./imagery";
@@ -540,34 +540,45 @@ async function moveAds(
   origin: "new words" | "edited words",
   alreadyDiscarded: "old set discarded" | null,
 ): Promise<{ variantIds: string[] }> {
-  return asUser(member.userId, async (tx) => {
-    if (!alreadyDiscarded) {
-      const res = await tx`update public.copy_sets set discarded_at = now() where id = ${v.copy_set_id} and discarded_at is null`;
-      if (res.count !== 1) throw new CreativeError("Those words were changed meanwhile. Reload the gallery.");
-    }
-    const ids: string[] = [];
-    for (const ad of ads) {
-      const res = await tx`update public.ad_variants set discarded_at = now() where id = ${ad.id} and discarded_at is null`;
-      if (res.count !== 1) continue; // discarded meanwhile by the person: not brought back
-      const id = await insertVariant(tx, {
-        workspaceId: v.workspace_id,
-        userId: member.userId,
-        campaignId: v.campaign_id,
-        briefVersion: v.brief_version,
-        imageAssetId: ad.imageAssetId,
-        copySetId: newSetId,
-        layout: ad.rendered.layout,
-        checks: ad.rendered.checks,
-        kit: ad.kit,
-        origin,
-        runId: null,
-        basedOn: ad.id,
-        pickedAt: ad.pickedAt,
-      });
-      if (id) ids.push(id);
-    }
-    return { variantIds: ids };
-  });
+  return asUser(member.userId, (tx) => moveAdsIn(tx, member, v, ads, newSetId, origin, alreadyDiscarded));
+}
+
+/** moveAds inside a transaction the caller holds. */
+async function moveAdsIn(
+  tx: Tx,
+  member: Member,
+  v: VariantRow,
+  ads: MovedAd[],
+  newSetId: string,
+  origin: "new words" | "edited words",
+  alreadyDiscarded: "old set discarded" | null,
+): Promise<{ variantIds: string[] }> {
+  if (!alreadyDiscarded) {
+    const res = await tx`update public.copy_sets set discarded_at = now() where id = ${v.copy_set_id} and discarded_at is null`;
+    if (res.count !== 1) throw new CreativeError("Those words were changed meanwhile. Reload the gallery.");
+  }
+  const ids: string[] = [];
+  for (const ad of ads) {
+    const res = await tx`update public.ad_variants set discarded_at = now() where id = ${ad.id} and discarded_at is null`;
+    if (res.count !== 1) continue; // discarded meanwhile by the person: not brought back
+    const id = await insertVariant(tx, {
+      workspaceId: v.workspace_id,
+      userId: member.userId,
+      campaignId: v.campaign_id,
+      briefVersion: v.brief_version,
+      imageAssetId: ad.imageAssetId,
+      copySetId: newSetId,
+      layout: ad.rendered.layout,
+      checks: ad.rendered.checks,
+      kit: ad.kit,
+      origin,
+      runId: null,
+      basedOn: ad.id,
+      pickedAt: ad.pickedAt,
+    });
+    if (id) ids.push(id);
+  }
+  return { variantIds: ids };
 }
 
 /**
@@ -600,10 +611,11 @@ export async function editWords(member: Member, variantId: string, fields: unkno
   const redrawn = await redrawWithWords(member.userId, v.copy_set_id, { words, legalLines }, null);
   if (!redrawn.ok) throw new CopyEditError([`The words don't fit any layout: ${redrawn.reason}.`], fitErrors(redrawn.reason));
 
-  const setId = await saveCopyEdit(member, v.copy_set_id, words);
-  const { variantIds } = await moveAds(member, v, redrawn.ads, setId, "edited words", "old set discarded");
-  const [mine] = variantIds.length
-    ? await asUser(member.userId, (tx) => tx`select id from public.ad_variants where based_on = ${v.id} and discarded_at is null limit 1`)
-    : [];
-  return { setId, variantId: (mine?.id as string | undefined) ?? null, variantIds };
+  // The person's set and the ads' move are one transaction (review finding 6): if the move fails, nothing is saved.
+  return asUser(member.userId, async (tx) => {
+    const setId = await saveCopyEditIn(tx, member, v.copy_set_id, words);
+    const { variantIds } = await moveAdsIn(tx, member, v, redrawn.ads, setId, "edited words", "old set discarded");
+    const [mine] = variantIds.length ? await tx`select id from public.ad_variants where based_on = ${v.id} and discarded_at is null limit 1` : [];
+    return { setId, variantId: (mine?.id as string | undefined) ?? null, variantIds };
+  });
 }

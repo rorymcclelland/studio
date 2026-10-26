@@ -361,7 +361,9 @@ describe("S5-2 Copy agent", () => {
     await discardCopySet(a, set.id);
     const kept = await listCopySets(a.userId, campaign);
     expect(kept.sets.find((s) => s.id === set.id)).toBeUndefined();
-    expect(kept.sets.find((s) => s.id === made[0].id)!.replaces).toBeNull();
+    // Review finding 7: the waiting replacement goes with the set it would replace, rather than becoming a current set shown nowhere.
+    expect(kept.sets.find((s) => s.id === made[0].id)).toBeUndefined();
+    expect(kept.discarded.find((s) => s.id === made[0].id)).toBeDefined();
     await restoreCopySet(a, set.id);
     expect((await listCopySets(a.userId, campaign)).sets.find((s) => s.id === set.id)).toBeDefined();
     await expect(startNewWords(a, (await listCopySets(a.userId, campaign)).discarded[0].id, noSend)).rejects.toThrow(/discarded/);

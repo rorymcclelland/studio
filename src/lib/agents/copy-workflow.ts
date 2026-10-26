@@ -136,29 +136,49 @@ export async function executeCopyRun(ctx: StepContext, step: StepTools): Promise
 
   return step.run("save", async () => {
     const basedOn = prepared.start.mode === "replace" ? prepared.start.setId : null;
-    const saved = await asUser(ctx.userId, async (tx) => {
+    const { saved, stale } = await asUser(ctx.userId, async (tx) => {
+      // New words replace a set only while it is current. If a person edited or
+      // discarded it while these were written, they are kept in the history as
+      // discarded, rather than becoming a current set shown nowhere (review
+      // finding 7). The lock waits for an edit or discard in flight.
+      let stale = false;
+      if (basedOn) {
+        const [original] = await tx`select discarded_at from public.copy_sets where id = ${basedOn} for update`;
+        stale = !original || original.discarded_at !== null;
+      }
       // A retried step finds the sets it already wrote.
       const [done] = await tx`select count(*)::int as n from public.copy_sets where run_id = ${ctx.runId}`;
-      if (done.n > 0) return done.n as number;
+      if (done.n > 0) return { saved: done.n as number, stale };
       for (const s of written.output.sets) {
         const a = prepared.audiences[s.audience];
         // clock_timestamp keeps the sets in the order they were written.
         await tx`
-          insert into public.copy_sets (workspace_id, campaign_id, brief_version, run_id, channel, segment_ref, segment_title, set, legal_lines, source, based_on, created_by, created_at)
+          insert into public.copy_sets (workspace_id, campaign_id, brief_version, run_id, channel, segment_ref, segment_title, set, legal_lines, source, based_on, created_by, created_at, discarded_at)
           values (${ctx.workspaceId}, ${prepared.campaignId}, ${prepared.version}, ${ctx.runId}, ${s.channel}, ${a.segmentRef}, ${a.title},
-                  ${tx.json(s.copy as never)}, ${prepared.legalLines}, 'agent', ${basedOn}, ${ctx.userId}, clock_timestamp())`;
+                  ${tx.json(s.copy as never)}, ${prepared.legalLines}, 'agent', ${basedOn}, ${ctx.userId}, clock_timestamp(),
+                  ${stale ? tx`clock_timestamp()` : null})`;
       }
-      return written.output.sets.length;
+      return { saved: written.output.sets.length, stale };
     });
     const counts = new Map<string, number>();
     for (const s of written.output.sets) counts.set(s.channel, (counts.get(s.channel) ?? 0) + 1);
     const breakdown = [...counts].map(([c, n]) => `${c} ${n}`).join(", ");
     const first = written.output.sets[0];
     const summary = replacing
-      ? `New words for one ${first.channel} set (${prepared.audiences[first.audience].title}), waiting beside the set they would replace.`
+      ? stale
+        ? `New words for one ${first.channel} set (${prepared.audiences[first.audience].title}). The set they would replace was edited or discarded while they were written, so they are saved as discarded, in the copy history, and no ad changed.`
+        : `New words for one ${first.channel} set (${prepared.audiences[first.audience].title}), waiting beside the set they would replace.`
       : `${saved} copy sets for version ${prepared.version} (${breakdown}).${prepared.notes.length ? ` ${prepared.notes.join(" ")}` : ""}`;
     await setRun(ctx, "completed", {
-      output: { summary, version: prepared.version, sets: saved, notes: prepared.notes, href: `/campaigns/${prepared.campaignId}#copy`, hrefLabel: "See the copy" },
+      output: {
+        summary,
+        version: prepared.version,
+        sets: saved,
+        notes: prepared.notes,
+        ...(replacing ? { stale } : {}),
+        href: `/campaigns/${prepared.campaignId}#copy`,
+        hrefLabel: "See the copy",
+      },
     });
     return "completed";
   });

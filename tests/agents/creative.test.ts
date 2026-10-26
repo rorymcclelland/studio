@@ -610,6 +610,95 @@ describe("S5-4 Make creative and the gallery", () => {
     }
   });
 
+  describe("review findings 6 and 7: words that change while other words wait", () => {
+    let id: string;
+    beforeAll(async () => {
+      id = await signedOff();
+      expect((await make(id)).status).toBe("completed");
+    }, 120_000);
+    afterEach(async () => {
+      await getSql()`drop trigger if exists test_fail_moves on public.ad_variants`;
+      await getSql()`drop function if exists public.test_fail_moves()`;
+    });
+
+    const counts = async () => {
+      const [r] = await asUser(a.userId, (tx) => tx`
+        select (select count(*)::int from public.copy_sets where campaign_id = ${id}) as sets,
+               (select count(*)::int from public.copy_sets where campaign_id = ${id} and discarded_at is null) as current_sets,
+               (select count(*)::int from public.ad_variants where campaign_id = ${id}) as ads,
+               (select count(*)::int from public.ad_variants where campaign_id = ${id} and discarded_at is null) as current_ads`);
+      return r;
+    };
+    const words = { headline: "Put a little aside each week", body: "Round-ups move spare change into a pot you choose.", cta: "Get the app" };
+
+    it("6: Edit words is one transaction: a failure while moving the ads leaves the words and the ads as they were", async () => {
+      const v = (await view(id)).variants.find((x) => x.words.source === "agent")!;
+      const before = await counts();
+      // The new ads can't be written: the move fails after the edited set would have been saved.
+      await getSql().unsafe(`
+        create function public.test_fail_moves() returns trigger language plpgsql as $$
+        begin
+          if new.origin = 'edited words' then raise exception 'simulated failure moving the ads'; end if;
+          return new;
+        end $$`);
+      await getSql()`create trigger test_fail_moves before insert on public.ad_variants for each row execute function public.test_fail_moves()`;
+      await expect(editWords(a, v.id, words)).rejects.toThrow(/simulated failure moving the ads/);
+      expect(await counts()).toEqual(before);
+      const [old] = await asUser(a.userId, (tx) => tx`select discarded_at from public.copy_sets where id = ${v.words.setId}`);
+      expect(old.discarded_at).toBeNull();
+      expect((await view(id)).variants.find((x) => x.id === v.id)).toBeDefined();
+    });
+
+    it("7: new words finished after their set was edited are saved as discarded, and the run says so", async () => {
+      const v = (await view(id)).variants.find((x) => x.words.source === "agent")!;
+      const runId = await newWords(a, v.id, noSend);
+      // The person edits the set while the new words are being written: after the run read it, before it saves.
+      const editMidway: StepTools = {
+        run: async (stepId, fn) => {
+          if (stepId === "save") await editWords(a, v.id, words);
+          return fn();
+        },
+        waitForEvent: async () => null,
+      };
+      const status = await executeRun("copy", { runId, ...a }, editMidway);
+      const run = (await getRun(a.userId, runId))!;
+      expect(status, run.error ?? "").toBe("completed");
+      expect(String(run.output!.summary)).toMatch(/edited or discarded while they were written, so they are saved as discarded/);
+      expect(run.output!.stale).toBe(true);
+      const [written] = await asUser(a.userId, (tx) => tx`select discarded_at from public.copy_sets where run_id = ${runId}`);
+      expect(written.discarded_at).not.toBeNull();
+      // Nothing waits beside the edited words, and no current set is left without ads.
+      const g = await view(id);
+      for (const ad of g.variants) expect(ad.pendingWords).toBeNull();
+      const stranded = await asUser(a.userId, (tx) => tx`
+        select s.id from public.copy_sets s
+        where s.campaign_id = ${id} and s.discarded_at is null and s.channel = 'paid social'
+          and not exists (select 1 from public.ad_variants v where v.copy_set_id = s.id and v.discarded_at is null)`);
+      expect(stranded).toHaveLength(0);
+    });
+
+    it("7: editing or discarding a set discards new words waiting to replace it", async () => {
+      // Edit: the waiting replacement goes too.
+      const v = (await view(id)).variants.find((x) => x.words.source === "agent")!;
+      const first = await newWords(a, v.id, noSend);
+      expect((await execute(a, first)).status).toBe("completed");
+      expect((await view(id)).variants.find((x) => x.id === v.id)!.pendingWords).not.toBeNull();
+      const [r1] = await asUser(a.userId, (tx) => tx`select id from public.copy_sets where run_id = ${first}`);
+      await editWords(a, v.id, { ...words, headline: "A little aside, each week" });
+      const [after1] = await asUser(a.userId, (tx) => tx`select discarded_at from public.copy_sets where id = ${r1.id}`);
+      expect(after1.discarded_at).not.toBeNull();
+
+      // Discard in the copy lists: the waiting replacement goes too.
+      const w = (await view(id)).variants.find((x) => x.words.source === "agent" && x.words.setId !== v.words.setId)!;
+      const second = await newWords(a, w.id, noSend);
+      expect((await execute(a, second)).status).toBe("completed");
+      const [r2] = await asUser(a.userId, (tx) => tx`select id from public.copy_sets where run_id = ${second}`);
+      await discardCopySet(a, w.words.setId);
+      const [after2] = await asUser(a.userId, (tx) => tx`select discarded_at from public.copy_sets where id = ${r2.id}`);
+      expect(after2.discarded_at).not.toBeNull();
+    });
+  });
+
   it("review finding 5: two Make creative starts at once (two tabs): one run is recorded, the other is refused", async () => {
     const id = await signedOff();
     const results = await Promise.allSettled([startMakeCreative(a, id, noSend), startMakeCreative(a, id, noSend)]);

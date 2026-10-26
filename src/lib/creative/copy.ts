@@ -1,5 +1,5 @@
 import { createRun, type Member, type SendEvent } from "@/lib/agents/runs";
-import { asUser } from "@/lib/db/scoped";
+import { asUser, type Tx } from "@/lib/db/scoped";
 import { loadCopyContext, NOT_SIGNED_OFF, rulesFor } from "./copy-context";
 import { CHANNEL_LIMITS, EDIT_COPY, figuresAddedByPerson, setProblems, type AnyCopy, type CopyByChannel, type CopyChannel } from "./copy-rules";
 
@@ -128,13 +128,30 @@ export async function startCopyRun(member: Member, campaignId: string, send: Sen
 
 /** The set and its campaign's sign-off state, for edits and new words. */
 async function setFor(member: Member, setId: string) {
+  return asUser(member.userId, (tx) => setIn(tx, setId));
+}
+
+async function setIn(tx: Tx, setId: string) {
   if (!UUID.test(setId)) throw new CopyError("That copy set isn't in your workspace.");
-  const [s] = await asUser(member.userId, (tx) => tx`
+  const [s] = await tx`
     select s.*, c.status, c.approved_version, c.brand_id, b.name as brand_name
     from public.copy_sets s join public.campaigns c on c.id = s.campaign_id join public.brands b on b.id = c.brand_id
-    where s.id = ${setId}`);
+    where s.id = ${setId}`;
   if (!s) throw new CopyError("That copy set isn't in your workspace.");
   return s;
+}
+
+/**
+ * Discards the agent's new words still waiting to replace a set, once that set
+ * is edited or discarded (review finding 7): they would otherwise become a
+ * current set shown nowhere. They stay in the history, discarded.
+ */
+async function discardWaitingReplacements(tx: Tx, setId: string): Promise<number> {
+  const rows = await tx`
+    update public.copy_sets set discarded_at = now()
+    where based_on = ${setId} and source = 'agent' and discarded_at is null
+    returning id`;
+  return rows.length;
 }
 
 function gate(s: Record<string, unknown>) {
@@ -163,7 +180,16 @@ export async function startNewWords(member: Member, setId: string, send: SendEve
  * words, except that a typed figure is allowed and marked as added by a person.
  */
 export async function saveCopyEdit(member: Member, setId: string, raw: unknown): Promise<string> {
-  const s = await setFor(member, setId);
+  return asUser(member.userId, (tx) => saveCopyEditIn(tx, member, setId, raw));
+}
+
+/**
+ * saveCopyEdit inside a transaction the caller holds, so Edit words can save
+ * the set and move its ads in one transaction (review finding 6). New words
+ * waiting to replace the old set are discarded with it (review finding 7).
+ */
+export async function saveCopyEditIn(tx: Tx, member: Member, setId: string, raw: unknown): Promise<string> {
+  const s = await setIn(tx, setId);
   const channel = s.channel as CopyChannel;
   const parsed = EDIT_COPY[channel].safeParse(raw);
   if (!parsed.success) {
@@ -171,30 +197,35 @@ export async function saveCopyEdit(member: Member, setId: string, raw: unknown):
     for (const i of parsed.error.issues) fieldErrors[i.path.join(".") || "form"] ??= i.message;
     throw new CopyEditError(Object.entries(fieldErrors).map(([f, m]) => `${f}: ${m}`), fieldErrors);
   }
-  return asUser(member.userId, async (tx) => {
-    const [locked] = await tx`select discarded_at from public.copy_sets where id = ${setId} for update`;
-    if (!locked || locked.discarded_at) throw new CopyError("This set was discarded or replaced. Open the current set to edit it.");
-    gate(s);
-    const ctx = await loadCopyContext(tx, s.campaign_id, s.brief_version);
-    if (!ctx) throw new CopyError("The signed-off brief version no longer exists.");
-    const problems = setProblems(channel, parsed.data as AnyCopy, rulesFor(ctx), { where: "the", allowFigures: true });
-    if (problems.length) throw new CopyEditError(problems);
-    const [row] = await tx`
-      insert into public.copy_sets (workspace_id, campaign_id, brief_version, run_id, channel, segment_ref, segment_title, set, legal_lines, source, based_on, created_by)
-      values (${s.workspace_id}, ${s.campaign_id}, ${s.brief_version}, null, ${channel}, ${s.segment_ref}, ${s.segment_title},
-              ${tx.json(parsed.data as never)}, ${ctx.kit.legalLines}, 'person', ${setId}, ${member.userId})
-      returning id`;
-    await tx`update public.copy_sets set discarded_at = now() where id = ${setId}`;
-    return row.id as string;
-  });
+  const [locked] = await tx`select discarded_at from public.copy_sets where id = ${setId} for update`;
+  if (!locked || locked.discarded_at) throw new CopyError("This set was discarded or replaced. Open the current set to edit it.");
+  gate(s);
+  const ctx = await loadCopyContext(tx, s.campaign_id, s.brief_version);
+  if (!ctx) throw new CopyError("The signed-off brief version no longer exists.");
+  const problems = setProblems(channel, parsed.data as AnyCopy, rulesFor(ctx), { where: "the", allowFigures: true });
+  if (problems.length) throw new CopyEditError(problems);
+  const [row] = await tx`
+    insert into public.copy_sets (workspace_id, campaign_id, brief_version, run_id, channel, segment_ref, segment_title, set, legal_lines, source, based_on, created_by)
+    values (${s.workspace_id}, ${s.campaign_id}, ${s.brief_version}, null, ${channel}, ${s.segment_ref}, ${s.segment_title},
+            ${tx.json(parsed.data as never)}, ${ctx.kit.legalLines}, 'person', ${setId}, ${member.userId})
+    returning id`;
+  await tx`update public.copy_sets set discarded_at = now() where id = ${setId}`;
+  await discardWaitingReplacements(tx, setId);
+  return row.id as string;
 }
 
-/** Marks a set discarded. It stays in the history and can be restored. */
+/**
+ * Marks a set discarded. It stays in the history and can be restored. New
+ * words waiting to replace it are discarded too (review finding 7); restoring
+ * the set doesn't bring them back.
+ */
 export async function discardCopySet(member: Member, setId: string): Promise<void> {
   if (!UUID.test(setId)) throw new CopyError("That copy set isn't in your workspace.");
-  const rows = await asUser(member.userId, (tx) => tx`
-    update public.copy_sets set discarded_at = now() where id = ${setId} and discarded_at is null returning id`);
-  if (rows.length === 0) throw new CopyError("That copy set isn't in your workspace, or is already discarded.");
+  await asUser(member.userId, async (tx) => {
+    const rows = await tx`update public.copy_sets set discarded_at = now() where id = ${setId} and discarded_at is null returning id`;
+    if (rows.length === 0) throw new CopyError("That copy set isn't in your workspace, or is already discarded.");
+    await discardWaitingReplacements(tx, setId);
+  });
 }
 
 /** Undoes a discard. */
