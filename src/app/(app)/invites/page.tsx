@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatWhen } from "@/lib/format";
-import { InviteForm, NewLinkButton, RevokeButton } from "./invite-form";
+import { InviteActions, InviteForm } from "./invite-form";
 
 export const metadata = { title: "Invites" };
 
@@ -75,7 +75,7 @@ async function InvitesContent() {
                 <li
                   key={i.id}
                   data-invite={i.state}
-                  className="flex flex-col gap-3 border-line px-5 py-4 not-first:border-t sm:flex-row sm:items-center sm:gap-4 sm:px-6"
+                  className="flex flex-col gap-3 border-line px-5 py-4 not-first:border-t sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-4 sm:px-6"
                 >
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -89,8 +89,12 @@ async function InvitesContent() {
                     </p>
                     {i.note && <p className="mt-1 text-sm wrap-anywhere">{i.note}</p>}
                   </div>
-                  {i.state === "used" && <NewLinkButton inviteId={i.id} email={i.email} />}
-                  {(i.state === "open" || i.state === "used") && <RevokeButton inviteId={i.id} email={i.email} />}
+                  <InviteActions
+                    inviteId={i.id}
+                    email={i.email}
+                    newLink={i.state === "used"}
+                    canRevoke={i.state === "open" || i.state === "used"}
+                  />
                 </li>
               ))}
             </ul>

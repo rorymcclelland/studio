@@ -110,3 +110,51 @@ test("F-3 #2 and #3: an invite signs someone in once, to their own workspace, un
   await guest.context().close();
   await again.context().close();
 });
+
+test("F-18a: New sign-in link sits beside Revoke, and its link opens below the row without moving them", async ({ page, browser }) => {
+  test.setTimeout(120_000);
+  const email = `back-${Date.now()}@example.test`;
+  await signIn(page);
+  await page.goto("/invites");
+  await settle(page);
+  await page.getByLabel("Email").filter({ visible: true }).fill(email);
+  await page.getByRole("button", { name: "Create invite link" }).click();
+  const link = await page.locator("[data-invite-link] input").first().inputValue();
+  const guest = await freshPage(browser);
+  await guest.goto(new URL(link).pathname);
+  await guest.getByRole("button", { name: "Continue to Studio" }).click();
+  await expect(guest.getByRole("heading", { name: "Try the tagline agent" })).toBeVisible();
+  await guest.context().close();
+
+  await page.reload();
+  await settle(page);
+  const row = page.locator("[data-invite=used]").filter({ hasText: email });
+  const newLink = row.getByRole("button", { name: `Make a new sign-in link for ${email}` });
+  const revoke = row.getByRole("button", { name: `Revoke the invite for ${email}` });
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await settle(page);
+    const [a, b] = [await newLink.boundingBox(), await revoke.boundingBox()];
+    // Side by side, on one line.
+    expect(Math.abs(a!.y - b!.y), `buttons on one line at ${width}px`).toBeLessThan(2);
+    expect(a!.x + a!.width, `New sign-in link before Revoke at ${width}px`).toBeLessThanOrEqual(b!.x);
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  const before = await revoke.boundingBox();
+  await newLink.click();
+  const box = row.locator("[data-invite-link]");
+  await expect(box).toBeVisible();
+  await expect(box).toBeFocused();
+  const after = await revoke.boundingBox();
+  expect(after!.x, "Revoke stays where it was").toBeCloseTo(before!.x, 0);
+  const boxRect = await box.boundingBox();
+  expect(boxRect!.y, "the link opens below the buttons").toBeGreaterThan(after!.y + after!.height);
+  const rowRect = await row.boundingBox();
+  expect(boxRect!.width, "the link box spans the row").toBeGreaterThan(rowRect!.width * 0.8);
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await settle(page);
+    await expectNoHorizontalScroll(page, `/invites with a new link at ${width}px`);
+    expect(await contrastViolations(page), `/invites with a new link at ${width}px`).toEqual([]);
+  }
+});

@@ -50,8 +50,8 @@ export default function WelcomePage() {
           <h1 className="mt-4 max-w-3xl text-display font-strong">A multi-agent campaign studio for marketing teams</h1>
           <p className="mt-4 max-w-prose text-lg text-ink-2">
             Three squads of AI agents share one store of business context. The Strategy squad takes a campaign from an
-            objective to a signed-off brief and test plan; the Creative and Performance squads come next. A person approves
-            every consequential move.
+            objective to a signed-off brief and test plan, and the Creative squad turns that brief into ads; the Performance
+            squad comes next. A person approves every consequential move.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
             <ButtonLink href="/signin" size="lg">
@@ -83,15 +83,29 @@ export default function WelcomePage() {
           </ol>
         </section>
 
+        <section aria-labelledby="creative" className="space-y-4">
+          <h2 id="creative" className="text-2xl font-strong tracking-tight">
+            What the Creative squad does today
+          </h2>
+          <Card className="space-y-2">
+            <h3 className="text-lg font-strong">Ads composed in code</h3>
+            <p className="max-w-prose text-ink-2">
+              From a signed-off brief, the Imagery agent draws four pictures, each checked for text, and the Copy agent writes
+              words for each channel within its character limits, through the same checks as the brief. Code puts each
+              picture and set of words into an ad with the logo and the legal line, and checks contrast and fit. A person
+              picks, discards, edits the words or asks for a new picture. Nothing is published.
+            </p>
+          </Card>
+        </section>
+
         <section aria-labelledby="next" className="grid gap-4 md:grid-cols-2">
           <Card>
             <h2 id="next" className="text-xl font-strong tracking-tight">
               Coming next
             </h2>
             <p className="mt-2 text-ink-2">
-              The Creative squad will turn a signed-off brief into on-brand creative, with words and logos composed in code
-              rather than drawn by an image model. The Performance squad will watch how creative does and propose
-              replacements, which a person approves.
+              More sizes for each ad, and a compliance agent that checks creative before it goes anywhere. Then the
+              Performance squad will watch how creative does and propose replacements, which a person approves.
             </p>
           </Card>
           <Card>

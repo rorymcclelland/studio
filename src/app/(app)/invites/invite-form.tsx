@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useActionState, useEffect, useId, useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
@@ -41,6 +41,7 @@ export function InviteForm() {
 
 function CreatedLink({ link, message, ref }: { link: string; message: string; ref: React.Ref<HTMLDivElement> }) {
   const [copied, setCopied] = useState<"yes" | "no" | null>(null);
+  const inputId = useId();
   return (
     <div
       ref={ref}
@@ -51,11 +52,11 @@ function CreatedLink({ link, message, ref }: { link: string; message: string; re
     >
       <p className="font-semibold">{message}</p>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <label htmlFor="invite-link" className="sr-only">
+        <label htmlFor={inputId} className="sr-only">
           Invite link
         </label>
         <input
-          id="invite-link"
+          id={inputId}
           readOnly
           value={link}
           onFocus={(e) => e.currentTarget.select()}
@@ -86,66 +87,69 @@ function CreatedLink({ link, message, ref }: { link: string; message: string; re
   );
 }
 
-/** Revokes an invite: the link stops working, and anyone who signed in with it is signed out. */
-export function RevokeButton({ inviteId, email }: { inviteId: string; email: string }) {
-  const [pending, start] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-  const toast = useToast();
-  return (
-    <div className="flex flex-col items-start gap-1 sm:items-end">
-      <Button
-        type="button"
-        size="sm"
-        variant="quiet"
-        disabled={pending}
-        aria-label={`Revoke the invite for ${email}`}
-        onClick={() =>
-          start(async () => {
-            setError(null);
-            const r = await revoke(inviteId);
-            if (r && "done" in r) toast({ message: r.done, tone: "good" });
-            else if (r && "error" in r) setError(r.error);
-          })
-        }
-      >
-        {pending ? "Revoking…" : "Revoke"}
-      </Button>
-      {error && (
-        <p role="alert" className="text-sm font-medium text-attention-ink">
-          {error}
-        </p>
-      )}
-    </div>
-  );
-}
-
-/** F-18a: a fresh sign-in link for someone who has used their invite, shown once here. */
-export function NewLinkButton({ inviteId, email }: { inviteId: string; email: string }) {
-  const [pending, start] = useTransition();
+/**
+ * The actions on one invite: New sign-in link (F-18a, for a used invite) and
+ * Revoke, side by side. A new link opens below the whole row, at full width,
+ * so the buttons stay where they were.
+ */
+export function InviteActions({ inviteId, email, newLink, canRevoke }: { inviteId: string; email: string; newLink: boolean; canRevoke: boolean }) {
+  const [making, startMaking] = useTransition();
+  const [revoking, startRevoking] = useTransition();
   const [state, setState] = useState<InviteState>(null);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const toast = useToast();
   const link = state && "done" in state ? (state.link ?? null) : null;
+  const linkError = state && "error" in state ? state.error : null;
   useEffect(() => {
     if (link) box.current?.focus();
   }, [link]);
+  if (!newLink && !canRevoke) return null;
   return (
-    <div className="flex w-full flex-col items-start gap-2 sm:items-end">
-      <Button
-        type="button"
-        size="sm"
-        variant="quiet"
-        disabled={pending}
-        aria-label={`Make a new sign-in link for ${email}`}
-        onClick={() => start(async () => setState(await makeNewSignInLink(inviteId)))}
-      >
-        {pending ? "Making…" : "New sign-in link"}
-      </Button>
-      {state && "error" in state && (
-        <p role="alert" className="text-sm font-medium text-attention-ink">
-          {state.error}
+    <>
+      <div className="flex flex-wrap gap-2 sm:justify-end" data-invite-actions="">
+        {newLink && (
+          <Button
+            type="button"
+            size="sm"
+            variant="quiet"
+            disabled={making || revoking}
+            aria-label={`Make a new sign-in link for ${email}`}
+            onClick={() => startMaking(async () => setState(await makeNewSignInLink(inviteId)))}
+          >
+            {making ? "Making…" : "New sign-in link"}
+          </Button>
+        )}
+        {canRevoke && (
+          <Button
+            type="button"
+            size="sm"
+            variant="quiet"
+            disabled={making || revoking}
+            aria-label={`Revoke the invite for ${email}`}
+            onClick={() =>
+              startRevoking(async () => {
+                setRevokeError(null);
+                const r = await revoke(inviteId);
+                if (r && "done" in r) toast({ message: r.done, tone: "good" });
+                else if (r && "error" in r) setRevokeError(r.error);
+              })
+            }
+          >
+            {revoking ? "Revoking…" : "Revoke"}
+          </Button>
+        )}
+      </div>
+      {(linkError || revokeError) && (
+        <p role="alert" className="basis-full text-sm font-medium text-attention-ink">
+          {linkError ?? revokeError}
         </p>
       )}
-      {link && state && "done" in state && <CreatedLink ref={box} link={link} message={state.done} />}
-    </div>
+      {link && state && "done" in state && (
+        <div className="basis-full">
+          <CreatedLink ref={box} link={link} message={state.done} />
+        </div>
+      )}
+    </>
   );
 }
