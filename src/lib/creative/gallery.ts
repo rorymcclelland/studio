@@ -1,4 +1,4 @@
-import { CREATIVE_KEY, CREATIVE_VERSION, makeCreativeRefusal } from "@/lib/agents/creative-workflow";
+import { CREATIVE_KEY, CREATIVE_VERSION, MAKE_BUSY, makeCreativeRefusal } from "@/lib/agents/creative-workflow";
 import { createWorkflowRun, type Member, type SendEvent } from "@/lib/agents/runs";
 import { asUser } from "@/lib/db/scoped";
 import { loadCopyContext, rulesFor } from "./copy-context";
@@ -329,10 +329,22 @@ export async function startMakeCreative(member: Member, campaignId: string, send
   });
   if (refusal) throw new CreativeError(refusal);
   const version = c.approved_version as number;
-  return createWorkflowRun(member, CREATIVE_KEY, CREATIVE_VERSION, { mode: "make", campaignId, version }, send, {
-    label: `${c.name}: make creative (v${version})`,
-    brandId: c.brand_id,
-  });
+  try {
+    return await createWorkflowRun(member, CREATIVE_KEY, CREATIVE_VERSION, { mode: "make", campaignId, version }, send, {
+      label: `${c.name}: make creative (v${version})`,
+      brandId: c.brand_id,
+    });
+  } catch (err) {
+    // Another tab started one between the check and the insert (review finding 5).
+    if (isActiveRunConflict(err, "agent_runs_one_active_make")) throw new CreativeError(MAKE_BUSY);
+    throw err;
+  }
+}
+
+/** The database refused a second active creative run (the partial unique indexes in 20261028000005). */
+function isActiveRunConflict(err: unknown, index: string): boolean {
+  const e = err as { code?: string; constraint_name?: string };
+  return e?.code === "23505" && e.constraint_name === index;
 }
 
 type VariantRow = Record<string, unknown> & {
@@ -441,13 +453,21 @@ export async function newPicture(member: Member, variantId: string, send: SendEv
   signedOffFor(v);
   const [busy] = await asUser(member.userId, (tx) => tx`
     select count(*)::int as n from public.agent_runs
-    where agent = 'creative' and status in ('queued', 'running') and input ->> 'variantId' = ${v.id}`);
-  if (busy.n > 0) throw new CreativeError("A new picture is already being drawn for this ad.");
-  return createWorkflowRun(member, CREATIVE_KEY, CREATIVE_VERSION, { mode: "picture", campaignId: v.campaign_id, variantId: v.id }, send, {
-    label: `${v.brand_name}: new picture`,
-    brandId: v.brand_id,
-  });
+    where agent = 'creative' and status in ('queued', 'running', 'awaiting_approval') and input ->> 'variantId' = ${v.id}`);
+  if (busy.n > 0) throw new CreativeError(PICTURE_BUSY);
+  try {
+    return await createWorkflowRun(member, CREATIVE_KEY, CREATIVE_VERSION, { mode: "picture", campaignId: v.campaign_id, variantId: v.id }, send, {
+      label: `${v.brand_name}: new picture`,
+      brandId: v.brand_id,
+    });
+  } catch (err) {
+    // Another tab asked between the check and the insert: one picture is drawn and paid for, not two (review finding 5).
+    if (isActiveRunConflict(err, "agent_runs_one_active_picture")) throw new CreativeError(PICTURE_BUSY);
+    throw err;
+  }
 }
+
+const PICTURE_BUSY = "A new picture is already being drawn for this ad.";
 
 /** New words for this ad's set: a Copy run whose replacement waits beside it until a person keeps one (keepWords). */
 export async function newWords(member: Member, variantId: string, send: SendEvent): Promise<string> {

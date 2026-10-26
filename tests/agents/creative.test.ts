@@ -4,6 +4,7 @@
 // Edit words, the /ads route, and the failure and hostile cases.
 import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { makeCreativeRefusal } from "@/lib/agents/creative-workflow";
 import { createRun, getRun, listChildRuns, type Member } from "@/lib/agents/runs";
 import { executeRun, WORKFLOWS } from "@/lib/agents/workflows";
 import type { StepTools } from "@/lib/agents/workflow";
@@ -361,6 +362,22 @@ describe("S5-4 Make creative and the gallery", () => {
       await expect(newPicture(a, target.id, noSend)).rejects.toThrow(/discarded/);
     });
 
+    it("review finding 5: two New picture starts at once for one ad: one run is recorded, the other is refused", async () => {
+      const target = (await view(id)).variants[2];
+      const results = await Promise.allSettled([newPicture(a, target.id, noSend), newPicture(a, target.id, noSend)]);
+      expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+      const refused = results.find((r): r is PromiseRejectedResult => r.status === "rejected")!;
+      expect(refused.reason).toBeInstanceOf(CreativeError);
+      expect(String(refused.reason.message)).toMatch(/already being drawn/);
+      const runs = await getSql()`select id from public.agent_runs where agent = 'creative' and input ->> 'variantId' = ${target.id}`;
+      expect(runs).toHaveLength(1);
+      // A different ad can still get a new picture meanwhile.
+      const other = (await view(id)).variants[3];
+      await expect(newPicture(a, other.id, noSend)).resolves.toMatch(/^[0-9a-f-]{36}$/);
+      // Leave nothing active for the tests after this one.
+      await getSql()`update public.agent_runs set status = 'failed' where agent = 'creative' and status in ('queued', 'running') and input ->> 'mode' = 'picture'`;
+    });
+
     it("a new picture the check finds text in is discarded, and the ad keeps its picture", async () => {
       const v = (await view(id)).variants[3];
       mockBehaviour.visionHasText = () => true;
@@ -591,6 +608,35 @@ describe("S5-4 Make creative and the gallery", () => {
     } finally {
       await getSql()`update public.brands set palette = ${getSql().json(p.palette)} where id = ${quill}`;
     }
+  });
+
+  it("review finding 5: two Make creative starts at once (two tabs): one run is recorded, the other is refused", async () => {
+    const id = await signedOff();
+    const results = await Promise.allSettled([startMakeCreative(a, id, noSend), startMakeCreative(a, id, noSend)]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const refused = results.find((r): r is PromiseRejectedResult => r.status === "rejected")!;
+    expect(refused.reason).toBeInstanceOf(CreativeError);
+    expect(String(refused.reason.message)).toMatch(/already being made/);
+    const [{ n }] = await getSql()`select count(*)::int as n from public.agent_runs where agent = 'creative' and input ->> 'campaignId' = ${id}`;
+    expect(n).toBe(1);
+  });
+
+  it("review finding 5: inside the workflow, Make creative is refused only by an older active run, not a newer one", async () => {
+    const id = await signedOff();
+    const older = await startMakeCreative(a, id, noSend);
+    // A newer run for the same version, recorded and then stopped (the database allows one active run at a time).
+    const [newer] = await asUser(a.userId, (tx) => tx`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, status, created_at)
+      values (${a.workspaceId}, 'creative', 1, ${tx.json({ mode: "make", campaignId: id, version: 1 })}, ${a.userId}, 'failed', clock_timestamp())
+      returning id`);
+    // The newer run asks: the older one is active, so it is refused.
+    expect(await asUser(a.userId, (tx) => makeCreativeRefusal(tx, id, newer.id as string))).toMatch(/already being made/);
+    // The older run asks while the newer one is active: it may go ahead.
+    await getSql()`update public.agent_runs set status = 'failed' where id = ${older}`;
+    await getSql()`update public.agent_runs set status = 'running' where id = ${newer.id}`;
+    expect(await asUser(a.userId, (tx) => makeCreativeRefusal(tx, id, older))).toBeNull();
+    // And the database refuses a second active Make creative outright.
+    await expect(getSql()`update public.agent_runs set status = 'queued' where id = ${older}`).rejects.toThrow(/agent_runs_one_active_make/);
   });
 
   it("while Make creative is running, a second one is refused, and creative is a registered workflow", async () => {

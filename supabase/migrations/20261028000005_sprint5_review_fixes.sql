@@ -15,3 +15,16 @@ $$;
 
 revoke all on function public.simulated_spend_today_pence(text) from public, anon;
 grant execute on function public.simulated_spend_today_pence(text) to authenticated;
+
+-- Finding 5: one active creative run per campaign (Make creative) and per ad
+-- (New picture), held by the database. The app checks first and says why;
+-- these indexes make two starts at once (two tabs) record one run, not two
+-- that both draw and pay. Active means queued, running or awaiting approval,
+-- as everywhere else (src/components/status-badge.tsx).
+create unique index agent_runs_one_active_make
+  on public.agent_runs (workspace_id, (input ->> 'campaignId'))
+  where agent = 'creative' and input ->> 'mode' = 'make' and status in ('queued', 'running', 'awaiting_approval');
+
+create unique index agent_runs_one_active_picture
+  on public.agent_runs (workspace_id, (input ->> 'variantId'))
+  where agent = 'creative' and input ->> 'mode' = 'picture' and status in ('queued', 'running', 'awaiting_approval');

@@ -50,8 +50,18 @@ async function systemStep(ctx: StepContext, seq: number, name: string, ok: boole
       duration_ms = excluded.duration_ms, finished_at = now()`);
 }
 
-/** Why Make creative can't start for this campaign now, or null. Shared by the start function, the gallery and the workflow. */
-export async function makeCreativeRefusal(tx: Tx, campaignId: string, exceptRunId: string | null = null): Promise<string | null> {
+/** The message for a second Make creative while one is active. */
+export const MAKE_BUSY = "Creative is already being made for this brief. It takes about two minutes.";
+
+/**
+ * Why Make creative can't start for this campaign now, or null. Shared by the
+ * start function, the gallery and the workflow. The workflow passes its own
+ * run (`ownRunId`): then only an older active run refuses it, so of two runs
+ * started together the first goes ahead rather than both stopping (review
+ * finding 5; the database's agent_runs_one_active_make index means a second
+ * active one can't normally be recorded at all).
+ */
+export async function makeCreativeRefusal(tx: Tx, campaignId: string, ownRunId: string | null = null): Promise<string | null> {
   const [c] = await tx`
     select c.status, c.approved_version, b.palette, v.brief
     from public.campaigns c join public.brands b on b.id = c.brand_id
@@ -66,10 +76,13 @@ export async function makeCreativeRefusal(tx: Tx, campaignId: string, exceptRunI
   const palette = ((c.palette ?? []) as { hex: string }[]).filter((p) => /^#[0-9a-f]{6}$/i.test(p.hex));
   if (palette.length === 0) return "The brand has no palette, so the pictures can't be on-brand. Add its colours on the brand page first.";
   const [busy] = await tx`
-    select count(*)::int as n from public.agent_runs
-    where agent = 'creative' and status in ('queued', 'running') and input ->> 'mode' = 'make'
-      and input ->> 'campaignId' = ${campaignId} and id is distinct from ${exceptRunId}::uuid`;
-  if (busy.n > 0) return "Creative is already being made for this brief. It takes about two minutes.";
+    select count(*)::int as n from public.agent_runs r
+    where r.agent = 'creative' and r.status in ('queued', 'running', 'awaiting_approval') and r.input ->> 'mode' = 'make'
+      and r.input ->> 'campaignId' = ${campaignId}
+      and ${ownRunId
+        ? tx`r.id <> ${ownRunId}::uuid and (r.created_at, r.id) < (select o.created_at, o.id from public.agent_runs o where o.id = ${ownRunId}::uuid)`
+        : tx`true`}`;
+  if (busy.n > 0) return MAKE_BUSY;
   const [current] = await tx`
     select count(*)::int as n from public.ad_variants
     where campaign_id = ${campaignId} and brief_version = ${c.approved_version} and discarded_at is null`;
