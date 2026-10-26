@@ -13,6 +13,23 @@ export function allowedEmails(): string[] {
     .filter(Boolean);
 }
 
+/** The owner (Rory): may invite people, and is exempt from the per-workspace cap. Defaults to the first allowed email. */
+export function ownerEmail(env: Record<string, string | undefined> = process.env): string | null {
+  const o = (env.OWNER_EMAIL ?? "").trim().toLowerCase();
+  return o || allowedEmails()[0] || null;
+}
+
+export function isOwnerEmail(email: string | null | undefined): boolean {
+  const o = ownerEmail();
+  return !!email && !!o && email.trim().toLowerCase() === o;
+}
+
+/** Each non-owner workspace's daily AI spend limit in pence (F-3), under the app-wide cap. */
+export function workspaceCapPence(): number {
+  const v = Number(process.env.WORKSPACE_DAILY_CAP_PENCE);
+  return Number.isFinite(v) && v >= 0 ? v : 50;
+}
+
 export function isEmailAllowed(email: string | null | undefined, list = allowedEmails()): boolean {
   if (!email) return false;
   return list.includes(email.trim().toLowerCase());

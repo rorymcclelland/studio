@@ -18,11 +18,20 @@ export function malformedRecordPath(pathname: string): boolean {
   }
 }
 
+/** A session cookie of either kind is present (whether it is valid is checked by the page). */
+export function hasSessionCookie(request: NextRequest): boolean {
+  return request.cookies.getAll().some((c) => c.name === "cs_dev_session" || (c.name.startsWith("sb-") && c.name.includes("auth-token")));
+}
+
 // Refreshes the Supabase session cookie once per navigation, so server
 // components always see a valid session. Skipped in local dev auth mode.
 export async function proxy(request: NextRequest) {
   if (request.method === "GET" && malformedRecordPath(request.nextUrl.pathname)) {
     return NextResponse.rewrite(new URL("/_record-not-found", request.url));
+  }
+  // F-3: someone with no session sees the public page at /, not a sign-in redirect.
+  if (request.method === "GET" && request.nextUrl.pathname === "/" && !hasSessionCookie(request)) {
+    return NextResponse.rewrite(new URL("/welcome", request.url));
   }
   if (process.env.AUTH_MODE === "dev" || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
     return NextResponse.next();

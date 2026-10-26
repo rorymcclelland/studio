@@ -1,0 +1,48 @@
+name: Real-model evals
+
+# F-16: run agent evals against the real models, on demand, with the provider
+# key from a repository secret (it is never kept locally, rule 6). Today's
+# eval spend is capped at £1 (DAILY_CAP_PENCE) in the eval database. Reports
+# are uploaded as an artifact to review and commit.
+
+on:
+  workflow_dispatch:
+    inputs:
+      agents:
+        description: "Agents to evaluate, space-separated (empty for all)"
+        required: false
+        default: ""
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports: ["54329:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      DAILY_CAP_PENCE: "100"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Run the evals
+        env:
+          AGENTS: ${{ inputs.agents }}
+        # Agent names are checked by scripts/eval.mjs against the eval files.
+        run: npm run eval -- $AGENTS --yes
+      - name: Upload the reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-reports
+          path: evals/reports/*.md
+          if-no-files-found: warn

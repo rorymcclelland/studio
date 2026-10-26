@@ -14,7 +14,7 @@ export type CurrentMember = CurrentUser & { userId: string; workspaceId: string 
 export async function getCurrentUser(): Promise<CurrentUser | null> {
   if (authMode() === "dev") {
     const s = decodeDevSession((await cookies()).get(DEV_COOKIE)?.value);
-    if (!s || !isEmailAllowed(s.email)) return null;
+    if (!s || !(await allowed(s.userId, s.email))) return null;
     return { id: s.userId, email: s.email };
   }
   // The Supabase client reads the clock (Date.now) while checking the session.
@@ -25,8 +25,17 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   const { data } = await supabase.auth.getClaims();
   const claims = data?.claims;
   const email = typeof claims?.email === "string" ? claims.email : null;
-  if (!claims?.sub || !isEmailAllowed(email)) return null;
-  return { id: claims.sub, email: email! };
+  if (!claims?.sub || !email || !(await allowed(claims.sub, email))) return null;
+  return { id: claims.sub, email };
+}
+
+/** On the allow-list (ALLOWED_EMAILS), or invited and not revoked (F-3). */
+async function allowed(userId: string, email: string): Promise<boolean> {
+  if (isEmailAllowed(email)) return true;
+  return asUser(userId, async (tx) => {
+    const [r] = await tx`select public.is_invited(${email}) as ok`;
+    return r.ok === true;
+  });
 }
 
 /** The signed-in member and their workspace; redirects to sign-in otherwise. */

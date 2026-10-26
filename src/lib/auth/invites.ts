@@ -1,0 +1,75 @@
+import "server-only";
+import { createHash, randomBytes } from "node:crypto";
+import { asAnon, asUser } from "@/lib/db/scoped";
+import { isOwnerEmail } from "@/lib/env";
+
+// F-3: invite links Rory sends himself. A link carries a random token; only
+// its SHA-256 is stored. It works once, for 7 days, until revoked.
+
+export const INVITE_DAYS = 7;
+const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+export class InviteError extends Error {}
+
+export const hashToken = (t: string) => createHash("sha256").update(t, "utf8").digest("hex");
+
+export type Invite = {
+  id: string;
+  email: string;
+  note: string | null;
+  createdAt: Date;
+  expiresAt: Date;
+  usedAt: Date | null;
+  revokedAt: Date | null;
+  state: "open" | "used" | "expired" | "revoked";
+};
+
+function requireOwner(email: string) {
+  if (!isOwnerEmail(email)) throw new InviteError("Only the owner can invite people.");
+}
+
+/** Creates an invite and returns the one-time link path (the token is shown once and never stored). */
+export async function createInvite(owner: { userId: string; email: string }, rawEmail: string, note?: string): Promise<{ id: string; path: string }> {
+  requireOwner(owner.email);
+  const email = rawEmail.trim().toLowerCase();
+  if (!EMAIL.test(email) || email.length > 254) throw new InviteError("Enter a valid email address.");
+  if (isOwnerEmail(email)) throw new InviteError("That's your own email.");
+  const token = randomBytes(32).toString("base64url");
+  const [r] = await asUser(owner.userId, (tx) => tx`
+    insert into public.invites (email, token_hash, note, created_by, expires_at)
+    values (${email}, ${hashToken(token)}, ${note?.trim().slice(0, 200) || null}, ${owner.userId}, now() + ${`${INVITE_DAYS} days`}::interval)
+    returning id`);
+  return { id: r.id as string, path: `/invite/${token}` };
+}
+
+export async function listInvites(owner: { userId: string; email: string }): Promise<Invite[]> {
+  requireOwner(owner.email);
+  const rows = await asUser(owner.userId, (tx) => tx`
+    select id, email, note, created_at, expires_at, used_at, revoked_at from public.invites order by created_at desc limit 200`);
+  return rows.map((r) => ({
+    id: r.id, email: r.email, note: r.note, createdAt: r.created_at, expiresAt: r.expires_at, usedAt: r.used_at, revokedAt: r.revoked_at,
+    state: r.revoked_at ? "revoked" : r.used_at ? "used" : new Date(r.expires_at) <= new Date() ? "expired" : "open",
+  }));
+}
+
+/** Revokes an invite: an open link stops working, and a person who used it can no longer sign in. */
+export async function revokeInvite(owner: { userId: string; email: string }, inviteId: string): Promise<void> {
+  requireOwner(owner.email);
+  if (!/^[0-9a-f-]{36}$/i.test(inviteId)) throw new InviteError("That invite doesn't exist.");
+  const rows = await asUser(owner.userId, (tx) => tx`
+    update public.invites set revoked_at = now() where id = ${inviteId} and revoked_at is null returning id`);
+  if (rows.length === 0) throw new InviteError("That invite doesn't exist or is already revoked.");
+}
+
+/** The email an invite token is good for, or null (used, expired, revoked or unknown). */
+export async function checkInvite(token: string): Promise<string | null> {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(token)) return null;
+  const [r] = await asAnon((tx) => tx`select public.check_invite(${hashToken(token)}) as email`);
+  return (r?.email as string | null) ?? null;
+}
+
+/** Marks the invite used by the user it signed in. False if someone used it in the meantime. */
+export async function redeemInvite(token: string, userId: string): Promise<boolean> {
+  const [r] = await asAnon((tx) => tx`select public.use_invite(${hashToken(token)}, ${userId}) as ok`);
+  return r?.ok === true;
+}

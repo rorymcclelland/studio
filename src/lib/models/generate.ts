@@ -1,17 +1,28 @@
 import { generateText } from "ai";
 import { resolveAgentModel, type AgentKey } from "@/config/agents";
 import { asUser } from "@/lib/db/scoped";
+import { isOwnerEmail, workspaceCapPence } from "@/lib/env";
 import { dailyCapPence, spendTodayPence } from "./cap";
 import { costPence, estimateTokens, searchCostPence } from "./cost";
 import { getLanguageModel, getWebSearchTool, MissingKeyError } from "./registry";
 
 export class CapExceededError extends Error {
-  constructor(public spentPence: number, public capPence: number, public estimatePence: number) {
+  constructor(public spentPence: number, public capPence: number, public estimatePence: number, public scope: "app" | "workspace" = "app") {
     super(
-      `Daily AI cap reached: £${(spentPence / 100).toFixed(2)} spent of £${(capPence / 100).toFixed(2)}; ` +
-        `this call could cost up to £${(estimatePence / 100).toFixed(2)}.`,
+      scope === "workspace"
+        ? `Daily AI cap reached: today's limit for this workspace is reached (£${(spentPence / 100).toFixed(2)} spent of £${(capPence / 100).toFixed(2)}; ` +
+            `this call could cost up to £${(estimatePence / 100).toFixed(2)}). It resets at midnight UK time.`
+        : `Daily AI cap reached: £${(spentPence / 100).toFixed(2)} spent of £${(capPence / 100).toFixed(2)}; ` +
+            `this call could cost up to £${(estimatePence / 100).toFixed(2)}.`,
     );
   }
+}
+
+async function workspaceSpend(userId: string, workspaceId: string): Promise<{ owner: boolean; spent: number }> {
+  return asUser(userId, async (tx) => {
+    const [r] = await tx`select public.current_user_email() as email, public.workspace_spend_today_pence(${workspaceId}) as spent`;
+    return { owner: isOwnerEmail(r.email), spent: Number(r.spent) };
+  });
 }
 
 export class ProviderError extends Error {}
@@ -63,6 +74,11 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
   const cap = dailyCapPence();
   const spent = await spendTodayPence(input.userId);
   if (spent + estimate > cap) throw new CapExceededError(spent, cap, estimate);
+  // F-3: each workspace but the owner's has its own, smaller daily limit.
+  const ws = await workspaceSpend(input.userId, input.workspaceId);
+  if (!ws.owner && ws.spent + estimate > workspaceCapPence()) {
+    throw new CapExceededError(ws.spent, workspaceCapPence(), estimate, "workspace");
+  }
 
   const model = getLanguageModel(cfg.provider, cfg.model);
   const tools = input.webSearch ? { web_search: getWebSearchTool(cfg.provider, input.webSearch.maxUses) } : undefined;

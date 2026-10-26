@@ -10,7 +10,7 @@ import { execFileSync, spawnSync } from "node:child_process";
 import { readdirSync } from "node:fs";
 
 const args = process.argv.slice(2);
-const mock = args.includes("--mock") || args.length === 0;
+const mock = args.includes("--mock") || args.length === 0 || (!args.includes("--yes") && args.every((a) => a.startsWith("--")));
 const yes = args.includes("--yes");
 const named = args.filter((a) => !a.startsWith("--"));
 const available = readdirSync("tests/evals").filter((f) => f.endsWith(".eval.ts")).map((f) => f.replace(/\.eval\.ts$/, "")).sort();

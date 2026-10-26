@@ -1,0 +1,28 @@
+name: After production deploy
+
+# F-15: after Vercel finishes a production deploy, make the app register its
+# Inngest functions (PUT /api/inngest asks the serve handler to sync itself),
+# then check the health endpoint lists them. Sprint 3's deploy left Inngest on
+# the old function list until a manual resync; this makes that impossible to
+# miss. Needs the production address to be public (F-3).
+
+on:
+  deployment_status:
+
+jobs:
+  sync-inngest:
+    if: github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production'
+    runs-on: ubuntu-latest
+    env:
+      APP_URL: https://campaign-studio-neon.vercel.app
+    steps:
+      - name: Ask the app to sync its functions with Inngest
+        run: |
+          code=$(curl -s -o sync.json -w '%{http_code}' -X PUT "$APP_URL/api/inngest")
+          cat sync.json; echo
+          test "$code" -ge 200 -a "$code" -lt 300 || { echo "Inngest sync failed with HTTP $code"; exit 1; }
+      - name: Check the health endpoint lists the agent run function
+        run: |
+          curl -sf "$APP_URL/api/health" -o health.json
+          cat health.json; echo
+          node -e 'const h=require("./health.json"); if(!h.ok||!(h.inngestFunctions||[]).some(f=>f.endsWith("agent-run"))){console.error("health check: agent-run not served");process.exit(1)}'
