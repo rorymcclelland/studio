@@ -86,3 +86,21 @@ describe("F-5 evals runner", () => {
     expect(r.stderr).toContain("need a provider key");
   });
 });
+
+describe("F-13 long replies in the attempt log", () => {
+  it("cuts a raw reply over 8,000 characters and says so", async () => {
+    const { mockBehaviour } = await import("@/lib/models/mock");
+    const { runModelStep } = await import("@/lib/agents/model-step");
+    const { taglineAgent } = await import("@/lib/agents/tagline");
+    const { getRun } = await import("@/lib/agents/runs");
+    const runId = await createRun(env.member, "tagline", { brandName: "Long" }, async () => {});
+    mockBehaviour.reset();
+    mockBehaviour.next({ text: "x".repeat(9000), inputTokens: 1, outputTokens: 1 });
+    mockBehaviour.next({ text: JSON.stringify({ taglines: ["One line", "Two line", "Three line"] }), inputTokens: 1, outputTokens: 1 });
+    await runModelStep({ runId, workspaceId: env.member.workspaceId, userId: env.member.userId }, taglineAgent, { brandName: "Long" }, 1, "Propose");
+    const step = (await getRun(env.member.userId, runId))!.steps[0];
+    expect(step.attempt_log[0]).toMatchObject({ attempt: 1, truncated: true });
+    expect(step.attempt_log[0].raw).toHaveLength(8000);
+    expect(step.attempt_log[0].problems[0]).toContain("not valid JSON");
+  });
+});

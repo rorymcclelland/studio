@@ -65,6 +65,7 @@ describe("agent run framework", () => {
     expect(model).toMatchObject({ provider: "mock", model: "mock-model", input_tokens: 200, output_tokens: 60 });
     expect(Number(model.cost_pence)).toBeGreaterThan(0);
     expect(model.duration_ms).toBeGreaterThanOrEqual(0);
+    expect(model.attempt_log).toEqual([{ attempt: 1, raw: taglinesJson, truncated: false, problems: [] }]);
   });
 
   it("S1-5 #2: rejection ends the run as Rejected with the reason", async () => {

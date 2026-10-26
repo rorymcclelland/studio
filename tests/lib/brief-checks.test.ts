@@ -81,3 +81,18 @@ describe("evidence checks", () => {
     expect(checkBrief({ ...input, revise: { ...input.revise, section: null } }, current)).toEqual([expect.stringContaining("not in the context")]);
   });
 });
+
+describe("F-14 loose quantities", () => {
+  it("refuses quantity words used as claims", async () => {
+    const { quantityInWords } = await import("@/lib/brief/checks");
+    for (const t of ["Most are open to hearing from us.", "Many of them buy accessories.", "The majority of lapsed customers buy fleeces.", "Nearly all customers walk.", "A good number of walkers are in Scotland."]) {
+      expect(quantityInWords(t), t).not.toBeNull();
+    }
+  });
+  it("lets ordinary words through", async () => {
+    const { quantityInWords } = await import("@/lib/brief/checks");
+    for (const t of ["Many walks start at the coast.", "Their most-bought categories are fleeces.", "Bring a few layers.", "Most of all, keep it plain."]) {
+      expect(quantityInWords(t), t).toBeNull();
+    }
+  });
+});

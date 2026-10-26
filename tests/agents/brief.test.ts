@@ -71,6 +71,12 @@ describe("S3-2 campaigns and the Brief agent", () => {
     const repaired = await brief(a, fern, DEMO);
     expect(repaired.run.status).toBe("completed");
     expect(repaired.run.steps[1].attempts).toBe(2);
+    // F-13: both attempts are in the trail, the first with why it was sent back.
+    const log = repaired.run.steps[1].attempt_log;
+    expect(log.map((l) => l.attempt)).toEqual([1, 2]);
+    expect(log[0].problems.join(" ")).toContain("insight 1 cites C99");
+    expect(log[0].raw).toContain("C99");
+    expect(log[1].problems).toEqual([]);
     expect(mockBehaviour.lastPlainPrompt).toContain("insight 1 cites C99, which is not in the context");
 
     const invented = { ...goodFern, insights: [{ ...goodFern.insights[0], text: "37% of lapsed customers bought a jacket." }, ...goodFern.insights.slice(1)] };
@@ -79,6 +85,7 @@ describe("S3-2 campaigns and the Brief agent", () => {
     const failed = await brief(a, fern, DEMO);
     expect(failed.run.status).toBe("failed");
     expect(failed.run.error).toContain("insight 1 says 37%, which no cited item contains");
+    expect(failed.run.steps[1].attempt_log.map((l) => l.problems.length > 0)).toEqual([true, true]);
     expect(failed.campaign.status).toBe("drafting");
     expect(failed.campaign.currentVersion).toBe(0);
   });

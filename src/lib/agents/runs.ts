@@ -77,6 +77,7 @@ export type RunDetail = {
     provider: string | null;
     model: string | null;
     attempts: number;
+    attempt_log: { attempt: number; raw: string; truncated: boolean; problems: string[] }[];
     input_tokens: number;
     output_tokens: number;
     cost_pence: string;

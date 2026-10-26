@@ -54,8 +54,14 @@ const NUMBER_WORD =
   /\b(?:(?:a\s+)?(?:half|quarter|third)\s+of|(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+in\s+(?:every\s+)?(?:two|three|four|five|six|seven|eight|nine|ten)\b|(?:two|three)\s+(?:thirds|quarters)|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\s+(?:per\s?cent|percent)|(?:twice|three times|four times)\s+(?:as|more)|(?:dozens|hundreds|thousands|millions)\s+of)\b/i;
 
 /** A quantity written in words, if the text has one. */
+// F-14: loose quantities used as claims ("most are", "the majority of
+// customers"); words like "many walks" or "most-bought" are fine.
+const QUANTITY_CLAIM =
+  /\b(?:most|many|few|the majority|a majority|a minority|nearly all|almost all|the bulk|a good number|a large number|a small number|hardly any)(?!-)\s+(?:of|are|were|have|had|buy|buys|bought|say|said|prefer|prefers|customers|people|buyers|users|members|walkers|shoppers|subscribers)\b/i;
+
 export function quantityInWords(text: string): string | null {
-  return NUMBER_WORD.exec(text)?.[0] ?? null;
+  const plain = text.replace(/\b(?:most|first) of all\b(?!\s+(?:customers|people|buyers|users|members|walkers|shoppers|subscribers|our|the|its|their))/gi, "");
+  return NUMBER_WORD.exec(text)?.[0] ?? QUANTITY_CLAIM.exec(plain)?.[0] ?? null;
 }
 
 type Field = { where: string; section: BriefSection; text: string; cites?: string[] };
@@ -140,8 +146,8 @@ export function evidenceProblems(
       problems.push(`${f.where} says ${f.number}, which no ${f.cited ? "cited item" : "context item"} contains; use only figures from the context, written as they are there`);
     }
     for (const f of fields) {
-      const m = NUMBER_WORD.exec(f.text);
-      if (m) problems.push(`${f.where} says "${m[0]}"; quantities in words can't be checked, so use only figures from the context`);
+      const m = quantityInWords(f.text);
+      if (m) problems.push(`${f.where} says "${m}"; quantities in words can't be checked, so use only figures from the context`);
     }
   }
 

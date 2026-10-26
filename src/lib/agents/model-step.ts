@@ -64,11 +64,13 @@ export async function runModelStep<I, O>(
   let provider: string | null = null;
   let model: string | null = null;
   let raw = "";
+  const log: { attempt: number; raw: string; truncated: boolean; problems: string[] }[] = [];
+  const RAW_LIMIT = 8000;
 
   const finish = async (status: "succeeded" | "failed", output: unknown, error: string | null) => {
     await asUser(ctx.userId, (tx) => tx`
       update public.agent_steps set status = ${status}, output = ${output === null ? null : tx.json(output as never)},
-        raw_output = ${raw}, provider = ${provider}, model = ${model}, attempts = ${attempts},
+        raw_output = ${raw}, attempt_log = ${tx.json(log as never)}, provider = ${provider}, model = ${model}, attempts = ${attempts},
         input_tokens = ${inputTokens}, output_tokens = ${outputTokens}, cost_pence = ${cost},
         duration_ms = ${Date.now() - started}, error = ${error}, finished_at = now()
       where id = ${stepId}`);
@@ -97,10 +99,17 @@ export async function runModelStep<I, O>(
       const parsed = json === undefined ? null : agent.output.safeParse(json);
       const problems = parsed?.success && agent.check ? agent.check(input, parsed.data) : [];
       if (parsed?.success && problems.length === 0) {
+        log.push({ attempt: attempts, raw: res.text.slice(0, RAW_LIMIT), truncated: res.text.length > RAW_LIMIT, problems: [] });
         await finish("succeeded", parsed.data, null);
         return { output: parsed.data, stepId };
       }
       const issues = parsed?.success ? problems.slice(0, 8).join("; ") : describeIssues(parsed ? parsed.error : null);
+      log.push({
+        attempt: attempts,
+        raw: res.text.slice(0, RAW_LIMIT),
+        truncated: res.text.length > RAW_LIMIT,
+        problems: parsed?.success ? problems : [issues],
+      });
       if (attempts >= 2) {
         throw new AgentOutputError(
           parsed?.success
