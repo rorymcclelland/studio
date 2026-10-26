@@ -56,10 +56,10 @@ Evidence: 82 unit and database tests and 33 end-to-end tests passing; fresh-eyes
 | F-5 | Evals runner (`npm run eval`), eval database, committed reports, mock mode in CI | M | Done, Sprint 3, for mock mode. The real-model eval report is split out as F-16 (no provider key is kept locally) |
 | S3-1 | Audience agent: SQL counts segments, Haiku names them, saved to the context store | M | Done, Sprint 3 (production: 11 s, 0.08p, nine segments, passed first time) |
 | S3-2 | Campaigns and the Brief agent (Sonnet), with evidence checks in code | L | Done, Sprint 3 (production: demo brief in 39 s against 60 s, 5.7p with one repair; every figure traced to its source) |
-| S3-3 | Brief editor: hand edits, revise with AI (whole or per section), version history | M | Done, Sprint 3. Test case 6 changed (legal lines are carried by code rather than a revision being refused), pending Rory's confirmation |
+| S3-3 | Brief editor: hand edits, revise with AI (whole or per section), version history | M | Done, Sprint 3. Test case 6 changed (legal lines are carried by code rather than a revision being refused), confirmed by Rory 26 Oct 2026 |
 | F-12 | Not-found pages return 404 (two-hour time-box) | S | Done, Sprint 3, for malformed ids (404 on production). Residual: a well-formed missing id shows not found with HTTP 200 and `noindex`, the agreed fallback |
 
-Evidence: 138 unit and database tests and 40 end-to-end tests passing against a production build; mock evals 13 of 13; fresh-eyes review with 13 of its 15 findings fixed before deploy (the other two are F-16 and Rory's confirmation of S3-3 #6); production runs above. Detail: `docs/refinement/sprint-3.md`.
+Evidence: 138 unit and database tests and 40 end-to-end tests passing against a production build; mock evals 13 of 13; fresh-eyes review with 13 of its 15 findings fixed before deploy (the other two: F-16, and S3-3 #6, which Rory has since confirmed); production runs above. Detail: `docs/refinement/sprint-3.md`.
 
 ## Where the Sprint 3 review items now live
 

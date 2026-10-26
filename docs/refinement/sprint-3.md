@@ -266,7 +266,7 @@ All seven recommendations accepted: Q1 (a) segments saved straight away, labelle
 | F-4 | The old `tagline-run` Inngest function is replaced by `agent-run`. Tagline runs still waiting for approval are closed as expired by migration 20261026000004 (one Sprint 1 test run on production) | A run waiting under a removed function could never finish |
 | F-5 | Mock evals run in CI. Real-model evals need a key in `.env.local`; none is kept locally (keys live only in Vercel), so no real-model eval report exists yet | Rule 6 |
 | S3-2 | The must-include and avoid lists are copied from the kit by code, never written by the model. Claims on the brand's "needs evidence" list are refused as well as banned terms | No instruction can drop a legal line; unevidenced superlatives are a rule 1 risk too |
-| S3-3 #6 | Was "a revision asking to remove the legal lines fails validation and the person sees why". Now: the proposal still carries every legal line, because code adds them | A consequence of the change above; stronger than refusing. **For Rory to confirm** |
+| S3-3 #6 | Was "a revision asking to remove the legal lines fails validation and the person sees why". Now: the proposal still carries every legal line, because code adds them | A consequence of the change above; stronger than refusing. Confirmed by Rory, 26 October 2026 |
 | S3-3 | Hand edits check only the sections that changed; a typed figure is allowed and marked; restores take today's kit lists and are re-checked | Found while building the screens |
 | F-12 | Malformed ids on `/brands`, `/runs` and `/campaigns` pages answer 404 from the proxy. A well-formed id that doesn't exist shows the not-found screen with HTTP 200 and `noindex` (test case 2's agreed fallback): the app shell streams, and so commits to 200, before the page can look the record up (Next.js streaming guide, "The HTTP contract") | Known limit, recorded |
 | S3-2 #7 | Timed on production after deploy (below) | Needs the real model |
@@ -287,7 +287,7 @@ A reviewer subagent checked `git diff main..sprint-3`. Tenancy, kit keys, prompt
 | 8 | The eval cap reset with each fresh eval database; no key check | Fixed: today's eval spend carries over; real runs refuse to start without a key |
 | 9 | F-12 #2 spec uncommitted and the limit unrecorded | Fixed: spec committed; limit recorded above |
 | 10 | S3-2 #7 timing and a real eval report missing | Timing on production after deploy; real eval report not possible without a local key (above) |
-| 11 | S3-3 #6 criterion changed without agreement | Recorded above for Rory to confirm |
+| 11 | S3-3 #6 criterion changed without agreement | Rory confirmed the new criterion (26 October 2026) |
 | 12 | Audience names weren't checked for banned terms or quantities in words | Fixed |
 | 13 | Deleting a campaign erased its history; versions could be inserted out of order | Fixed: no delete policy; a version must be its campaign's current one |
 | 14 | Kit key case folding is ASCII-only | Accepted and documented (decision 0009) |
