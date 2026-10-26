@@ -4,7 +4,9 @@
 // Edit words, the /ads route, and the failure and hostile cases.
 import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { resolveAgentModel } from "@/config/agents";
 import { makeCreativeRefusal } from "@/lib/agents/creative-workflow";
+import { IMAGE_COUNT } from "@/lib/agents/imagery";
 import { createRun, getRun, listChildRuns, type Member } from "@/lib/agents/runs";
 import { executeRun, WORKFLOWS } from "@/lib/agents/workflows";
 import type { StepTools } from "@/lib/agents/workflow";
@@ -14,7 +16,7 @@ import { createCampaign, getCampaign, saveBriefEdit } from "@/lib/brief/repo";
 import type { BriefCore, StoredBrief } from "@/lib/brief/schema";
 import { adResponse, clearAdCache } from "@/lib/creative/ad-serve";
 import { discardCopySet, listCopySets, restoreCopySet } from "@/lib/creative/copy";
-import { aboutPence, makeCreativeEstimate, newPictureEstimate, newWordsEstimate } from "@/lib/creative/costs";
+import { aboutPence, makeCreativeEstimate, newPictureEstimate, newWordsEstimate, REPAIR_OVERHEAD_TOKENS, TYPICAL_TOKENS } from "@/lib/creative/costs";
 import {
   CopyEditError,
   CreativeError,
@@ -36,7 +38,7 @@ import { composeVariants } from "@/lib/creative/variants";
 import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
-import { imageCostPence } from "@/lib/models/cost";
+import { costPence, imageCostPence } from "@/lib/models/cost";
 import { spendPosition } from "@/lib/models/generate";
 import { mockBehaviour } from "@/lib/models/mock";
 import { createMember, truncateAll } from "../helpers/db";
@@ -181,11 +183,34 @@ describe("S5-4 Make creative and the gallery", () => {
       for (const c of r.children) expect((await getRun(a.userId, c.runId))!.input).toMatchObject({ parentRunId: runId, campaignId: id });
     });
 
-    it("costs at most 20p in real mode (estimated from prices.ts and the configured models), and the buttons say roughly how much", () => {
+    it("typically costs under 20p in real mode, and the button says the typical and the worst case (review finding 9)", () => {
       const real = { USD_TO_GBP: "0.79" };
       const estimate = makeCreativeEstimate({ writesCopy: true }, real);
       expect(estimate.pence).toBeLessThanOrEqual(20);
-      expect(estimate.label).toMatch(/^about \d+p$/);
+
+      // The worst case, worked out here from the prices and the configured limits: every picture redrawn
+      // (eight images), and every model call repaired once at its full output allowance.
+      const call = (agent: "imagery" | "imageCheck" | "copy", input: number) => {
+        const m = resolveAgentModel(agent, real);
+        const first = costPence(m.provider, m.model, input, m.maxOutputTokens);
+        const repair = costPence(m.provider, m.model, input + m.maxOutputTokens + REPAIR_OVERHEAD_TOKENS, m.maxOutputTokens);
+        return first + repair;
+      };
+      const image = imageCostPence("google", "gemini-nano-banana-2.1", "1K", 1);
+      const worst =
+        2 * IMAGE_COUNT * (image + call("imageCheck", TYPICAL_TOKENS.imageCheck.input)) +
+        call("imagery", TYPICAL_TOKENS.imagery.input) +
+        call("copy", TYPICAL_TOKENS.copyAll.input);
+      expect(estimate.worstPence).toBeCloseTo(worst, 3);
+      // Honestly above the refined 20p: the redraws alone are four more pictures.
+      expect(estimate.worstPence).toBeGreaterThan(20);
+      expect(estimate.worstPence).toBeLessThan(35);
+      expect(estimate.label).toBe(`about ${Math.ceil(estimate.pence)}p, at most ${Math.ceil(estimate.worstPence)}p`);
+      // With the copy already written, the copy's share comes off both.
+      const noCopy = makeCreativeEstimate({ writesCopy: false }, real);
+      expect(noCopy.pence).toBeLessThan(estimate.pence);
+      expect(noCopy.worstPence).toBeCloseTo(worst - call("copy", TYPICAL_TOKENS.copyAll.input), 3);
+      expect(g.makeCreative.estimate.label).toMatch(/^about \d+p, at most \d+p$/);
       expect(newPictureEstimate(real).label).toBe("about 3p");
       expect(newWordsEstimate(real).label).toMatch(/^(about \d+p|under 1p)$/);
       expect(g.estimates.newPicture.label).toBe("about 3p");

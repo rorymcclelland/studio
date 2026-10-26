@@ -6,6 +6,11 @@ import { costPence, imageCostPence } from "@/lib/models/cost";
 // ("about 3p"). Worked out from prices.ts and the configured models, with
 // the token counts below as estimates of a typical call (they are not
 // measured per brief). The cap still decides at call time.
+//
+// Make creative also shows its worst case (review finding 9): every picture
+// redrawn once, and every model call repaired once, each call writing its
+// full output allowance (maxOutputTokens, as generate() reserves). Inputs stay
+// the typical counts, so a very long brief could cost a little more.
 
 /** Typical tokens per call, rounded up from Sprint 5's mock and real runs' prompts. */
 export const TYPICAL_TOKENS = {
@@ -19,7 +24,11 @@ export const TYPICAL_TOKENS = {
   copyOne: { input: 4_000, output: 300 },
 } as const;
 
-export type Estimate = { pence: number; label: string };
+/** What a repair prompt adds to the first prompt besides the previous reply: the issues and the instructions. */
+export const REPAIR_OVERHEAD_TOKENS = 300;
+
+/** Typical cost, the worst case (redraws, repairs, full output), and the label for the button. */
+export type Estimate = { pence: number; worstPence: number; label: string };
 
 type Env = Record<string, string | undefined>;
 
@@ -29,11 +38,28 @@ export function aboutPence(pence: number): string {
   return `about ${Math.ceil(pence - 1e-9)}p`;
 }
 
-const est = (pence: number): Estimate => ({ pence: Math.round(pence * 10_000) / 10_000, label: aboutPence(pence) });
+/** "about 14p, at most 31p": the typical and the worst case, both rounded up. */
+export function aboutAndAtMost(pence: number, worstPence: number): string {
+  return `${aboutPence(pence)}, at most ${Math.max(1, Math.ceil(worstPence - 1e-9))}p`;
+}
 
-function modelCall(agent: "imagery" | "imageCheck" | "copy", tokens: { input: number; output: number }, env: Env): number {
+const round = (p: number) => Math.round(p * 10_000) / 10_000;
+/** A button that shows the typical cost only; the worst case is kept for any check against the cap. */
+const est = (pence: number, worstPence: number): Estimate => ({ pence: round(pence), worstPence: round(worstPence), label: aboutPence(pence) });
+
+type ModelAgent = "imagery" | "imageCheck" | "copy";
+
+function modelCall(agent: ModelAgent, tokens: { input: number; output: number }, env: Env): number {
   const m = resolveAgentModel(agent, env);
   return costPence(m.provider, m.model, tokens.input, tokens.output);
+}
+
+/** A model call at its worst: its full output allowance, then one repair that also reads the previous reply. */
+function worstModelCall(agent: ModelAgent, input: number, env: Env): number {
+  const m = resolveAgentModel(agent, env);
+  const first = costPence(m.provider, m.model, input, m.maxOutputTokens);
+  const repair = costPence(m.provider, m.model, input + m.maxOutputTokens + REPAIR_OVERHEAD_TOKENS, m.maxOutputTokens);
+  return first + repair;
 }
 
 function oneImage(env: Env): number {
@@ -41,20 +67,32 @@ function oneImage(env: Env): number {
   return imageCostPence(m.provider, m.model, m.size, 1);
 }
 
-/** New picture: one image call and its check for text. */
+/** New picture: one image call (never redrawn) and its check for text. */
 export function newPictureEstimate(env: Env = process.env): Estimate {
-  return est(oneImage(env) + modelCall("imageCheck", TYPICAL_TOKENS.imageCheck, env));
+  const pence = oneImage(env) + modelCall("imageCheck", TYPICAL_TOKENS.imageCheck, env);
+  return est(pence, oneImage(env) + worstModelCall("imageCheck", TYPICAL_TOKENS.imageCheck.input, env));
 }
 
 /** New words: one Copy call for one set. */
 export function newWordsEstimate(env: Env = process.env): Estimate {
-  return est(modelCall("copy", TYPICAL_TOKENS.copyOne, env));
+  return est(modelCall("copy", TYPICAL_TOKENS.copyOne, env), worstModelCall("copy", TYPICAL_TOKENS.copyOne.input, env));
 }
 
-/** Make creative: the image prompts, four pictures with their checks, and the copy (unless the version already has copy). */
+/**
+ * Make creative: the image prompts, four pictures with their checks, and the
+ * copy (unless the version already has copy). The worst case adds a redraw and
+ * a second check for every picture (up to four more images) and a repair of
+ * every model call; use it for any check against the cap before starting.
+ */
 export function makeCreativeEstimate(opts: { writesCopy: boolean } = { writesCopy: true }, env: Env = process.env): Estimate {
   const pictures = IMAGE_COUNT * (oneImage(env) + modelCall("imageCheck", TYPICAL_TOKENS.imageCheck, env));
   const prompts = modelCall("imagery", TYPICAL_TOKENS.imagery, env);
   const copy = opts.writesCopy ? modelCall("copy", TYPICAL_TOKENS.copyAll, env) : 0;
-  return est(pictures + prompts + copy);
+  const pence = pictures + prompts + copy;
+
+  const worstPictures = 2 * IMAGE_COUNT * (oneImage(env) + worstModelCall("imageCheck", TYPICAL_TOKENS.imageCheck.input, env));
+  const worstPrompts = worstModelCall("imagery", TYPICAL_TOKENS.imagery.input, env);
+  const worstCopy = opts.writesCopy ? worstModelCall("copy", TYPICAL_TOKENS.copyAll.input, env) : 0;
+  const worstPence = worstPictures + worstPrompts + worstCopy;
+  return { pence: round(pence), worstPence: round(worstPence), label: aboutAndAtMost(pence, worstPence) };
 }

@@ -76,7 +76,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
 
   // #1: Make creative says what it costs, then gives 12 ads with their badges, labelled simulated.
-  const make = creative(page).getByRole("button", { name: /^Make creative \((about \d+p|under 1p)\)$/ });
+  const make = creative(page).getByRole("button", { name: /^Make creative \(about \d+p, at most \d+p\)$/ });
   await expect(make).toBeEnabled();
   await make.click();
   await expect(creative(page).getByRole("status").filter({ hasText: "Drawing four pictures" })).toBeVisible({ timeout: 15_000 });
