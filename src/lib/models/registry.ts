@@ -1,8 +1,8 @@
 import { createAnthropic } from "@ai-sdk/anthropic";
 import { createGoogleGenerativeAI } from "@ai-sdk/google";
-import type { LanguageModel } from "ai";
-import { AGENT_MODELS, resolveAgentModel, type AgentKey, type ProviderId } from "@/config/agents";
-import { createMockModel } from "./mock";
+import type { ImageModel, LanguageModel } from "ai";
+import { AGENT_MODELS, resolveAgentModel, resolveImageModel, type AgentKey, type ProviderId } from "@/config/agents";
+import { createMockImageModel, createMockModel } from "./mock";
 
 const KEY_VARS: Record<Exclude<ProviderId, "mock">, string> = {
   anthropic: "ANTHROPIC_API_KEY",
@@ -25,6 +25,16 @@ export function getLanguageModel(provider: ProviderId, model: string): LanguageM
   return createGoogleGenerativeAI({ apiKey })(model);
 }
 
+/** Builds the image model client (S5-1). Only Google draws pictures; the mock draws palette shapes. */
+export function getImageModel(provider: ProviderId, model: string): ImageModel {
+  if (provider === "mock") return createMockImageModel();
+  if (provider !== "google") throw new Error(`The "${provider}" provider has no image model configured.`);
+  const envVar = KEY_VARS.google;
+  const apiKey = process.env[envVar];
+  if (!apiKey) throw new MissingKeyError(provider, envVar);
+  return createGoogleGenerativeAI({ apiKey }).image(model);
+}
+
 /**
  * Anthropic's web search tool (S4-3), limited to `maxUses` searches and the UK.
  * The mock provider gets the same tool definition; the mock model answers it
@@ -44,9 +54,10 @@ export function getWebSearchTool(provider: ProviderId, maxUses: number) {
 export function missingProviderKeys(
   env: Record<string, string | undefined> = process.env,
 ): { provider: string; envVar: string }[] {
-  const providers = new Set(
-    (Object.keys(AGENT_MODELS) as AgentKey[]).map((a) => resolveAgentModel(a, env).provider),
-  );
+  const providers = new Set([
+    ...(Object.keys(AGENT_MODELS) as AgentKey[]).map((a) => resolveAgentModel(a, env).provider),
+    resolveImageModel(env).provider,
+  ]);
   const missing: { provider: string; envVar: string }[] = [];
   for (const p of providers) {
     if (p === "mock") continue;

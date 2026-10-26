@@ -16,11 +16,37 @@ export const AGENT_MODELS = {
   persona: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2500 },
   testPlan: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
   market: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 3000 },
+  // S5-1 (Q3): image prompts and the picture check on Haiku.
+  imagery: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 1500 },
+  imageCheck: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 200 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;
 
 type Env = Record<string, string | undefined>;
+
+export type ImageSize = "1K" | "2K";
+
+export type ImageModelConfig = { provider: ProviderId; model: string; size: ImageSize };
+
+/**
+ * The image model (S5-1, Q1: Nano Banana 2.1 at 1K, plenty for a 1080 px ad).
+ * IMAGE_MODEL="provider:model" overrides it; MODEL_PROVIDER_OVERRIDE=mock uses
+ * the mock image model, which draws palette shapes and spends nothing real.
+ */
+export const IMAGE_MODEL: ImageModelConfig = { provider: "google", model: "gemini-nano-banana-2.1", size: "1K" };
+
+export function resolveImageModel(env: Env = process.env): ImageModelConfig {
+  const base: ImageModelConfig = { ...IMAGE_MODEL };
+  if (env.IMAGE_MODEL) {
+    const [provider, ...rest] = env.IMAGE_MODEL.split(":");
+    if (!isProvider(provider) || rest.length === 0) throw new Error('IMAGE_MODEL must look like "google:model-id"');
+    base.provider = provider;
+    base.model = rest.join(":");
+  }
+  if (env.MODEL_PROVIDER_OVERRIDE === "mock") return { ...base, provider: "mock", model: "mock-image" };
+  return base;
+}
 
 /**
  * Resolves an agent's model, applying overrides in order:

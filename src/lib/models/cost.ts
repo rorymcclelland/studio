@@ -1,4 +1,4 @@
-import { DEFAULT_USD_TO_GBP, PRICES, SEARCH_PRICES } from "@/config/prices";
+import { DEFAULT_USD_TO_GBP, IMAGE_PRICES, PRICES, SEARCH_PRICES } from "@/config/prices";
 
 export function usdToGbp(): number {
   const v = Number(process.env.USD_TO_GBP);
@@ -27,6 +27,14 @@ export function costPence(
  */
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3);
+}
+
+/** Cost of images in pence. Models or sizes without a price are refused, not guessed. */
+export function imageCostPence(provider: string, model: string, size: "1K" | "2K", images: number): number {
+  if (images <= 0) return 0;
+  const usd = IMAGE_PRICES[`${provider}:${model}`]?.[size];
+  if (usd === undefined) throw new Error(`No image price configured for ${provider}:${model} at ${size}`);
+  return images * usd * usdToGbp() * 100;
 }
 
 /** Cost of web searches in pence. Providers without a search price are refused. */

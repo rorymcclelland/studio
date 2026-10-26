@@ -38,3 +38,16 @@ export const SEARCH_PRICES: Record<string, { usdPerSearch: number }> = {
   mock: { usdPerSearch: 0.01 },
 };
 
+/**
+ * Image prices in US dollars per image, by size. Checked 26 October 2026 on
+ * the Google AI for Developers pricing page (standard tier, no free tier):
+ * Nano Banana 2.1 is $0.0336 per 1K image and $0.0504 per 2K. The prompt's few
+ * hundred input tokens are not priced here, as no input price was checked for
+ * this model; they are recorded in the ledger.
+ */
+export const IMAGE_PRICES: Record<string, Partial<Record<"1K" | "2K", number>>> = {
+  "google:gemini-nano-banana-2.1": { "1K": 0.0336, "2K": 0.0504 },
+  // Test and offline model: priced like the real one, so cap tests mean something.
+  "mock:mock-image": { "1K": 0.0336, "2K": 0.0504 },
+};
+
