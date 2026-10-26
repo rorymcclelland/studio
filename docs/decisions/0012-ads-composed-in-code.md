@@ -1,4 +1,4 @@
-# 0011 Ads composed in code: ImageResponse, bundled fonts, contrast and fit decided before drawing
+# 0012 Ads composed in code: ImageResponse, bundled fonts, contrast and fit decided before drawing
 
 **Date:** 26 October 2026. **Status:** accepted (built in Sprint 5: S5-3 rendering core, `src/lib/creative/render/`).
 
