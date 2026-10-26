@@ -139,6 +139,7 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       left join public.campaigns c on c.id = a.campaign_id
       left join public.brands b on b.id = c.brand_id
       where a.status = 'pending' and a.expires_at > now()
+        and (a.kind = 'brief_signoff' or r.status = 'awaiting_approval')
       order by a.created_at desc
       limit 100`;
     return rows.map((r): InboxItem =>
@@ -154,7 +155,8 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
 
 export async function inboxCount(userId: string): Promise<number> {
   const [r] = await asUser(userId, (tx) => tx`
-    select count(*)::int as n from public.approvals where status = 'pending' and expires_at > now()`);
+    select count(*)::int as n from public.approvals a left join public.agent_runs r on r.id = a.run_id
+    where a.status = 'pending' and a.expires_at > now() and (a.kind = 'brief_signoff' or r.status = 'awaiting_approval')`);
   return r.n as number;
 }
 

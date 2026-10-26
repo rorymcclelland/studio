@@ -29,9 +29,14 @@ export async function addVersion(
     returning current_version, workspace_id`;
   if (!c) throw new StaleBriefError();
   // A sign-off asked for an older version no longer applies (S4-1).
-  await tx`
+  const lapsed = await tx`
     update public.approvals set status = 'expired', reason = 'A newer version was saved before it was signed off', decided_at = now()
-    where campaign_id = ${campaignId} and kind = 'brief_signoff' and status = 'pending'`;
+    where campaign_id = ${campaignId} and kind = 'brief_signoff' and status = 'pending'
+    returning brief_version`;
+  if (lapsed.length) {
+    await tx`update public.campaigns set signoff_note = ${`The sign-off request for version ${lapsed[0].brief_version} lapsed because a newer version was saved. Send this version when it is ready.`}
+      where id = ${campaignId}`;
+  }
   await tx`
     insert into public.brief_versions (workspace_id, campaign_id, version, brief, source, restored_from, note, run_id, created_by)
     values (${c.workspace_id}, ${campaignId}, ${c.current_version}, ${tx.json(brief as never)}, ${source},

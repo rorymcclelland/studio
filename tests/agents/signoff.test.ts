@@ -88,6 +88,7 @@ describe("S4-1 approvals and brief sign-off", () => {
     s = (await getSignoffState(a.userId, id))!;
     expect(s.open).toBeNull();
     expect(s.history.find((h) => h.id === open)).toMatchObject({ status: "expired", reason: "A newer version was saved before it was signed off" });
+    expect(s.note).toContain("sign-off request for version 2 lapsed");
     await expect(decideSignoff(a, open, "approved")).rejects.toThrow(/no longer open/);
   });
 
@@ -152,6 +153,8 @@ describe("S4-1 approvals and brief sign-off", () => {
     });
     expect(seen).toBe(true);
     expect((await getRun(a.userId, runId))!.status).toBe("completed");
+    // A run choice whose run has ended is not offered.
+    expect((await listInbox(a.userId)).some((i) => i.kind === "run_choice" && i.runId === runId)).toBe(false);
   });
 
   it("expiry: a sign-off left past its date expires and the campaign goes back to draft with a note", async () => {

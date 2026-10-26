@@ -59,3 +59,17 @@ Open the production URL, sign in with the email from 1.3, follow the link in the
 - **After a deploy that adds, renames or removes an Inngest function, resync Inngest.** Open the project in Vercel, then **Integrations → Inngest → Open in Inngest** (this signs in to the linked account; signing in at app.inngest.com directly makes a separate, empty one), choose **Production → Apps → campaign-studio → Resync**, and check **Functions** lists what the code serves (from Sprint 3: **Agent run**). Until then, new runs stay queued. Sprint 3 needed this once (backlog F-15).
 - **Migrations that change data or remove a permission** may be refused by the Supabase connector's approval step. Run those in the Supabase SQL editor and note it in the sprint's refinement.
 
+
+## Sprint 4: public address, invites and previews
+
+Done once, in this order, after the Sprint 4 deploy.
+
+1. **Supabase secret key (for invite sign-ins).** Supabase → Project Settings → API Keys → copy the **secret** key (starts `sb_secret_`). In Vercel → campaign-studio → Settings → Environment Variables, add `SUPABASE_SECRET_KEY` for **Production** only. Never prefix it with `NEXT_PUBLIC_`.
+2. **Owner and caps.** In the same place, add `OWNER_EMAIL` (your sign-in email) and, if you want a different per-workspace limit than 50p a day, `WORKSPACE_DAILY_CAP_PENCE`, both for Production.
+3. **Preview database (F-8).** A second free Supabase project, `campaign-studio-preview`, in London, with the same migrations. In Vercel, set `DATABASE_URL` for **Preview** only to its transaction pooler string (port 6543), and `MODEL_PROVIDER_OVERRIDE=mock` for **Preview** only, so previews never spend or touch production data.
+4. **Redeploy** production by pushing to GitHub (or Vercel's Redeploy button), so the new variables apply.
+5. **Public address (F-3).** Vercel → campaign-studio → Settings → Deployment Protection → **Vercel Authentication**: set it to protect **Preview deployments only** (not production). The app still requires sign-in; signed-out visitors see the welcome page.
+6. **Inngest sync after every deploy (F-15).** Nothing to set up: the `After production deploy` GitHub Action runs on Vercel's deployment status and needs the address to be public (step 5). Check its first run in GitHub → Actions.
+7. **Real-model evals (F-16, optional).** GitHub → the repo → Settings → Secrets and variables → Actions → New repository secret `ANTHROPIC_API_KEY` (a key with its own spending limit). Run them from Actions → Real-model evals → Run workflow; the reports are attached to the run.
+
+**Inviting someone:** sign in, open the account menu → **Invites**, enter their email, copy the link and send it in your own message. It works once, for 7 days. If they lose their session later, make a new invite. Revoke an invite to stop the link, or to remove someone who has used it.
