@@ -21,7 +21,8 @@ A multi-agent campaign studio for marketing teams. Three squads of AI agents (St
 
 - **Next.js 16** (App Router, Cache Components on, Turbopack). Read the version-matched docs in `node_modules/next/dist/docs/` before using an API you have not used in this repo. Pages that read the session render inside `<Suspense>`.
 - **Postgres** via `postgres` (porsager). Supabase in production (transaction pooler); plain Postgres plus `db/shim/supabase-shim.sql` locally and in CI.
-- **Auth:** Supabase magic link, allow-listed by `ALLOWED_EMAILS`. `AUTH_MODE=dev` is a signed-cookie sign-in for local work only, refused on Vercel.
+- **Auth:** Supabase magic link for `ALLOWED_EMAILS`; everyone else comes in through a one-time invite link the owner (`OWNER_EMAIL`) makes on /invites and sends himself (decision 0010). Signed-out visitors see /welcome. `AUTH_MODE=dev` is a signed-cookie sign-in for local work only, refused on Vercel.
+- **Spend:** the owner may use the whole daily cap; other workspaces get `WORKSPACE_DAILY_CAP_PENCE` each and never the owner's reserve (`OWNER_RESERVE_PENCE`). Web searches are priced in `src/config/prices.ts` and counted in the cap and ledger.
 - **Agents:** each agent is a definition (`src/lib/agents/contract.ts`): typed input and output (Zod), instructions, prompt builder, summary, optional offline mock answer. `runModelStep()` does the call, validation, one repair attempt and the trail.
 - **Workflows:** Inngest (`src/inngest`). Workflow logic lives in `src/lib/agents/workflow.ts` against the small `StepTools` interface, so it is testable with a fake runner. Approvals are `waitForEvent` steps.
 - **Models:** `src/config/agents.ts` maps each agent to provider and model; `src/config/prices.ts` holds prices. `MODEL_PROVIDER_OVERRIDE=mock` uses the deterministic mock model.

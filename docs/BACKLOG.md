@@ -32,7 +32,7 @@ Nothing returned to the backlog.
 | F-10 | SVG sanitiser refuses good logos with `data:`/`https:` in any attribute, and stores logos without `xmlns` that then don't display | Sprint 2 review | Backlog, for Sprint 5 (logo upload) |
 | F-11 | Rule context items are keyed by position (`rule:dont:2`), so deleting a rule shifts the others | Sprint 2 review | Ready, Sprint 3 |
 | F-12 | `notFound()` inside a streamed page returns HTTP 200 (the screen is right) | Sprint 2 review | Ready, Sprint 3 |
-| F-13 | Switch off Supabase's Data API (the app never uses it) | Sprint 2 review, finding 4 | Done, 25 Oct 2026 (Rory) |
+| F-12a | Switch off Supabase's Data API (the app never uses it); renumbered from F-13, which Sprint 3 reused | Sprint 2 review, finding 4 | Done, 25 Oct 2026 (Rory) |
 
 ## Sprint 2: design system and brand kits (closed 25 October 2026)
 
@@ -40,7 +40,7 @@ Nothing returned to the backlog.
 | --- | --- | --- | --- |
 | S2-6 | Housekeeping from the Sprint 1 review (F-1, F-2, F-7) | S | Done, Sprint 2 (hosted advisors clean of unindexed foreign keys and per-row `auth.uid()`) |
 | S2-1 | Soft machine design system and app reskin (with BUG-1, F-6) | L | Done, Sprint 2 (light theme; dark is F-9) |
-| S2-2 | Brand data model | M | Done, Sprint 2 (database guards added; Rory switched off the Data API, F-13) |
+| S2-2 | Brand data model | M | Done, Sprint 2 (database guards added; Rory switched off the Data API, F-12a) |
 | S2-3 | Brand kit editor and brand overview | M | Done, Sprint 2 |
 | S2-4 | Two fictional brands with simulated first-party data | M | Done, Sprint 2 (loaded on production in 2.7 s against a 20 s target) |
 | S2-5 | Business Context store and search | M | Done, Sprint 2 (search about 23 ms on production against 300 ms) |

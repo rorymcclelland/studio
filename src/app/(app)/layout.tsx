@@ -49,7 +49,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
           <Wordmark className="order-1" />
           <SegmentedNav items={nav(waiting)} label="Main" className="order-3 lg:order-2 lg:ml-1" />
           <div className="order-4 lg:order-3 lg:ml-auto">
-            <SpendMeter userId={member.userId} />
+            <SpendMeter userId={member.userId} workspaceId={member.workspaceId} />
           </div>
           <div className="order-2 ml-auto lg:order-4 lg:ml-0">
             <AccountMenu email={member.email} owner={isOwnerEmail(member.email)} />

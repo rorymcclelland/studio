@@ -30,7 +30,7 @@ export async function gatherContext(tx: Tx, brandId: string, objective: string):
   if (!b) return null;
 
   const fixed = await tx`
-    select id, kind, title, body from public.context_items
+    select id, kind, title, body, meta from public.context_items
     where brand_id = ${brandId} and kind <> 'product'
     order by array_position(${KIND_ORDER}::text[], kind), (created_by_kind = 'system') desc, title`;
 
@@ -45,13 +45,17 @@ export async function gatherContext(tx: Tx, brandId: string, objective: string):
 
   // Products keep their places; the kit, segments and insights fill the rest.
   const rows = [...fixed.slice(0, MAX_CONTEXT_ITEMS - products.length), ...products];
-  const items: GatheredItem[] = rows.map((r, i) => ({
-    ref: `C${i + 1}`,
-    id: r.id as string,
-    kind: r.kind as string,
-    title: r.title as string,
-    text: (r.body as string).length > BODY_CHARS ? `${(r.body as string).slice(0, BODY_CHARS - 3)}...` : (r.body as string),
-  }));
+  const items: GatheredItem[] = rows.map((r, i) => {
+    const body = r.kind === "result" ? withoutNames(r.body as string, (r.meta?.names ?? []) as string[]) : (r.body as string);
+    const title = r.kind === "result" ? withoutNames(r.title as string, (r.meta?.names ?? []) as string[]) : (r.title as string);
+    return {
+      ref: `C${i + 1}`,
+      id: r.id as string,
+      kind: r.kind as string,
+      title,
+      text: body.length > BODY_CHARS ? `${body.slice(0, BODY_CHARS - 3)}...` : body,
+    };
+  });
 
   return {
     brand: {
@@ -84,5 +88,15 @@ export async function realNamesFor(tx: Tx, brandId: string): Promise<string[]> {
     select distinct jsonb_array_elements_text(coalesce(meta -> 'names', '[]'::jsonb)) as name
     from public.context_items where brand_id = ${brandId} and kind = 'result'`;
   return rows.map((r) => r.name as string).filter((n) => n.trim().length >= 2);
+}
+
+/** A market note as the brief sees it: the real names it declared replaced (rule 2). */
+export function withoutNames(text: string, names: string[]): string {
+  let out = text;
+  for (const n of [...names].sort((a, b) => b.length - a.length)) {
+    if (n.trim().length < 2) continue;
+    out = out.replace(new RegExp(n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "a named company");
+  }
+  return out;
 }
 

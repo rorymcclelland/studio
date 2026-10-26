@@ -65,7 +65,14 @@ export async function requestSignoff(
     await tx`update public.campaigns set status = 'awaiting_signoff', signoff_note = null where id = ${campaignId}`;
     return a.id as string;
   });
-  if (onRequested) await onRequested(member, campaignId, baseVersion, send);
+  // The sign-off is already requested; a persona or test plan run that can't start is a warning, not a failure (review 11).
+  if (onRequested) {
+    try {
+      await onRequested(member, campaignId, baseVersion, send);
+    } catch (err) {
+      console.error("[requestSignoff] couldn't start the persona review or test plan", err);
+    }
+  }
   return id;
 }
 

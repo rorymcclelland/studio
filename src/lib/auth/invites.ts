@@ -1,7 +1,7 @@
 import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { asAnon, asUser } from "@/lib/db/scoped";
-import { isOwnerEmail } from "@/lib/env";
+import { allowedEmails, isOwnerEmail } from "@/lib/env";
 
 // F-3: invite links Rory sends himself. A link carries a random token; only
 // its SHA-256 is stored. It works once, for 7 days, until revoked.
@@ -34,6 +34,8 @@ export async function createInvite(owner: { userId: string; email: string }, raw
   const email = rawEmail.trim().toLowerCase();
   if (!EMAIL.test(email) || email.length > 254) throw new InviteError("Enter a valid email address.");
   if (isOwnerEmail(email)) throw new InviteError("That's your own email.");
+  // An allow-listed address already signs in directly; an invite link for it would let whoever holds the link into that account (review 13).
+  if (allowedEmails().includes(email)) throw new InviteError("That address is on the allow-list already, so it doesn't need an invite.");
   const token = randomBytes(32).toString("base64url");
   const [r] = await asUser(owner.userId, (tx) => tx`
     insert into public.invites (email, token_hash, note, created_by, expires_at)
@@ -52,13 +54,21 @@ export async function listInvites(owner: { userId: string; email: string }): Pro
   }));
 }
 
-/** Revokes an invite: an open link stops working, and a person who used it can no longer sign in. */
-export async function revokeInvite(owner: { userId: string; email: string }, inviteId: string): Promise<void> {
+/**
+ * Revokes a person: every invite for that invite's email, so open links stop
+ * working and whoever used one can no longer sign in (review 1: one person
+ * may have had several invites).
+ */
+export async function revokeInvite(owner: { userId: string; email: string }, inviteId: string): Promise<string> {
   requireOwner(owner.email);
   if (!/^[0-9a-f-]{36}$/i.test(inviteId)) throw new InviteError("That invite doesn't exist.");
-  const rows = await asUser(owner.userId, (tx) => tx`
-    update public.invites set revoked_at = now() where id = ${inviteId} and revoked_at is null returning id`);
-  if (rows.length === 0) throw new InviteError("That invite doesn't exist or is already revoked.");
+  return asUser(owner.userId, async (tx) => {
+    const [i] = await tx`select email from public.invites where id = ${inviteId}`;
+    if (!i) throw new InviteError("That invite doesn't exist.");
+    const rows = await tx`update public.invites set revoked_at = now() where email = ${i.email} and revoked_at is null returning id`;
+    if (rows.length === 0) throw new InviteError("That person's access is already revoked.");
+    return i.email as string;
+  });
 }
 
 /** The email an invite token is good for, or null (used, expired, revoked or unknown). */

@@ -7,13 +7,6 @@ import { setRun, type StepTools } from "./workflow";
 type Prepared = { ok: true; brandId: string; isSimulated: boolean; input: MarketInput } | { ok: false; message: string };
 type Found = { ok: true; output: MarketOutput; sources: WebSource[] } | { ok: false; reason: "cap" | "error"; message: string };
 
-const host = (u: string) => {
-  try {
-    return new URL(u).hostname.replace(/^www\./, "");
-  } catch {
-    return u;
-  }
-};
 
 /**
  * S4-3: read the brand (system step), search and write notes (model step with
@@ -29,6 +22,7 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
       const start = marketStart.safeParse(run?.input);
       const [b] = start.success ? await tx`select id, name, category, description, banned_terms, is_simulated from public.brands where id = ${start.data.brandId}` : [];
       const products = b ? await tx`select name, category from public.products where brand_id = ${b.id} and active order by name limit 30` : [];
+      const places = b ? await tx`select distinct region from public.customers where brand_id = ${b.id} and region <> '' limit 30` : [];
       const result: Prepared = b
         ? {
             ok: true,
@@ -40,6 +34,7 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
               description: b.description,
               products: products.map((p) => `${p.name} (${p.category})`),
               bannedTerms: b.banned_terms,
+              places: places.map((p) => p.region as string),
               month: new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "Europe/London" }),
             },
           }
@@ -86,9 +81,8 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
           const s = byUrl.get(u.replace(/#.*$/, "").replace(/\/$/, "").toLowerCase());
           return { url: s?.url ?? u, title: s?.title ?? null, citedText: (s?.citedText ?? []).slice(0, 3).map((t) => t.slice(0, 500)) };
         });
-        const body =
-          `${n.text} Sources: ${sources.map((s) => `${s.title ?? host(s.url)} (${host(s.url)})`).join("; ")}. ` +
-          `From the web via the Market agent, checked ${day}.`;
+        // Sources live in meta, not the body: page titles and domains often carry real names (rule 2, review 2).
+        const body = `${n.text} From the web via the Market agent, checked ${day}.`;
         await tx`
           insert into public.context_items (workspace_id, brand_id, kind, title, body, source, source_ref, tags, created_by_kind, meta)
           values (${ctx.workspaceId}, ${prepared.brandId}, 'result', ${n.title}, ${body.slice(0, 4000)}, 'Market agent', ${ref},

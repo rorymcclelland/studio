@@ -7,7 +7,7 @@ import { SignInForm } from "./signin-form";
 
 export const metadata = { title: "Sign in" };
 
-// F-3: where a failed invite link lands (src/app/invite/[token]/route.ts).
+// F-3: where a failed invite link lands (src/app/invite/[token]/actions.ts).
 const INVITE_NOTICE: Record<string, string> = {
   expired: "This invite has expired or was already used. Ask Rory for a new one.",
   unavailable: "Signing in with an invite isn't working right now, so your link wasn't used. Try it again later, or ask Rory.",

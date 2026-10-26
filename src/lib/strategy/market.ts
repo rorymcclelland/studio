@@ -27,7 +27,7 @@ export async function listMarketNotes(userId: string, brandId: string): Promise<
   return rows.map((r) => ({
     id: r.id,
     title: r.title,
-    text: String(r.body).replace(/ Sources: .*$/, ""),
+    text: String(r.body).replace(/ (?:Sources: .*|From the web via the Market agent, checked .*)$/, ""),
     kind: r.meta?.kind ?? "trend",
     sources: r.meta?.sources ?? [],
     names: r.meta?.names ?? [],

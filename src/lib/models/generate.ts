@@ -1,8 +1,8 @@
 import { generateText } from "ai";
 import { resolveAgentModel, type AgentKey } from "@/config/agents";
 import { asUser } from "@/lib/db/scoped";
-import { isOwnerEmail, workspaceCapPence } from "@/lib/env";
-import { dailyCapPence, spendTodayPence } from "./cap";
+import { isOwnerEmail, ownerEmail, ownerReservePence, workspaceCapPence } from "@/lib/env";
+import { dailyCapPence } from "./cap";
 import { costPence, estimateTokens, searchCostPence } from "./cost";
 import { getLanguageModel, getWebSearchTool, MissingKeyError } from "./registry";
 
@@ -18,11 +18,45 @@ export class CapExceededError extends Error {
   }
 }
 
-async function workspaceSpend(userId: string, workspaceId: string): Promise<{ owner: boolean; spent: number }> {
-  return asUser(userId, async (tx) => {
-    const [r] = await tx`select public.current_user_email() as email, public.workspace_spend_today_pence(${workspaceId}) as spent`;
-    return { owner: isOwnerEmail(r.email), spent: Number(r.spent) };
+export type SpendPosition = {
+  owner: boolean;
+  /** This workspace today. */
+  workspace: number;
+  /** The whole app today, and the owner's part of it. */
+  total: number;
+  ownerSpent: number;
+  /** What this user's runs may still spend today, all limits considered. */
+  limit: number;
+  scope: "app" | "workspace";
+};
+
+/** Where a user stands against the caps (rule 5): the owner may use the whole daily cap; others get their workspace's limit, and never the owner's reserve. */
+export async function spendPosition(userId: string, workspaceId: string): Promise<SpendPosition> {
+  const r = await asUser(userId, async (tx) => {
+    const [x] = await tx`
+      select public.current_user_email() as email, public.workspace_spend_today_pence(${workspaceId}) as ws,
+        s.owner_pence, s.total_pence
+      from public.spend_split_today(${ownerEmail()}) s`;
+    return x;
   });
+  const owner = isOwnerEmail(r.email);
+  const total = Number(r.total_pence);
+  const ownerSpent = Number(r.owner_pence);
+  const workspace = Number(r.ws);
+  const cap = dailyCapPence();
+  if (owner) return { owner, workspace, total, ownerSpent, limit: cap, scope: "app" };
+  const appRoom = cap - Math.max(0, ownerReservePence() - ownerSpent);
+  const wsCap = workspaceCapPence();
+  // Whichever runs out first: the workspace's own limit or the guests' share of the app cap.
+  return wsCap - workspace <= appRoom - total
+    ? { owner, workspace, total, ownerSpent, limit: wsCap, scope: "workspace" }
+    : { owner, workspace, total, ownerSpent, limit: appRoom, scope: "app" };
+}
+
+async function checkCaps(userId: string, workspaceId: string, estimate: number): Promise<void> {
+  const p = await spendPosition(userId, workspaceId);
+  const spent = p.scope === "workspace" ? p.workspace : p.total;
+  if (spent + estimate > p.limit) throw new CapExceededError(spent, Math.max(0, p.limit), estimate, p.scope);
 }
 
 export class ProviderError extends Error {}
@@ -57,6 +91,7 @@ export type GenerateResult = {
 
 const ATTEMPTS = 2; // one retry (S1-4 #5)
 const TIMEOUT_MS = 60_000;
+const SEARCH_TIMEOUT_MS = 180_000;
 
 /**
  * The only way the app calls a model. Checks the cap first (rule 5), retries
@@ -71,19 +106,15 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
   const estimate =
     costPence(cfg.provider, cfg.model, estimateTokens(fullText) + searchTokens, cfg.maxOutputTokens) +
     (input.webSearch ? searchCostPence(cfg.provider, input.webSearch.maxUses) : 0);
-  const cap = dailyCapPence();
-  const spent = await spendTodayPence(input.userId);
-  if (spent + estimate > cap) throw new CapExceededError(spent, cap, estimate);
-  // F-3: each workspace but the owner's has its own, smaller daily limit.
-  const ws = await workspaceSpend(input.userId, input.workspaceId);
-  if (!ws.owner && ws.spent + estimate > workspaceCapPence()) {
-    throw new CapExceededError(ws.spent, workspaceCapPence(), estimate, "workspace");
-  }
+  await checkCaps(input.userId, input.workspaceId, estimate);
 
   const model = getLanguageModel(cfg.provider, cfg.model);
   const tools = input.webSearch ? { web_search: getWebSearchTool(cfg.provider, input.webSearch.maxUses) } : undefined;
   let lastError: unknown;
-  for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
+  // A search call is not retried here (the searches may already have been charged), and gets longer.
+  const attemptsAllowed = input.webSearch ? 1 : ATTEMPTS;
+  const timeout = input.webSearch ? SEARCH_TIMEOUT_MS : TIMEOUT_MS;
+  for (let attempt = 1; attempt <= attemptsAllowed; attempt++) {
     const started = Date.now();
     try {
       const result = await generateText({
@@ -93,7 +124,7 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
         maxOutputTokens: cfg.maxOutputTokens,
         ...(tools ? { tools } : {}),
         maxRetries: 0,
-        abortSignal: AbortSignal.timeout(TIMEOUT_MS),
+        abortSignal: AbortSignal.timeout(timeout),
       });
       const inputTokens = result.usage.inputTokens ?? 0;
       const outputTokens = result.usage.outputTokens ?? 0;
@@ -120,10 +151,20 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
     } catch (err) {
       if (err instanceof MissingKeyError) throw err;
       lastError = err;
+      if (input.webSearch) {
+        // The provider may have run and charged the searches before failing: record the full allowance, so the meter never under-counts.
+        const uses = input.webSearch.maxUses;
+        const cost = searchCostPence(cfg.provider, uses);
+        await asUser(input.userId, (tx) => tx`
+          insert into public.usage_ledger
+            (workspace_id, run_id, step_id, agent, provider, model, input_tokens, output_tokens, search_requests, cost_pence)
+          values (${input.workspaceId}, ${input.runId ?? null}, ${input.stepId ?? null}, ${input.agent},
+                  ${cfg.provider}, ${cfg.model}, 0, 0, ${uses}, ${cost})`);
+      }
     }
   }
   const message = lastError instanceof Error ? lastError.message : String(lastError);
-  throw new ProviderError(`${cfg.provider} failed after ${ATTEMPTS} attempts: ${message}`);
+  throw new ProviderError(`${cfg.provider} failed after ${attemptsAllowed} attempt${attemptsAllowed === 1 ? "" : "s"}: ${message}`);
 }
 
 type SearchResultShape = {

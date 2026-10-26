@@ -6,6 +6,8 @@ name: After production deploy
 # the old function list until a manual resync; this makes that impossible to
 # miss. Needs the production address to be public (F-3).
 
+permissions: {}
+
 on:
   deployment_status:
 
@@ -20,6 +22,7 @@ jobs:
         run: |
           code=$(curl -s -o sync.json -w '%{http_code}' -X PUT "$APP_URL/api/inngest")
           cat sync.json; echo
+          # The handler answers with whether Inngest's copy changed; either way the call must succeed.
           test "$code" -ge 200 -a "$code" -lt 300 || { echo "Inngest sync failed with HTTP $code"; exit 1; }
       - name: Check the health endpoint lists the agent run function
         run: |

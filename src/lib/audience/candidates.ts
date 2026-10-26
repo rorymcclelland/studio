@@ -79,18 +79,24 @@ export async function computeCandidates(tx: Tx, brandId: string): Promise<Candid
   if (!brand) return null;
   const asOf: Date = brand.data_as_of ? new Date(brand.data_as_of) : new Date();
 
+  // Right after a demo load the tables have no statistics yet, and the planner
+  // can pick nested loops over thousands of orders (minutes, not milliseconds).
+  // Hash joins are right for this whole-brand scan either way.
+  await tx`set local enable_nestloop = off`;
   const rows = (await tx`
-    with totals as (
+    -- Materialised so each CTE is computed once, whatever the planner's statistics say
+    -- (freshly loaded tables have none, and a nested-loop plan took minutes).
+    with totals as materialized (
       select o.id, o.customer_id, o.ordered_at, coalesce(sum(l.quantity * l.price_pence), 0)::int as total
       from public.orders o left join public.order_lines l on l.order_id = o.id
       where o.brand_id = ${brandId} and o.ordered_at <= ${asOf}
       group by o.id
-    ), cat as (
+    ), cat as materialized (
       select o.customer_id, p.category, sum(l.quantity)::int as units
       from public.orders o join public.order_lines l on l.order_id = o.id join public.products p on p.id = l.product_id
       where o.brand_id = ${brandId} and o.ordered_at <= ${asOf}
       group by o.customer_id, p.category
-    ), topcat as (
+    ), topcat as materialized (
       select distinct on (customer_id) customer_id, category from cat order by customer_id, units desc, category
     )
     select c.id, c.region, c.age_band, c.marketing_consent as consent,

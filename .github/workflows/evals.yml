@@ -1,9 +1,13 @@
 name: Real-model evals
 
 # F-16: run agent evals against the real models, on demand, with the provider
-# key from a repository secret (it is never kept locally, rule 6). Today's
-# eval spend is capped at £1 (DAILY_CAP_PENCE) in the eval database. Reports
-# are uploaded as an artifact to review and commit.
+# key from a repository secret (it is never kept locally, rule 6). Each run is
+# capped at £1 (DAILY_CAP_PENCE, in a fresh eval database); give the key its
+# own spending limit in the Anthropic console, since several runs a day each
+# get their own pound. Reports are uploaded as an artifact to review and commit.
+
+permissions:
+  contents: read
 
 on:
   workflow_dispatch:
@@ -25,7 +29,6 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
-      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
       DAILY_CAP_PENCE: "100"
     steps:
       - uses: actions/checkout@v4
@@ -37,6 +40,8 @@ jobs:
       - name: Run the evals
         env:
           AGENTS: ${{ inputs.agents }}
+          # Only this step sees the key, not npm install scripts (review 16).
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
         # Agent names are checked by scripts/eval.mjs against the eval files.
         run: npm run eval -- $AGENTS --yes
       - name: Upload the reports

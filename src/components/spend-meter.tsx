@@ -1,17 +1,23 @@
-import { dailyCapPence, spendTodayPence } from "@/lib/models/cap";
+import { spendPosition } from "@/lib/models/generate";
+import { workspaceCapPence } from "@/lib/env";
 import { formatPence } from "@/lib/format";
 import { cx } from "@/components/ui/cx";
 
-/** Today's AI spend against the daily cap (S1-4). */
-export async function SpendMeter({ userId }: { userId: string }) {
-  const spent = await spendTodayPence(userId);
-  const cap = dailyCapPence();
+/**
+ * Today's AI spend against the cap that applies to this person (S1-4, F-3):
+ * the owner sees the app against the daily cap; others see their workspace
+ * against its own limit (review 8).
+ */
+export async function SpendMeter({ userId, workspaceId }: { userId: string; workspaceId: string }) {
+  const p = await spendPosition(userId, workspaceId);
+  const spent = p.owner ? p.total : p.workspace;
+  const cap = p.owner ? p.limit : workspaceCapPence();
   const share = cap > 0 ? Math.min(1, spent / cap) : 1;
   const tone = share >= 1 ? "bg-attention" : share >= 0.8 ? "bg-review" : "bg-good";
   return (
     <div
       className="flex items-center gap-2 rounded-full bg-surface px-3 py-1.5 text-sm"
-      title="AI spend today, across the app, against the daily cap"
+      title={p.owner ? "AI spend today, across the app, against the daily cap" : "AI spend today in your workspace, against its daily limit"}
     >
       <span className="text-ink-2">AI today</span>
       <span

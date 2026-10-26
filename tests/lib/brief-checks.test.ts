@@ -96,3 +96,38 @@ describe("F-14 loose quantities", () => {
     }
   });
 });
+
+describe("review 5: loose quantities, more phrasings", () => {
+  it("catches these", async () => {
+    const { quantityInWords } = await import("@/lib/brief/checks");
+    for (const t of ["The vast majority of lapsed customers buy fleeces.", "Most lapsed customers buy fleeces.", "Most want plain advice.", "Many will come back.", "Lots of walkers buy socks.", "Plenty of people return.", "Almost everyone walks.", "A large share of customers agreed.", "Few customers buy gaiters."]) {
+      expect(quantityInWords(t), t).not.toBeNull();
+    }
+  });
+  it("lets these through", async () => {
+    const { quantityInWords } = await import("@/lib/brief/checks");
+    for (const t of ["Our most bought jacket is the Ridgeline.", "Walk for most of the season.", "A few of our routes are coastal.", "The most popular walks are coastal.", "Many walks start at the coast.", "Bring a few layers."]) {
+      expect(quantityInWords(t), t).toBeNull();
+    }
+  });
+});
+
+describe("review 2 and 18: market notes' names and figures", () => {
+  it("finds undeclared proper names, but not places, dates or the brand's own words", async () => {
+    const { undeclaredNames } = await import("@/lib/agents/market");
+    const input = { brandName: "Fernhollow Outfitters", category: "Outdoor apparel", products: ["Bothy insulated jacket"], places: ["North West", "Scotland"] };
+    expect(undeclaredNames("Acme Outdoor launched a repair service in September.", [], input)).toEqual(["Acme Outdoor"]);
+    expect(undeclaredNames("In September, Acme Outdoor launched repair.", ["Acme Outdoor"], input)).toEqual([]);
+    expect(undeclaredNames("Demand in Scotland and the North West peaks at Christmas, as the Bothy shows.", [], input)).toEqual([]);
+    expect(undeclaredNames("Sales rose. According to Trend Weekly, walkers want repair.", [], input)).toEqual(["Trend Weekly"]);
+  });
+  it("the brief sees market notes with their declared names replaced", async () => {
+    const { withoutNames } = await import("@/lib/brief/gather");
+    expect(withoutNames("Cairnwick Outdoor launched mail-in repair; cairnwick outdoor leads.", ["Cairnwick Outdoor"])).toBe("a named company launched mail-in repair; a named company leads.");
+  });
+  it("a bare figure needs the same noun in its source", async () => {
+    const { figureSupported, figuresIn } = await import("@/lib/brief/checks");
+    expect(figureSupported(figuresIn("12 retailers")[0], figuresIn("launched on 12 September"))).toBe(false);
+    expect(figureSupported(figuresIn("12 retailers")[0], figuresIn("now 12 retailers offer repair"))).toBe(true);
+  });
+});

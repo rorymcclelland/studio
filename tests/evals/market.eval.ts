@@ -27,7 +27,7 @@ const mod: EvalModule<In, MarketOutput, { sources: WebSource[]; brandName: strin
   },
   grade(_input, output, ctx) {
     // Source membership and declared names (figures were checked against the cited passages in the run itself).
-    const problems = checkMarket({ brandName: ctx.brandName, category: "", description: "", products: [], bannedTerms: ctx.banned, month: "" }, output, { sources: ctx.sources })
+    const problems = checkMarket({ brandName: ctx.brandName, category: "", description: "", products: [], bannedTerms: ctx.banned, places: [], month: "" }, output, { sources: ctx.sources })
       .filter((p) => !/cited passages contain/.test(p));
     const kinds = new Set(output.notes.map((n) => n.kind));
     if (kinds.size < 2) problems.push("every note is the same kind");

@@ -85,6 +85,29 @@ describe("campaigns tenancy", () => {
     await expect(asUser(a.userId, (tx) => tx`update public.campaigns set run_id = ${run.id} where id = ${campaignA}`)).rejects.toThrow();
   });
 
+  it("review 9: persona reviews and test plans stay in their workspace and are append-only", async () => {
+    const [run] = await asUser(a.userId, (tx) => tx`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by) values (${a.workspaceId}, 'persona', 1, '{}', ${a.userId}) returning id`);
+    const [planRun] = await asUser(a.userId, (tx) => tx`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by) values (${a.workspaceId}, 'testPlan', 1, '{}', ${a.userId}) returning id`);
+    await asUser(a.userId, (tx) => tx`insert into public.persona_reviews (workspace_id, campaign_id, brief_version, run_id, review, created_by)
+      values (${a.workspaceId}, ${campaignA}, 1, ${run.id}, '{"personas":[]}', ${a.userId})`);
+    await asUser(a.userId, (tx) => tx`insert into public.test_plans (workspace_id, campaign_id, brief_version, run_id, plan, created_by)
+      values (${a.workspaceId}, ${campaignA}, 1, ${planRun.id}, '{"hypotheses":[]}', ${a.userId})`);
+    for (const table of ["persona_reviews", "test_plans"]) {
+      expect(await asUser(b.userId, (tx) => tx`select id from ${tx(table)}`), table).toHaveLength(0);
+      expect(await asUser(a.userId, (tx) => tx`select id from ${tx(table)}`), table).toHaveLength(1);
+      await expect(asUser(a.userId, (tx) => tx`update ${tx(table)} set brief_version = 2`), table).rejects.toThrow();
+      await expect(asUser(a.userId, (tx) => tx`delete from ${tx(table)}`), table).rejects.toThrow();
+    }
+    const [bRun] = await asUser(b.userId, (tx) => tx`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by) values (${b.workspaceId}, 'persona', 1, '{}', ${b.userId}) returning id`);
+    await expect(asUser(b.userId, (tx) => tx`insert into public.persona_reviews (workspace_id, campaign_id, brief_version, run_id, review, created_by)
+      values (${b.workspaceId}, ${campaignA}, 1, ${bRun.id}, '{}', ${b.userId})`)).rejects.toThrow();
+    await expect(asUser(b.userId, (tx) => tx`insert into public.test_plans (workspace_id, campaign_id, brief_version, run_id, plan, created_by)
+      values (${a.workspaceId}, ${campaignA}, 1, ${run.id}, '{}', ${b.userId})`)).rejects.toThrow();
+  });
+
   it("anon sees nothing", async () => {
     const sql = getSql();
     await expect(sql.begin(async (tx) => {

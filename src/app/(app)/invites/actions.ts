@@ -26,11 +26,11 @@ export async function inviteSomeone(_prev: InviteState, form: FormData): Promise
 export async function revoke(inviteId: string): Promise<InviteState> {
   const member = await requireMember();
   try {
-    await revokeInvite(member, inviteId);
+    const email = await revokeInvite(member, inviteId);
+    revalidatePath("/invites");
+    return { done: `Revoked ${email}: their links no longer work, and they can no longer sign in.` };
   } catch (err) {
     if (err instanceof InviteError) return { error: err.message };
     throw err;
   }
-  revalidatePath("/invites");
-  return { done: "Revoked. The link no longer works, and anyone who used it can no longer sign in." };
 }

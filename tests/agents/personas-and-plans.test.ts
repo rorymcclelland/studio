@@ -70,7 +70,7 @@ describe("S4-2 personas and S4-4 test plan", () => {
 
   it("S4-2 #3: a quote not in the brief, a score of 6 or 'most people' is repaired, then fails", async () => {
     const good = JSON.parse((await getRun(a.userId, (await getReviews(a.userId, campaign)).review!.runId))!.steps[1].raw_output!);
-    const bad = { personas: good.personas.map((p: Record<string, unknown>, i: number) => (i === 0 ? { ...p, objection: { text: "Most people would not care at all.", quote: "words never written" } } : p)) };
+    const bad = { personas: good.personas.map((p: Record<string, unknown>, i: number) => (i === 0 ? { ...p, objection: { text: "Most people would not care at all.", quote: "these words were never written" } } : p)) };
     mockBehaviour.next(reply(bad));
     mockBehaviour.next(reply(good));
     const ok = await run(await startPersonaReview(a, campaign, noSend));

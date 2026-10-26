@@ -30,6 +30,12 @@ export function workspaceCapPence(): number {
   return Number.isFinite(v) && v >= 0 ? v : 50;
 }
 
+/** The part of the daily cap only the owner can use (pence), so guests can't stop the owner's demo. */
+export function ownerReservePence(): number {
+  const v = Number(process.env.OWNER_RESERVE_PENCE);
+  return Number.isFinite(v) && v >= 0 ? v : 50;
+}
+
 export function isEmailAllowed(email: string | null | undefined, list = allowedEmails()): boolean {
   if (!email) return false;
   return list.includes(email.trim().toLowerCase());

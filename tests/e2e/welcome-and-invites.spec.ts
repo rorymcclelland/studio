@@ -71,6 +71,10 @@ test("F-3 #2 and #3: an invite signs someone in once, to their own workspace, un
   // Someone else opens it: signed in, on their own empty workspace.
   const guest = await freshPage(browser);
   await guest.goto(new URL(link).pathname);
+  // Opening the link alone uses nothing (review 3): it asks to continue.
+  await expect(guest.getByRole("heading", { name: "You've been invited to Studio" })).toBeVisible();
+  expect(await contrastViolations(guest), "invite page").toEqual([]);
+  await guest.getByRole("button", { name: "Continue to Studio" }).click();
   await expect(guest.getByRole("heading", { name: "Try the tagline agent" })).toBeVisible();
   await guest.goto("/brands");
   await settle(guest);
@@ -87,6 +91,7 @@ test("F-3 #2 and #3: an invite signs someone in once, to their own workspace, un
   // The link works once.
   const again = await freshPage(browser);
   await again.goto(new URL(link).pathname);
+  await again.getByRole("button", { name: "Continue to Studio" }).click();
   await expect(again).toHaveURL(/\/signin\?invite=expired$/);
   await expect(again.locator("[data-invite-notice=expired]")).toHaveText("This invite has expired or was already used. Ask Rory for a new one.");
   expect(await contrastViolations(again), "sign-in after an expired invite").toEqual([]);

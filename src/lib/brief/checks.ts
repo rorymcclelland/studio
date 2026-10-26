@@ -48,6 +48,10 @@ export function numbersIn(text: string): string[] {
 }
 
 /** A figure is supported if the pool has the same value with the same unit; a bare figure needs a bare or worded one, never £ or %. */
+export function figureSupported(f: Figure, pool: Figure[]): boolean {
+  return supported(f, pool);
+}
+
 function supported(f: Figure, pool: Figure[]): boolean {
   return pool.some((p) => {
     if (p.value !== f.value) return false;
@@ -61,10 +65,20 @@ const NUMBER_WORD =
   /\b(?:(?:a\s+)?(?:half|quarter|third)\s+of|(?:one|two|three|four|five|six|seven|eight|nine|ten)\s+in\s+(?:every\s+)?(?:two|three|four|five|six|seven|eight|nine|ten)\b|(?:two|three)\s+(?:thirds|quarters)|(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|fifteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred)\s+(?:per\s?cent|percent)|(?:twice|three times|four times)\s+(?:as|more)|(?:dozens|hundreds|thousands|millions)\s+of)\b/i;
 
 /** A quantity written in words, if the text has one. */
-// F-14: loose quantities used as claims ("most are", "the majority of
-// customers"); words like "many walks" or "most-bought" are fine.
-const QUANTITY_CLAIM =
-  /\b(?:most|many|few|the majority|a majority|a minority|nearly all|almost all|the bulk|a good number|a large number|a small number|hardly any)(?!-)\s+(?:of|are|were|have|had|buy|buys|bought|say|said|prefer|prefers|customers|people|buyers|users|members|walkers|shoppers|subscribers)\b/i;
+// F-14: loose quantities used as claims ("most are", "the vast majority of
+// lapsed customers", "many will"). Superlatives ("our most bought jacket"),
+// time ("most of the season") and small amounts ("a few layers") are fine.
+const PEOPLE = "customers|people|buyers|users|members|walkers|shoppers|subscribers|households|parents|savers|adults|families|consumers|readers|visitors|clients|owners";
+const VERBS = "are|were|have|had|will|would|want|wants|need|needs|buy|buys|bought|say|said|prefer|prefers|use|used|agree|agreed|come|came|return|returned|open|opened|own|live|lapse|lapsed";
+const TIME = "season|year|day|week|month|winter|summer|spring|autumn|time|evening|morning|weekend|walk|way";
+const QUANT = "most|many|the (?:vast |great |overwhelming )?majority|a (?:large |small |good |significant |growing )?(?:number|proportion|share|minority|majority)|the bulk|hardly any|(?:nearly|almost|virtually) (?:all|everyone|everybody|every customer)";
+const QUANTITY_CLAIM = new RegExp(
+  `(?<!\\b(?:the|our|their|its|your|his|her)\\s)\\b(?:${QUANT})(?!-)\\s+(?:(?:of\\s+(?!(?:the |this |that |our |its |their )?(?:${TIME})s?\\b))|(?:[a-z]+\\s+){0,2}(?:${PEOPLE})\\b|(?:${VERBS})\\b)` +
+    `|\\b(?<!a\\s)few\\s+(?:(?:[a-z]+\\s+){0,2}(?:${PEOPLE})\\b|(?:${VERBS})\\b)` +
+    `|\\b(?:lots|plenty|a lot) of\\s+(?:[a-z]+\\s+){0,2}(?:${PEOPLE})\\b` +
+    `|\\b(?:nearly|almost|virtually) (?:all|everyone|everybody)\\b`,
+  "i",
+);
 
 export function quantityInWords(text: string): string | null {
   const plain = text.replace(/\b(?:most|first) of all\b(?!\s+(?:customers|people|buyers|users|members|walkers|shoppers|subscribers|our|the|its|their))/gi, "");
