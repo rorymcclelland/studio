@@ -13,6 +13,7 @@ import { Card } from "@/components/ui/card";
 import { Pill } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatPrice } from "@/lib/format";
+import { mapBrandFont } from "@/lib/creative/render/fonts";
 import { BrandLogo } from "../brand-logo";
 import { ContextSearch, MAX_QUERY } from "./context-search";
 import { CustomerSummary } from "./customer-summary";
@@ -53,7 +54,7 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
         <Card size="hero" className="mt-3">
           <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
             <div className="min-w-0">
-              <BrandLogo name={brand.name} svg={brand.logoSvg} className="h-14 w-auto max-w-72" />
+              <BrandLogo name={brand.name} svg={brand.logoSvg} pngSrc={brand.logoPngSrc} className="h-14 w-auto max-w-72" />
               <div className="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2">
                 <h1 className="min-w-0 text-title font-strong wrap-anywhere">{brand.name}</h1>
                 {brand.isSimulated && <Pill tone="review">Simulated data</Pill>}
@@ -152,6 +153,7 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
               <FontSample label="Primary" font={brand.fontPrimary} />
               <FontSample label="Secondary" font={brand.fontSecondary} />
             </dl>
+            <p className="mt-2 text-sm text-ink-2">Ads are drawn with bundled open fonts, so each brand font maps to the nearest one.</p>
           </Sub>
         </Card>
       </div>
@@ -271,6 +273,9 @@ function FontSample({ label, font }: { label: string; font: string }) {
           Aa Bb Cc 123
         </dd>
       )}
+      <dd className="mt-1 text-sm text-ink-2" data-font-note="">
+        In ads: {mapBrandFont(font).note}.
+      </dd>
     </div>
   );
 }

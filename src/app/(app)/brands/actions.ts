@@ -8,6 +8,7 @@ import { DemoAlreadyLoadedError, loadDemoBrands } from "@/lib/demo/load";
 import { createRun, StartRunError } from "@/lib/agents/runs";
 import { removeContextItem } from "@/lib/context/store";
 import { RecentlyRefreshedError, startMarketRun } from "@/lib/strategy/market";
+import { LogoError, PNG_MAX_BYTES, removeBrandLogo, uploadBrandLogo } from "@/lib/brands/logo-upload";
 import { sendEvent } from "@/inngest/client";
 import type { FormState } from "../actions";
 
@@ -99,3 +100,41 @@ export async function refreshMarketNotes(brandId: string, confirm = false): Prom
   }
 }
 
+
+export type LogoState =
+  | { ok: true; done: string; logo: { kind: "svg"; svg: string } | { kind: "png"; src: string; width: number; height: number } | null }
+  | { ok: false; error: string };
+
+/** F-10: uploads a brand's logo (SVG up to 200 KB, PNG up to 1 MB). A refusal gives the reason, and nothing is stored. */
+export async function uploadLogo(brandId: string, form: FormData): Promise<LogoState> {
+  const member = await requireMember();
+  const file = form.get("logo");
+  if (!(file instanceof File) || file.size === 0) return { ok: false, error: "Choose an SVG or PNG file first." };
+  if (file.size > PNG_MAX_BYTES) return { ok: false, error: "The file is too large: an SVG can be 200 KB and a PNG 1 MB at most." };
+  try {
+    const logo = await uploadBrandLogo(member, brandId, { name: file.name, type: file.type, bytes: new Uint8Array(await file.arrayBuffer()) });
+    revalidatePath(`/brands/${brandId}`);
+    revalidatePath(`/brands/${brandId}/edit`);
+    revalidatePath("/brands");
+    return {
+      ok: true,
+      done: logo.kind === "svg" ? "Logo uploaded. New ads will use it." : `Logo uploaded (${logo.width} × ${logo.height} PNG). New ads will use it.`,
+      logo: logo.kind === "svg" ? logo : { kind: "png", src: logo.src, width: logo.width, height: logo.height },
+    };
+  } catch (err) {
+    if (err instanceof LogoError) return { ok: false, error: `${err.message} Nothing was changed.` };
+    console.error("[uploadLogo]", { brandId }, err);
+    return { ok: false, error: "Couldn't upload the logo. Nothing was changed; try again." };
+  }
+}
+
+/** F-10: removes a brand's logo. Ads already made keep the logo they were drawn with. */
+export async function removeLogo(brandId: string): Promise<LogoState> {
+  const member = await requireMember();
+  const removed = await removeBrandLogo(member, brandId);
+  if (!removed) return { ok: false, error: "This brand isn't in your workspace any more, so nothing was changed." };
+  revalidatePath(`/brands/${brandId}`);
+  revalidatePath(`/brands/${brandId}/edit`);
+  revalidatePath("/brands");
+  return { ok: true, done: "Logo removed. Ads already made keep the logo they were drawn with.", logo: null };
+}

@@ -13,6 +13,10 @@ const nextConfig: NextConfig = {
     ],
   },
   partialPrefetching: true,
+  experimental: {
+    // F-10: a logo PNG may be 1 MB, and the upload's multipart framing adds a little (the default limit is 1 MB).
+    serverActions: { bodySizeLimit: "1100kb" },
+  },
   turbopack: {
     rules: {
       // Tailwind only processes the global stylesheet; CSS modules are left to Next.

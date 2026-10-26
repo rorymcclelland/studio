@@ -42,7 +42,7 @@ async function BrandsPageContent() {
                   href={`/brands/${b.id}`}
                   className="flex h-full min-w-0 flex-col gap-4 rounded-card border-2 border-transparent bg-surface p-5 transition-colors hover:border-primary-soft sm:p-6"
                 >
-                  <BrandLogo name={b.name} svg={b.logoSvg} decorative className="h-12 w-auto max-w-60 self-start" />
+                  <BrandLogo name={b.name} svg={b.logoSvg} pngSrc={b.logoPngSrc} decorative className="h-12 w-auto max-w-60 self-start" />
                   <span className="flex min-w-0 flex-col gap-1">
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <span className="min-w-0 text-xl font-strong tracking-tight wrap-anywhere">{b.name}</span>

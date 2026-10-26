@@ -10,7 +10,6 @@ import { useToast } from "@/components/ui/toast";
 import { useLeaveGuard } from "@/components/use-leave-guard";
 import { parseBrandInput } from "@/lib/brands/schema";
 import { saveBrand, type BrandDraft } from "../../actions";
-import { BrandLogo } from "../../brand-logo";
 
 type ListKey = "toneWords" | "doRules" | "dontRules" | "legalLines" | "bannedTerms" | "evidenceClaims";
 type Row = { key: number; value: string };
@@ -82,15 +81,7 @@ function canonical(v: unknown): string {
   return JSON.stringify(v ?? null);
 }
 
-export function BrandEditor({
-  brandId,
-  initial,
-  logoSvg,
-}: {
-  brandId: string;
-  initial: BrandDraft;
-  logoSvg: string | null;
-}) {
+export function BrandEditor({ brandId, initial }: { brandId: string; initial: BrandDraft }) {
   const [draft, setDraft] = useState<Draft>(() => toDraft(initial));
   const [baseline, setBaseline] = useState<BrandDraft>(initial);
   const [errors, setErrors] = useState<Errors>({});
@@ -185,15 +176,6 @@ export function BrandEditor({
   return (
     <form onSubmit={onSubmit} noValidate className="space-y-6" aria-describedby={formError ? "form-error" : undefined}>
       <Section id="identity" title="Identity" intro="How the brand is named and described to agents.">
-        <div className="flex flex-col gap-2">
-          <p className="font-semibold">Logo</p>
-          <div className="flex flex-wrap items-center gap-4 rounded-field bg-bg p-4">
-            <BrandLogo name={draft.name || "This brand"} svg={logoSvg} className="h-12 w-auto max-w-60" />
-            <p className="min-w-0 flex-1 basis-60 text-sm text-ink-2">
-              The logo can&apos;t be changed here yet. Uploading one arrives with imagery in a later sprint.
-            </p>
-          </div>
-        </div>
         <div className="grid gap-6 md:grid-cols-2">
           <Field id={fieldId("name")} label="Name" hint="As customers see it." error={errors.name}>
             <Input

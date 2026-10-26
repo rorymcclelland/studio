@@ -6,6 +6,7 @@ import { TextLink } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { BrandEditor } from "./brand-editor";
+import { LogoUpload } from "./logo-upload";
 
 export const metadata = { title: "Edit brand kit" };
 
@@ -29,9 +30,9 @@ async function EditBrandContent(props: PageProps<"/brands/[id]/edit">) {
           {brand.name}. Agents read this kit before they write or design anything, so changes apply to their next run.
         </p>
       </div>
+      <LogoUpload brandId={brand.id} brandName={brand.name} initial={{ svg: brand.logoSvg, pngSrc: brand.logoPngSrc }} />
       <BrandEditor
         brandId={brand.id}
-        logoSvg={brand.logoSvg}
         initial={{
           name: brand.name,
           slug: brand.slug,
