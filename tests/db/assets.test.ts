@@ -44,7 +44,8 @@ describe("S5-1 asset store", () => {
     const mine = await assetResponse(a.userId, id);
     expect(mine.status).toBe(200);
     expect(mine.headers.get("content-type")).toBe("image/webp");
-    expect(mine.headers.get("cache-control")).toBe("private, max-age=31536000, immutable");
+    // Review finding 8: a shared device must not keep a picture for good after sign-out; revalidate with the ETag instead.
+    expect(mine.headers.get("cache-control")).toBe("private, no-cache");
     expect(mine.headers.get("x-content-type-options")).toBe("nosniff");
     const body = Buffer.from(await mine.arrayBuffer());
     expect((await sharp(body).metadata()).format).toBe("webp");
@@ -60,6 +61,29 @@ describe("S5-1 asset store", () => {
     expect(await listAssets(b.userId)).toEqual([]);
     expect((await listAssets(a.userId)).map((x) => x.id)).toEqual([id]);
     expect(await asUser(b.userId, (tx) => tx`select 1 from public.assets`)).toHaveLength(0);
+  });
+
+  it("review finding 8: a matching If-None-Match gets a 304 without the bytes, but only after the access check", async () => {
+    const id = await storeOne(a, brandA);
+    const first = await assetResponse(a.userId, id);
+    const etag = first.headers.get("etag")!;
+    expect(etag).toMatch(/^"[0-9a-f]{64}"$/);
+
+    for (const header of [etag, `W/${etag}`, `"other", ${etag}`, "*"]) {
+      const again = await assetResponse(a.userId, id, header);
+      expect(again.status, header).toBe(304);
+      expect(again.headers.get("etag")).toBe(etag);
+      expect(again.headers.get("cache-control")).toBe("private, no-cache");
+      expect((await again.arrayBuffer()).byteLength).toBe(0);
+    }
+    // A stale ETag gets the picture again.
+    expect((await assetResponse(a.userId, id, `"${"0".repeat(64)}"`)).status).toBe(200);
+    // Knowing the ETag is no way in: another workspace, or no session, still gets the 404.
+    for (const who of [b.userId, null]) {
+      const res = await assetResponse(who, id, etag);
+      expect(res.status).toBe(404);
+      expect(res.headers.get("etag")).toBeNull();
+    }
   });
 
   it("another workspace can't add an asset to a workspace, attach one to its brand or campaign, or mark one discarded", async () => {

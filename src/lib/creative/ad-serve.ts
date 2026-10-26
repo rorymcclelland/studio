@@ -1,3 +1,4 @@
+import { etagMatches } from "@/lib/http/etag";
 import { drawableVariant, drawVariant } from "./variants";
 
 // S5-3: what /ads/[variantId] answers. Kept out of the route file so tests can
@@ -40,14 +41,6 @@ export function variantIdFromPath(segment: string): string {
     return "";
   }
   return s.toLowerCase().endsWith(".png") ? s.slice(0, -4) : s;
-}
-
-function etagMatches(header: string | null, etag: string): boolean {
-  if (!header) return false;
-  return header.split(",").some((t) => {
-    const v = t.trim().replace(/^W\//, "");
-    return v === etag || v === "*";
-  });
 }
 
 /** A drawn ad for the signed-in user, or a plain 404 (signed out, another workspace's, malformed, or its picture or words discarded). */
