@@ -151,4 +151,22 @@ describe("F-3 invites", () => {
     await expect(newSignInLink(guest, inv.id)).rejects.toThrow(InviteError);
     await expect(newSignInLink(owner, "not-an-id")).rejects.toThrow(/doesn't exist/);
   });
+
+  it("F-18a #2 (review finding 2): revoked, invited again and signed in, a person can be sent a new sign-in link", async () => {
+    const person = await member("restored@example.test");
+    const first = await createInvite(owner, person.email);
+    await redeemInvite(tokenOf(first.path), person.userId);
+    await revokeInvite(owner, first.id);
+    const restored = await createInvite(owner, person.email);
+    // Restored but not yet used: the new invite's own link still works, and the revoked one gets nothing.
+    await expect(newSignInLink(owner, restored.id)).rejects.toThrow(/hasn't been used yet/);
+    await expect(newSignInLink(owner, first.id)).rejects.toThrow(/revoked/);
+    expect(await redeemInvite(tokenOf(restored.path), person.userId)).toBe(true);
+    expect(await invited(person.userId, person.email)).toBe(true);
+    const again = await newSignInLink(owner, restored.id);
+    expect(again.email).toBe(person.email);
+    expect(await checkInvite(tokenOf(again.path))).toBe(person.email);
+    // The old, revoked invite still gets no link of its own.
+    await expect(newSignInLink(owner, first.id)).rejects.toThrow(/revoked/);
+  });
 });

@@ -97,6 +97,8 @@ test("F-3 #2 and #3: an invite signs someone in once, to their own workspace, un
   expect(await contrastViolations(again), "sign-in after an expired invite").toEqual([]);
   await again.goto("/brands");
   await expect(again).toHaveURL(/\/signin$/);
+  // F-18a: the sign-in page itself says how an invitee gets back in, not only the expired-link notice.
+  await expect(again.locator("[data-invite-help]")).toHaveText("Invited? Ask Rory for a new sign-in link.");
 
   // Revoking signs that person out on their next page load.
   await page.reload();

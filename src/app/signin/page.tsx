@@ -39,6 +39,9 @@ export default function SignInPage(props: PageProps<"/signin">) {
                 : "Enter your email and we'll send you a sign-in link."}
             </p>
             <SignInForm dev={authMode() === "dev"} />
+            <p data-invite-help className="mt-4 text-sm text-ink-2">
+              Invited? Ask Rory for a new sign-in link.
+            </p>
           </Card>
           <p className="px-2 text-sm text-ink-2">
             Studio is a multi-agent campaign studio. Agents propose; you approve every move that spends, publishes or
