@@ -16,6 +16,9 @@ export const AGENT_MODELS = {
   persona: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2500 },
   testPlan: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
   market: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 3000 },
+  // Sonnet, not Haiku (Sprint 5, Q3): the words are the visible part of every ad, and Sonnet adds
+  // about 3p a run. Up to 27 sets (three audiences, four channels) fit in 4,000 tokens.
+  copy: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 4000 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;
