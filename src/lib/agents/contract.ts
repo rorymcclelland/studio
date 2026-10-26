@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type { AgentKey } from "@/config/agents";
+import type { WebSource } from "@/lib/models/generate";
 
 /**
  * The contract every product agent follows. An agent is data plus pure
@@ -25,7 +26,9 @@ export type AgentDefinition<I, O> = {
    * come from the evidence). Returns problems; any problem gets one repair
    * attempt, then the step fails with them listed.
    */
-  check?: (input: I, output: O) => string[];
+  check?: (input: I, output: O, extra: { sources: WebSource[] }) => string[];
+  /** S4-3: the agent may search the web on its first attempt, at most this many times. */
+  webSearch?: { maxUses: number };
   /** A short title for run lists, from the input alone. The caller may pass a better one (with the brand's name) to createRun. */
   label: (input: I) => string;
   /** Deterministic answer for the offline mock model, so demos run without keys. */

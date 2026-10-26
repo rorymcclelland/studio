@@ -10,15 +10,28 @@ type Queued =
 
 type Responder = (prompt: string) => string;
 
+// Fixed, clearly fictional pages for offline market research (example.test never resolves).
+const DEFAULT_PAGES = [
+  { url: "https://outdoor-trends.example.test/winter-2026", title: "Winter walking trends 2026 (sample page)", citedText: "Sales of insulated jackets rose 12% in the autumn, with recycled fill the most asked-for feature." },
+  { url: "https://retail-notes.example.test/repair", title: "Repair services in outdoor retail (sample page)", citedText: "Several outdoor chains now offer in-store repair, and Cairnwick Outdoor (a fictional chain) launched a mail-in repair service in September." },
+  { url: "https://walking-news.example.test/season", title: "When people buy winter kit (sample page)", citedText: "Most winter kit is bought between October and December, peaking in the first cold weekend." },
+];
+
 class MockBehaviour {
   queue: Queued[] = [];
   calls = 0;
   lastPrompt = "";
   responders: Responder[] = [];
+  /** Pages the mock "finds" when a call offers web search (S4-3). Tests may replace them. */
+  searchPages: { url: string; title: string; citedText: string }[] = DEFAULT_PAGES;
+  /** Searches the mock reports making for a call that offers web search. */
+  searchCount = 2;
   /** The last prompt's message text, unescaped. */
   lastPlainPrompt = "";
 
   reset() {
+    this.searchPages = DEFAULT_PAGES;
+    this.searchCount = 2;
     this.queue = [];
     this.calls = 0;
     this.lastPrompt = "";
@@ -85,8 +98,20 @@ export function createMockModel(): MockLanguageModelV4 {
           outputTokens: Math.ceil((answer || "Mock response").length / 4),
         };
       }
+      const searching = Array.isArray((options as { tools?: unknown[] }).tools) && ((options as { tools?: unknown[] }).tools ?? []).length > 0;
+      const sources = searching
+        ? mockBehaviour.searchPages.map((p, i) => ({
+            type: "source" as const,
+            sourceType: "url" as const,
+            id: `mock-source-${i}`,
+            url: p.url,
+            title: p.title,
+            providerMetadata: { anthropic: { citedText: p.citedText } },
+          }))
+        : [];
       return {
-        content: [{ type: "text", text: out.text }],
+        content: [{ type: "text", text: out.text }, ...sources],
+        providerMetadata: searching ? { anthropic: { usage: { server_tool_use: { web_search_requests: mockBehaviour.searchCount } } } } : undefined,
         finishReason: { unified: "stop", raw: undefined },
         usage: {
           inputTokens: { total: out.inputTokens, noCache: out.inputTokens, cacheRead: undefined, cacheWrite: undefined },

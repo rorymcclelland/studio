@@ -2,6 +2,7 @@ import { mockBehaviour } from "@/lib/models/mock";
 import type { AgentDefinition } from "./contract";
 import { audienceAgent } from "./audience";
 import { briefAgent } from "./brief";
+import { marketAgent } from "./market";
 import { personaAgent } from "./persona";
 import { testPlanAgent } from "./testplan";
 import { taglineAgent } from "./tagline";
@@ -13,6 +14,7 @@ export const AGENTS = {
   brief: briefAgent,
   persona: personaAgent,
   testPlan: testPlanAgent,
+  market: marketAgent,
 } as const;
 
 export type RegisteredAgent = keyof typeof AGENTS;

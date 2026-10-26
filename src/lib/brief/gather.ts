@@ -17,7 +17,8 @@ export type Gathered = {
 };
 
 // If a big kit would overflow the limit, rules are the last to be dropped after results.
-const KIND_ORDER = ["brand_voice", "segment", "insight", "legal", "brand_rule", "result", "product"];
+// Market notes (results) come straight after segments (S4-3).
+const KIND_ORDER = ["brand_voice", "segment", "result", "insight", "legal", "brand_rule", "product"];
 
 /** Words from the objective, safe to OR together in a full-text query. */
 export function objectiveWords(objective: string): string[] {
@@ -61,6 +62,7 @@ export async function gatherContext(tx: Tx, brandId: string, objective: string):
       isSimulated: b.is_simulated as boolean,
     },
     kit: {
+      realNames: await realNamesFor(tx, brandId),
       legalLines: b.legal_lines as string[],
       bannedTerms: b.banned_terms as string[],
       dontRules: b.dont_rules as string[],
@@ -75,3 +77,12 @@ export async function contextById(tx: Tx, brandId: string): Promise<EvidenceItem
   const rows = await tx`select id, kind, title, body from public.context_items where brand_id = ${brandId}`;
   return rows.map((r) => ({ ref: r.id as string, kind: r.kind as string, title: r.title as string, text: r.body as string }));
 }
+
+/** The real companies the brand's market notes name (S4-3, rule 2). */
+export async function realNamesFor(tx: Tx, brandId: string): Promise<string[]> {
+  const rows = await tx`
+    select distinct jsonb_array_elements_text(coalesce(meta -> 'names', '[]'::jsonb)) as name
+    from public.context_items where brand_id = ${brandId} and kind = 'result'`;
+  return rows.map((r) => r.name as string).filter((n) => n.trim().length >= 2);
+}
+

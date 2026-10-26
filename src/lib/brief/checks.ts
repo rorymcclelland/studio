@@ -7,7 +7,14 @@ import type { BriefCore, BriefSection, StoredBrief } from "./schema";
 
 export type EvidenceItem = { ref: string; kind: string; title: string; text: string };
 
-export type KitLists = { legalLines: string[]; bannedTerms: string[]; dontRules: string[]; evidenceClaims: string[] };
+export type KitLists = {
+  legalLines: string[];
+  bannedTerms: string[];
+  dontRules: string[];
+  evidenceClaims: string[];
+  /** S4-3: real companies named in the brand's market notes; they stay in the notes (rule 2). */
+  realNames?: string[];
+};
 
 // A figure with its unit: "£45", "45%", "12 month", "5116 customer", or a bare "37".
 // Units matter: "45% of customers" is not supported by a £45.00 price, and
@@ -153,6 +160,9 @@ export function evidenceProblems(
 
   for (const f of fields) {
     for (const term of kit.bannedTerms) if (containsTerm(f.text, term)) problems.push(`${f.where} uses the banned term "${term}"`);
+    for (const name of kit.realNames ?? []) {
+      if (containsTerm(f.text, name)) problems.push(`${f.where} names ${name}, a real company from the market notes; describe it instead ("a large outdoor chain")`);
+    }
     for (const claim of kit.evidenceClaims) {
       if (containsTerm(f.text, claim)) problems.push(`${f.where} claims "${claim}", which needs evidence the context does not hold`);
     }

@@ -15,6 +15,7 @@ export const AGENT_MODELS = {
   brief: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 3000 },
   persona: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2500 },
   testPlan: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
+  market: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 3000 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

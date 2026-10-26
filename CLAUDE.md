@@ -9,7 +9,7 @@ A multi-agent campaign studio for marketing teams. Three squads of AI agents (St
 ## Project rules (never break these)
 
 1. **Honest by default.** No invented metrics, testimonials or claims in the UI, README or demo data. Simulated data is labelled as simulated wherever it is shown.
-2. **Fictional brands only.** No real company names, logos or trademarks in seeds, prompts, generated assets or screenshots.
+2. **Fictional brands only.** No real company names, logos or trademarks in seeds, creative prompts, generated assets or screenshots. Market notes (the Market agent) may name real companies, with their sources; those names never reach a brief or creative (the brief checks refuse them). Agreed by Rory, Sprint 4.
 3. **People approve consequential actions.** Agents propose; anything that spends, publishes or replaces creative waits for an approval.
 4. **Every agent run is traceable.** Inputs, outputs, model, tokens, cost, duration and outcome are recorded (`agent_steps`, `usage_ledger`).
 5. **Spend is capped.** No model call bypasses `generate()` in `src/lib/models/generate.ts`, which checks the daily cap first.

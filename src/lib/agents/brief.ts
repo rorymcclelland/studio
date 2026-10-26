@@ -26,7 +26,13 @@ export const briefInput = z.object({
   objective: z.string(),
   voice: z.string(),
   doRules: z.array(z.string()),
-  kit: z.object({ legalLines: z.array(z.string()), bannedTerms: z.array(z.string()), dontRules: z.array(z.string()), evidenceClaims: z.array(z.string()) }),
+  kit: z.object({
+    legalLines: z.array(z.string()),
+    bannedTerms: z.array(z.string()),
+    dontRules: z.array(z.string()),
+    evidenceClaims: z.array(z.string()),
+    realNames: z.array(z.string()).optional(),
+  }),
   context: z.array(contextItem),
   revise: z
     .object({ current: briefCore, section: z.enum(BRIEF_SECTIONS).nullable(), instruction: z.string() })
@@ -103,6 +109,7 @@ export const briefAgent = defineAgent({
       `Don't: ${JSON.stringify(input.kit.dontRules)}`,
       `Banned terms: ${JSON.stringify(input.kit.bannedTerms)}`,
       `Claims that need evidence: ${JSON.stringify(input.kit.evidenceClaims)}`,
+      ...(input.kit.realNames?.length ? [`Real companies never to name (describe them instead): ${JSON.stringify(input.kit.realNames)}`] : []),
       `Context: ${JSON.stringify(input.context)}`,
       ...(input.revise
         ? [

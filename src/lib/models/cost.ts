@@ -1,4 +1,4 @@
-import { DEFAULT_USD_TO_GBP, PRICES } from "@/config/prices";
+import { DEFAULT_USD_TO_GBP, PRICES, SEARCH_PRICES } from "@/config/prices";
 
 export function usdToGbp(): number {
   const v = Number(process.env.USD_TO_GBP);
@@ -28,3 +28,12 @@ export function costPence(
 export function estimateTokens(text: string): number {
   return Math.ceil(text.length / 3);
 }
+
+/** Cost of web searches in pence. Providers without a search price are refused. */
+export function searchCostPence(provider: string, searches: number): number {
+  if (searches <= 0) return 0;
+  const p = SEARCH_PRICES[provider];
+  if (!p) throw new Error(`No search price configured for ${provider}`);
+  return searches * p.usdPerSearch * usdToGbp() * 100;
+}
+

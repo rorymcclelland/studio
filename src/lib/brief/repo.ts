@@ -1,7 +1,7 @@
 import { createRun, type Member, type SendEvent, StartRunError } from "@/lib/agents/runs";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { changedSections, evidenceProblems, kitListsFor, type KitLists, unsourcedNumbers } from "./checks";
-import { contextById } from "./gather";
+import { contextById, realNamesFor } from "./gather";
 import { BRIEF_SECTIONS, briefCore, storedBrief, type BriefSection, type StoredBrief } from "./schema";
 import { addVersion, StaleBriefError } from "./versions";
 
@@ -200,7 +200,7 @@ export async function saveBriefEdit(member: Member, campaignId: string, baseVers
     const [c] = await tx`select c.id, c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
       from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
     if (!c) throw new CampaignError("That campaign isn't in your workspace.");
-    const kit = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims };
+    const kit = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims, realNames: await realNamesFor(tx, c.brand_id) };
     const context = await contextById(tx, c.brand_id);
     // Only the parts the person changed are checked, so a source removed since can't block an edit elsewhere.
     const [base] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
@@ -281,7 +281,7 @@ async function recheck(tx: Tx, campaignId: string, brief: StoredBrief, sections?
   const [b] = await tx`select c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
     from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
   if (!b) throw new CampaignError("That campaign isn't in your workspace.");
-  const kit: KitLists = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims };
+  const kit: KitLists = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims, realNames: await realNamesFor(tx, b.brand_id) };
   const problems = evidenceProblems(brief, await contextById(tx, b.brand_id), kit, { objective: b.objective, allowUnsourcedNumbers: true, sections });
   if (problems.length) throw new BriefEditError(problems);
   return storedBrief.parse({ ...brief, ...kitListsFor(kit) });

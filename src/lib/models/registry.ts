@@ -25,6 +25,21 @@ export function getLanguageModel(provider: ProviderId, model: string): LanguageM
   return createGoogleGenerativeAI({ apiKey })(model);
 }
 
+/**
+ * Anthropic's web search tool (S4-3), limited to `maxUses` searches and the UK.
+ * The mock provider gets the same tool definition; the mock model answers it
+ * with fixed pages.
+ */
+export function getWebSearchTool(provider: ProviderId, maxUses: number) {
+  const apiKey = provider === "anthropic" ? process.env[KEY_VARS.anthropic] : "mock-no-key";
+  if (provider === "google") throw new Error("Web search is only configured for the Anthropic provider.");
+  if (!apiKey) throw new MissingKeyError(provider, KEY_VARS.anthropic);
+  return createAnthropic({ apiKey }).tools.webSearch_20260318({
+    maxUses,
+    userLocation: { type: "approximate", country: "GB" },
+  });
+}
+
 /** Every configured provider that has no key, for the startup check (S1-4 #6). */
 export function missingProviderKeys(
   env: Record<string, string | undefined> = process.env,

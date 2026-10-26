@@ -28,3 +28,13 @@ export const PRICES: Record<string, Price> = {
 
 /** Approximate rate; set USD_TO_GBP to update it without a release. */
 export const DEFAULT_USD_TO_GBP = 0.79;
+
+/**
+ * Server-side tool prices in US dollars per use. Anthropic launched web search
+ * at $10 per 1,000 searches (May 2025); re-check before relying on the meter.
+ */
+export const SEARCH_PRICES: Record<string, { usdPerSearch: number }> = {
+  anthropic: { usdPerSearch: 0.01 },
+  mock: { usdPerSearch: 0.01 },
+};
+

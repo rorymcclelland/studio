@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import { asUser } from "@/lib/db/scoped";
-import { generate } from "@/lib/models/generate";
+import { generate, type WebSource } from "@/lib/models/generate";
 import type { AgentDefinition } from "./contract";
 
 export type StepContext = { runId: string; workspaceId: string; userId: string };
@@ -46,7 +46,7 @@ export async function runModelStep<I, O>(
   input: I,
   seq: number,
   name: string,
-): Promise<{ output: O; stepId: string }> {
+): Promise<{ output: O; stepId: string; sources: WebSource[] }> {
   const prompt = agent.buildPrompt(input);
   const [step] = await asUser(ctx.userId, (tx) => tx`
     insert into public.agent_steps (run_id, workspace_id, seq, name, kind, status, input)
@@ -64,6 +64,7 @@ export async function runModelStep<I, O>(
   let provider: string | null = null;
   let model: string | null = null;
   let raw = "";
+  const sources = new Map<string, WebSource>();
   const log: { attempt: number; raw: string; truncated: boolean; problems: string[] }[] = [];
   const RAW_LIMIT = 8000;
 
@@ -88,7 +89,13 @@ export async function runModelStep<I, O>(
         stepId,
         instructions: agent.instructions,
         prompt: currentPrompt,
+        // Search only on the first attempt; a repair works from the pages already found.
+        ...(agent.webSearch && attempts === 1 ? { webSearch: agent.webSearch } : {}),
       });
+      for (const src of res.sources) {
+        const had = sources.get(src.url);
+        sources.set(src.url, had ? { ...had, citedText: [...new Set([...had.citedText, ...src.citedText])] } : src);
+      }
       provider = res.provider;
       model = res.model;
       inputTokens += res.inputTokens;
@@ -97,11 +104,11 @@ export async function runModelStep<I, O>(
       raw = res.text;
       const json = extractJson(res.text);
       const parsed = json === undefined ? null : agent.output.safeParse(json);
-      const problems = parsed?.success && agent.check ? agent.check(input, parsed.data) : [];
+      const problems = parsed?.success && agent.check ? agent.check(input, parsed.data, { sources: [...sources.values()] }) : [];
       if (parsed?.success && problems.length === 0) {
         log.push({ attempt: attempts, raw: res.text.slice(0, RAW_LIMIT), truncated: res.text.length > RAW_LIMIT, problems: [] });
         await finish("succeeded", parsed.data, null);
-        return { output: parsed.data, stepId };
+        return { output: parsed.data, stepId, sources: [...sources.values()] };
       }
       const issues = parsed?.success ? problems.slice(0, 8).join("; ") : describeIssues(parsed ? parsed.error : null);
       log.push({

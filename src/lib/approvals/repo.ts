@@ -2,7 +2,7 @@ import { asUser, type Tx } from "@/lib/db/scoped";
 import type { Member, SendEvent } from "@/lib/agents/runs";
 import { BriefEditError, CampaignError } from "@/lib/brief/repo";
 import { evidenceProblems, type KitLists } from "@/lib/brief/checks";
-import { contextById } from "@/lib/brief/gather";
+import { contextById, realNamesFor } from "@/lib/brief/gather";
 import { storedBrief } from "@/lib/brief/schema";
 
 // S4-1: the approvals inbox, with brief sign-off as the first gate (rule 3).
@@ -54,7 +54,7 @@ export async function requestSignoff(
     if (c.approved_version === c.current_version) throw new SignoffError("This version is already signed off.");
     const [v] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
     const brief = storedBrief.parse(v.brief);
-    const kit: KitLists = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims };
+    const kit: KitLists = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims, realNames: await realNamesFor(tx, c.brand_id) };
     const problems = evidenceProblems(brief, await contextById(tx, c.brand_id), kit, { objective: c.objective, allowUnsourcedNumbers: true });
     if (problems.length) throw new BriefEditError(problems);
     const [a] = await tx`
