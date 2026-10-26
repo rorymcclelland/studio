@@ -15,7 +15,7 @@ export async function SpendMeter({ userId }: { userId: string }) {
     >
       <span className="text-ink-2">AI today</span>
       <span
-        className="relative h-2 w-14 overflow-hidden rounded-full bg-surface-2"
+        className="relative h-2 w-10 overflow-hidden rounded-full bg-surface-2"
         role="meter"
         aria-valuemin={0}
         aria-valuemax={cap}

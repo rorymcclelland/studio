@@ -5,7 +5,8 @@ import { getBrand } from "@/lib/brands/repo";
 import { listProducts } from "@/lib/brands/products";
 import { getCustomerSummary } from "@/lib/brands/summary";
 import { listSegments, searchContext } from "@/lib/context/store";
-import { listRuns } from "@/lib/agents/runs";
+import { getRun, listRuns } from "@/lib/agents/runs";
+import { listMarketNotes, STALE_DAYS } from "@/lib/strategy/market";
 import { listCampaigns, OBJECTIVE_MAX, OBJECTIVE_MIN } from "@/lib/brief/repo";
 import { ButtonLink, TextLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import { formatPrice } from "@/lib/format";
 import { BrandLogo } from "../brand-logo";
 import { ContextSearch, MAX_QUERY } from "./context-search";
 import { CustomerSummary } from "./customer-summary";
+import { MarketNotes } from "./market-notes";
 import { Segments } from "./segments";
 import { CampaignList } from "../../campaigns/campaign-list";
 import { NewCampaignForm } from "../../campaigns/new-campaign-form";
@@ -27,15 +29,20 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
   if (!brand) notFound();
 
   const query = (typeof q === "string" ? q : "").trim().slice(0, MAX_QUERY);
-  const [products, summary, hits, segments, runs, campaigns] = await Promise.all([
+  const [products, summary, hits, segments, runs, campaigns, marketNotes] = await Promise.all([
     listProducts(member.userId, brand.id),
     getCustomerSummary(member.userId, brand.id),
     query ? searchContext(member.userId, { query, brandId: brand.id, limit: 10 }) : Promise.resolve([]),
     listSegments(member.userId, brand.id),
     listRuns(member.userId, 50, brand.id),
     listCampaigns(member.userId, brand.id),
+    listMarketNotes(member.userId, brand.id),
   ]);
   const audienceRun = runs.find((r) => r.agent === "audience") ?? null;
+  const marketRun = runs.find((r) => r.agent === "market") ?? null;
+  // The run list has no error text; read it only when the last refresh failed.
+  const marketFailed = !!marketRun && !["queued", "running", "completed"].includes(marketRun.status);
+  const marketError = marketFailed ? ((await getRun(member.userId, marketRun.id))?.error ?? null) : null;
 
   return (
     <div className="space-y-10">
@@ -80,6 +87,8 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
       </Card>
 
       <Segments brandId={brand.id} segments={segments} latestRun={audienceRun} simulated={brand.isSimulated} />
+
+      <MarketNotes brandId={brand.id} notes={marketNotes} latestRun={marketRun} runError={marketError} staleDays={STALE_DAYS} />
 
       <ContextSearch brandName={brand.name} query={query} hits={hits} />
 

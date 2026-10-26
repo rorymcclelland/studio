@@ -4,6 +4,10 @@ import { requireMember } from "@/lib/auth/session";
 import { getCampaign, getVersion, type CampaignDetail, type Proposal } from "@/lib/brief/repo";
 import type { StoredBrief } from "@/lib/brief/schema";
 import { listContext } from "@/lib/context/store";
+import { getSignoffState } from "@/lib/approvals/repo";
+import { getReviews } from "@/lib/strategy/reviews";
+import { listMarketNotes, type MarketNote } from "@/lib/strategy/market";
+import { daysSince } from "@/components/format-day";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
 import { ButtonLink, TextLink } from "@/components/ui/button";
@@ -22,9 +26,11 @@ import {
   sectionPhrase,
   type Sources,
 } from "./brief-view";
+import { PersonasSection, TestPlanSection } from "./review-sections";
+import { MARKET_WARNING_DAYS, SignoffPanel, type OldMarketSource } from "./signoff-panel";
 
 const RUNNING = new Set(["queued", "running"]);
-const CITABLE = new Set(["segment", "insight", "product"]);
+const CITABLE = new Set(["segment", "insight", "product", "result"]);
 
 async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
   const { id } = await props.params;
@@ -35,9 +41,12 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
 
   const requested = typeof versionParam === "string" && /^\d+$/.test(versionParam) ? Number(versionParam) : null;
   const viewing = requested !== null && requested !== campaign.currentVersion ? requested : null;
-  const [context, old] = await Promise.all([
+  const [context, old, signoff, reviews, market] = await Promise.all([
     listContext(member.userId, campaign.brand.id),
     viewing !== null ? getVersion(member.userId, campaign.id, viewing) : Promise.resolve(null),
+    getSignoffState(member.userId, campaign.id),
+    getReviews(member.userId, campaign.id),
+    listMarketNotes(member.userId, campaign.brand.id),
   ]);
   if (viewing !== null && !old) notFound();
 
@@ -45,12 +54,19 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
   // proposals (from getCampaign), and an old version (from the store).
   const sources: Sources = { ...campaign.sources };
   for (const c of context) sources[c.id] ??= { kind: c.kind, title: c.title, text: c.body };
+  // Market notes (S4-3) show their web pages and the date they were checked.
+  const notes = new Map(market.map((n) => [n.id, n]));
+  for (const [id, s] of Object.entries(sources)) {
+    const n = notes.get(id);
+    if (n) sources[id] = { ...s, text: n.text, web: webOrigin(n) };
+  }
 
   const brief = campaign.brief;
   const drafting = !brief;
   const runActive = !!campaign.run && RUNNING.has(campaign.run.status);
   const revisingActive = campaign.revising.some((r) => RUNNING.has(r.status));
   const title = brief?.title ?? campaign.objective;
+  const oldMarket = brief ? oldMarketSources(brief, notes) : [];
 
   return (
     <div className="space-y-8">
@@ -92,6 +108,10 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
         </Card>
       </div>
 
+      {!drafting && viewing === null && signoff && (
+        <SignoffPanel campaignId={campaign.id} currentVersion={campaign.currentVersion} state={signoff} oldMarketSources={oldMarket} />
+      )}
+
       {drafting ? (
         <Drafting campaign={campaign} />
       ) : viewing !== null && old ? (
@@ -113,12 +133,30 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
             citeOptions={citeOptions(brief, context, sources)}
             segments={context.filter((c) => c.kind === "segment").map((c) => ({ id: c.id, kind: c.kind, title: c.title }))}
           />
+          <PersonasSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
+          <TestPlanSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
         </>
       )}
 
       {campaign.versions.length > 0 && <History campaign={campaign} viewing={viewing} />}
     </div>
   );
+}
+
+function webOrigin(n: MarketNote) {
+  return { checkedAt: n.checkedAt.toISOString(), links: n.sources.map((x) => ({ url: x.url, title: x.title })) };
+}
+
+/** Market notes the current brief cites that were checked more than 30 days ago (a warning at sign-off, not a block). */
+function oldMarketSources(brief: StoredBrief, notes: Map<string, MarketNote>): OldMarketSource[] {
+  const out: OldMarketSource[] = [];
+  for (const id of new Set(brief.insights.flatMap((i) => i.cites))) {
+    const n = notes.get(id);
+    if (!n) continue;
+    const days = daysSince(n.checkedAt);
+    if (days > MARKET_WARNING_DAYS) out.push({ title: n.title, checkedAt: n.checkedAt, days });
+  }
+  return out;
 }
 
 /** What an insight may cite: what it cites now, plus the brand's segments, insights and products. */

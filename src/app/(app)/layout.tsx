@@ -2,18 +2,23 @@ import { Suspense } from "react";
 import { AccountMenu } from "@/components/account-menu";
 import { ConfigGate } from "@/components/config-gate";
 import { SpendMeter } from "@/components/spend-meter";
-import { SegmentedNav } from "@/components/ui/segmented-nav";
+import { SegmentedNav, type SegmentedNavItem } from "@/components/ui/segmented-nav";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToastProvider } from "@/components/ui/toast";
 import { Wordmark } from "@/components/ui/wordmark";
+import { inboxCount } from "@/lib/approvals/repo";
 import { requireMember } from "@/lib/auth/session";
+import { isOwnerEmail } from "@/lib/env";
 
-const NAV = [
-  { href: "/", label: "Home", match: "exact" as const },
-  { href: "/brands", label: "Brands" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/runs", label: "Agent runs" },
-];
+function nav(waiting: number): SegmentedNavItem[] {
+  return [
+    { href: "/", label: "Home", match: "exact" },
+    { href: "/brands", label: "Brands" },
+    { href: "/campaigns", label: "Campaigns" },
+    { href: "/approvals", label: "Approvals", count: { value: waiting, label: waiting === 1 ? "item waiting" : "items waiting" } },
+    { href: "/runs", label: "Agent runs", short: "Runs" },
+  ];
+}
 
 export default function AppLayout({ children }: LayoutProps<"/">) {
   return (
@@ -27,6 +32,7 @@ export default function AppLayout({ children }: LayoutProps<"/">) {
 
 async function Shell({ children }: { children: React.ReactNode }) {
   const member = await requireMember();
+  const waiting = await inboxCount(member.userId);
   return (
     <ToastProvider>
       <div className="min-h-screen">
@@ -39,14 +45,14 @@ async function Shell({ children }: { children: React.ReactNode }) {
         {/* One row on wide screens: wordmark, nav, spend, account. On narrow
             screens the account button stays beside the wordmark and the nav
             and spend meter wrap below. Source order follows the wide layout. */}
-        <header className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-3 px-4 pt-5 pb-2 sm:px-8">
+        <header className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-3 px-4 pt-5 pb-2 sm:px-8 lg:gap-x-2">
           <Wordmark className="order-1" />
-          <SegmentedNav items={NAV} label="Main" className="order-3 lg:order-2 lg:ml-1" />
+          <SegmentedNav items={nav(waiting)} label="Main" className="order-3 lg:order-2 lg:ml-1" />
           <div className="order-4 lg:order-3 lg:ml-auto">
             <SpendMeter userId={member.userId} />
           </div>
           <div className="order-2 ml-auto lg:order-4 lg:ml-0">
-            <AccountMenu email={member.email} />
+            <AccountMenu email={member.email} owner={isOwnerEmail(member.email)} />
           </div>
         </header>
         <main id="main" className="mx-auto max-w-5xl px-4 pt-6 pb-16 sm:px-8">

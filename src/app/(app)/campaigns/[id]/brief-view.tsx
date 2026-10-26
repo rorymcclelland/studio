@@ -6,8 +6,47 @@ import { TextLink } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 import { Pill } from "@/components/ui/pill";
 
-/** Context items by id: what a citation or audience points at. */
-export type Sources = Record<string, { kind: string; title: string; text: string }>;
+/** Where a market note came from (S4-3): its web pages and when they were checked. */
+export type WebOrigin = { checkedAt: string; links: { url: string; title: string | null }[] };
+
+/** Context items by id: what a citation or audience points at. Market notes also carry their web origin. */
+export type Sources = Record<string, { kind: string; title: string; text: string; web?: WebOrigin }>;
+
+/** "outdoor-trends.example.test" from a URL, or the URL itself if it can't be read. */
+export function domainOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return url;
+  }
+}
+
+const day = new Intl.DateTimeFormat("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "Europe/London" });
+
+/** A market note's source pages, each opening in a new tab, and when they were checked. */
+export function WebLinks({ web, label }: { web: WebOrigin; label: string }) {
+  return (
+    <div className="min-w-0">
+      <ul aria-label={label} className="space-y-1">
+        {web.links.map((l) => (
+          <li key={l.url} className="min-w-0 wrap-anywhere">
+            <a
+              href={l.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-primary underline underline-offset-4"
+            >
+              {l.title ?? domainOf(l.url)}
+              <span className="sr-only"> (opens in a new tab)</span>
+            </a>
+            <span className="block text-sm text-ink-2">{domainOf(l.url)}</span>
+          </li>
+        ))}
+      </ul>
+      <p className="mt-1 text-sm text-ink-2">From the web, checked {day.format(new Date(web.checkedAt))}</p>
+    </div>
+  );
+}
 
 /** A figure in the brief that the context does not contain (typed by a person). */
 export type Unsourced = { where: string; number: string };
@@ -93,7 +132,7 @@ export function SourceChip({ id, sources }: { id: string; sources: Sources }) {
       </li>
     );
   }
-  const kind = contextKind(s.kind);
+  const kind = s.web ? { label: "From the web", tone: "neutral" as const } : contextKind(s.kind);
   return (
     <li className="min-w-0 has-[details[open]]:basis-full">
       <details className="group min-w-0" data-source-chip="">
@@ -106,7 +145,14 @@ export function SourceChip({ id, sources }: { id: string; sources: Sources }) {
             ›
           </span>
         </summary>
-        <p className="mt-2 rounded-field bg-bg px-4 py-3 text-sm text-ink-2 wrap-anywhere">{s.text}</p>
+        {s.web ? (
+          <div className="mt-2 space-y-2 rounded-field bg-bg px-4 py-3 text-sm" data-web-source="">
+            <p className="text-ink-2 wrap-anywhere">{s.text}</p>
+            <WebLinks web={s.web} label={`Web sources for ${s.title}`} />
+          </div>
+        ) : (
+          <p className="mt-2 rounded-field bg-bg px-4 py-3 text-sm text-ink-2 wrap-anywhere">{s.text}</p>
+        )}
       </details>
     </li>
   );

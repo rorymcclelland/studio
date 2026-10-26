@@ -14,11 +14,14 @@ const TONES: Record<PillTone, { pill: string; dot: string }> = {
 export function Pill({
   tone = "neutral",
   dot = false,
+  wrap = false,
   className,
   children,
 }: {
   tone?: PillTone;
   dot?: boolean;
+  /** Long labels: let the text wrap instead of keeping it on one line. */
+  wrap?: boolean;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -26,12 +29,13 @@ export function Pill({
   return (
     <span
       className={cx(
-        "inline-flex shrink-0 items-center gap-1.5 rounded-full px-3 py-0.5 text-sm font-semibold whitespace-nowrap",
+        "inline-flex items-center gap-1.5 rounded-full px-3 py-0.5 text-sm font-semibold",
+        wrap ? "max-w-full min-w-0 whitespace-normal" : "shrink-0 whitespace-nowrap",
         t.pill,
         className,
       )}
     >
-      {dot && <span aria-hidden className={cx("size-1.5 rounded-full", t.dot)} />}
+      {dot && <span aria-hidden className={cx("size-1.5 shrink-0 rounded-full", t.dot)} />}
       {children}
     </span>
   );

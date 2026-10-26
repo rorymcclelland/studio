@@ -1,24 +1,27 @@
 import { Button } from "@/components/ui/button";
 import { signOut } from "@/app/signin/actions";
+import { MenuLink } from "./menu-link";
 
 /**
  * The account button and its menu. Uses the platform popover, so it opens
  * with Enter or Space, closes with Escape or a click outside, and needs no
- * script.
+ * script. The owner also gets the Invites page (F-3).
  */
-export function AccountMenu({ email }: { email: string }) {
+export function AccountMenu({ email, owner = false }: { email: string; owner?: boolean }) {
   const initial = email.trim().charAt(0).toUpperCase() || "?";
   return (
     <div>
       <button
         type="button"
         popoverTarget="account-menu"
-        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-surface py-1 pr-3 pl-1 font-medium"
+        title="Account"
+        className="inline-flex min-h-10 items-center gap-2 rounded-full bg-surface py-1 pr-3 pl-1 font-medium lg:pr-1"
       >
         <span aria-hidden className="grid size-8 place-items-center rounded-full bg-primary-soft font-bold text-ink">
           {initial}
         </span>
-        Account
+        {/* On wide screens only the initial shows, so the header stays on one row. */}
+        <span className="lg:sr-only">Account</span>
       </button>
       <div
         id="account-menu"
@@ -27,7 +30,14 @@ export function AccountMenu({ email }: { email: string }) {
       >
         <p className="text-sm text-ink-2">Signed in as</p>
         <p className="mt-0.5 font-semibold break-all">{email}</p>
-        <form action={signOut} className="mt-4">
+        {owner && (
+          <div className="mt-4">
+            <MenuLink href="/invites" popover="account-menu">
+              Invites
+            </MenuLink>
+          </div>
+        )}
+        <form action={signOut} className={owner ? "mt-2" : "mt-4"}>
           <Button variant="quiet" size="sm" className="w-full">
             Sign out
           </Button>

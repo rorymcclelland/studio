@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireMember } from "@/lib/auth/session";
-import { getRun, runTitle } from "@/lib/agents/runs";
+import { getRun, runTitle, type RunDetail } from "@/lib/agents/runs";
 import { getAgent } from "@/lib/agents/registry";
 import { AGENTS } from "@/lib/agents/registry";
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/status-badge";
@@ -87,6 +87,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
                   </dl>
                 )}
                 {s.error && <p className="mt-3 text-sm font-medium text-attention-ink wrap-anywhere">{s.error}</p>}
+                {s.kind === "model" && (s.attempt_log?.length ?? 0) > 1 && <Attempts stepSeq={s.seq} log={s.attempt_log} />}
                 <details className="group mt-4 text-sm">
                   <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
                     <span aria-hidden className="inline-block transition-transform group-open:rotate-90">
@@ -143,6 +144,57 @@ function RunResult({ agent, output }: { agent: string; output: Record<string, un
         </p>
       )}
     </Card>
+  );
+}
+
+type AttemptLog = RunDetail["steps"][number]["attempt_log"];
+
+/**
+ * F-13: why a reply was sent back. Every attempt but a passing last one is
+ * listed with its problems, and its raw reply behind a toggle.
+ */
+function Attempts({ stepSeq, log }: { stepSeq: number; log: AttemptLog }) {
+  const last = log[log.length - 1];
+  const shown = last && last.problems.length === 0 ? log.slice(0, -1) : log;
+  return (
+    <ol aria-label={`Attempts at step ${stepSeq}`} className="mt-4 space-y-3">
+      {shown.map((a) => {
+        const final = a === last;
+        return (
+          <li key={a.attempt} data-attempt={a.attempt} className="min-w-0 rounded-field bg-attention-soft px-4 py-3 text-sm">
+            <p className="font-semibold text-attention-ink">
+              {final ? `Attempt ${a.attempt} refused, so the step failed` : `Attempt ${a.attempt} sent back`}
+            </p>
+            {a.problems.length > 0 && (
+              <ul className="mt-1.5 list-disc space-y-1 pl-5 marker:text-attention-ink">
+                {a.problems.map((p, i) => (
+                  <li key={i} className="wrap-anywhere">
+                    {p.charAt(0).toUpperCase() + p.slice(1)}
+                  </li>
+                ))}
+              </ul>
+            )}
+            <details className="group mt-2">
+              <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-attention-ink">
+                <span aria-hidden className="inline-block transition-transform group-open:rotate-90">
+                  ›
+                </span>
+                The reply to attempt {a.attempt}
+                {a.truncated && <span className="font-normal"> (cut at 8,000 characters)</span>}
+              </summary>
+              <pre
+                tabIndex={0}
+                aria-label={`Raw reply to attempt ${a.attempt}`}
+                className="mt-2 max-h-72 overflow-auto rounded-field bg-surface p-3 font-mono text-xs whitespace-pre-wrap text-ink wrap-anywhere"
+              >
+                {a.raw || "(empty reply)"}
+              </pre>
+              {a.truncated && <p className="mt-1 text-ink">Only the first 8,000 characters of this reply are kept.</p>}
+            </details>
+          </li>
+        );
+      })}
+    </ol>
   );
 }
 
