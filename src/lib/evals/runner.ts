@@ -42,7 +42,7 @@ export async function runEvalModule<I, O, C>(mod: EvalModule<I, O, C>, env: Eval
       runId = done.runId;
       let grade;
       try {
-        grade = mod.grade(c.input, done.output, done.context);
+        grade = await mod.grade(c.input, done.output, done.context);
       } catch (err) {
         grade = { pass: false, notes: `The grader failed: ${err instanceof Error ? err.message : String(err)}`, error: true };
       }

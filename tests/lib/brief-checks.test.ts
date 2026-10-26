@@ -120,6 +120,12 @@ describe("review 2 and 18: market notes' names and figures", () => {
     expect(undeclaredNames("In September, Acme Outdoor launched repair.", ["Acme Outdoor"], input)).toEqual([]);
     expect(undeclaredNames("Demand in Scotland and the North West peaks at Christmas, as the Bothy shows.", [], input)).toEqual([]);
     expect(undeclaredNames("Sales rose. According to Trend Weekly, walkers want repair.", [], input)).toEqual(["Trend Weekly"]);
+    // Production check (26 Oct): possessives, hyphenated words, abbreviations and ordinary sentence openers.
+    expect(undeclaredNames("YouGov's UK financial outlook looks at budgeting.", ["YouGov"], input)).toEqual([]);
+    expect(undeclaredNames("Among UK budgeters, savings matter. Starling launched the UK's first assistant.", ["Starling"], input)).toEqual([]);
+    expect(undeclaredNames("It fills a gap the UK-focused apps miss, paying 4.60% AER on an ISA.", [], input)).toEqual([]);
+    expect(undeclaredNames("Acme Outdoor launched repair.", [], input)).toEqual(["Acme Outdoor"]);
+    expect(undeclaredNames("Rates at Northbank Savings fell.", [], input)).toEqual(["Northbank Savings"]);
   });
   it("the brief sees market notes with their declared names replaced", async () => {
     const { withoutNames } = await import("@/lib/brief/gather");

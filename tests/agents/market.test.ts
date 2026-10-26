@@ -10,6 +10,7 @@ import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
 import { repairPrompt } from "@/lib/agents/model-step";
 import { mockBehaviour } from "@/lib/models/mock";
+import { htmlToText, pageReader } from "@/lib/web/page-text";
 import { listMarketNotes, RecentlyRefreshedError, startMarketRun } from "@/lib/strategy/market";
 import { createMember, truncateAll } from "../helpers/db";
 
@@ -41,8 +42,17 @@ describe("S4-3 Market agent", () => {
     await loadDemoBrands(a, { refDate: new Date("2026-03-15T10:30:00Z") });
     fern = (await listBrands(a.userId)).find((x) => x.slug === "fernhollow")!.id;
   }, 120_000);
-  beforeEach(() => mockBehaviour.reset());
-  afterAll(closeSql);
+  const realRead = pageReader.read;
+  let pageText: Record<string, string> = {};
+  beforeEach(() => {
+    mockBehaviour.reset();
+    pageText = {};
+    pageReader.read = async (url) => pageText[url] ?? null;
+  });
+  afterAll(async () => {
+    pageReader.read = realRead;
+    await closeSql();
+  });
 
   it("#1 saves sourced, dated notes whose every source came from the search; the searches are charged", async () => {
     const run = await research();
@@ -70,7 +80,7 @@ describe("S4-3 Market agent", () => {
     expect(ok.status).toBe("completed");
     const problems = ok.steps[1].attempt_log[0].problems.join(" ");
     expect(problems).toContain("which the search did not return");
-    expect(problems).toContain("says 40%, which none of its sources' cited passages contain");
+    expect(problems).toContain("says 40%, which can't be checked because its pages could not be read");
     expect((await ledger(ok.id)).s).toBe(2);
 
     mockBehaviour.searchPages = PAGES;
@@ -99,6 +109,42 @@ describe("S4-3 Market agent", () => {
     expect(r).not.toContain("Try more searches");
     expect(r).toContain('"z"]}');
     expect(r).not.toContain("Searching is finished");
+  });
+
+  it("production check: figures are checked against the cited page's text, not only the search's passages", async () => {
+    mockBehaviour.searchPages = PAGES;
+    pageText[PAGES[0].url] = "Winter walking trends. In a survey, 51% of walkers had a budget for kit, up from 46% in 2025.";
+    const onPage = note({ text: "51% of walkers had a budget for kit, up from 46% in 2025." });
+    const notOnPage = note({ title: "A made-up rise", text: "Spending on kit rose 23% in 2026." });
+    mockBehaviour.next(reply([onPage, notOnPage]));
+    mockBehaviour.next(reply([onPage, notOnPage]));
+    const run = await research();
+    // The repair still had one bad note: the good one is saved, the bad one left out and listed.
+    expect(run.status).toBe("completed");
+    expect((await listMarketNotes(a.userId, fern)).map((n) => n.title)).toEqual(["Recycled fill is asked for"]);
+    const out = run.output as { summary: string; leftOut: string[] };
+    expect(out.summary).toContain("1 more failed their checks and were left out");
+    expect(out.leftOut[0]).toContain("says 23%, which its cited pages do not contain");
+    expect(run.steps[1].attempt_log[1].problems.join(" ")).toContain('left out: "A made-up rise"');
+  });
+
+  it("production check: if every note fails after the repair, nothing is saved", async () => {
+    const before = (await listMarketNotes(a.userId, fern)).map((n) => n.id);
+    mockBehaviour.searchPages = PAGES;
+    const bad = note({ text: "Spending on kit rose 23% in 2026." });
+    mockBehaviour.next(reply([bad]));
+    mockBehaviour.next(reply([bad]));
+    const run = await research();
+    expect(run.status).toBe("failed");
+    expect(run.error).toContain("23%");
+    expect((await listMarketNotes(a.userId, fern)).map((n) => n.id)).toEqual(before);
+  });
+
+  it("the page reader only reads https pages on named public hosts, and turns HTML into text", async () => {
+    for (const url of ["http://example.com/x", "https://127.0.0.1/x", "https://localhost/x", "https://intranet/x", "https://site.example.com:8443/x", "file:///etc/passwd"]) {
+      expect(await realRead(url), url).toBeNull();
+    }
+    expect(htmlToText("<html><script>var x = 99;</script><p>Rates rose to 4.60%&nbsp;AER</p><p>&pound;1.6&nbsp;billion</p></html>")).toBe("Rates rose to 4.60% AER\n£1.6 billion");
   });
 
   it("#3 the cap refuses a run that could cost more than is left, before it starts", async () => {

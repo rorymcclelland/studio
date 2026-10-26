@@ -1,6 +1,10 @@
 import type { z } from "zod";
 import type { AgentKey } from "@/config/agents";
 import type { WebSource } from "@/lib/models/generate";
+import type { PageReader } from "@/lib/web/page-text";
+
+/** What a check gets besides the input and output: the pages a search returned, and a reader for them. */
+export type CheckExtra = { sources: WebSource[]; readPage: PageReader };
 
 /**
  * The contract every product agent follows. An agent is data plus pure
@@ -26,7 +30,13 @@ export type AgentDefinition<I, O> = {
    * come from the evidence). Returns problems; any problem gets one repair
    * attempt, then the step fails with them listed.
    */
-  check?: (input: I, output: O, extra: { sources: WebSource[] }) => string[];
+  check?: (input: I, output: O, extra: CheckExtra) => string[] | Promise<string[]>;
+  /**
+   * After the repair attempt still fails its checks: keep the parts that pass
+   * (e.g. the market notes that check out) and say what was left out, or
+   * return null to fail the step.
+   */
+  salvage?: (input: I, output: O, extra: CheckExtra) => Promise<{ output: O; leftOut: string[] } | null>;
   /** S4-3: the agent may search the web on its first attempt, at most this many times. */
   webSearch?: { maxUses: number };
   /** A short title for run lists, from the input alone. The caller may pass a better one (with the brand's name) to createRun. */

@@ -5,7 +5,7 @@ import { runModelStep, type StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
 
 type Prepared = { ok: true; brandId: string; isSimulated: boolean; input: MarketInput } | { ok: false; message: string };
-type Found = { ok: true; output: MarketOutput; sources: WebSource[] } | { ok: false; reason: "cap" | "error"; message: string };
+type Found = { ok: true; output: MarketOutput; sources: WebSource[]; leftOut: string[] } | { ok: false; reason: "cap" | "error"; message: string };
 
 
 /**
@@ -55,8 +55,8 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
 
   const found = await step.run("search-and-write", async (): Promise<Found> => {
     try {
-      const { output, sources } = await runModelStep(ctx, marketAgent, prepared.input, 2, "Search the web and write market notes");
-      return { ok: true, output, sources };
+      const { output, sources, leftOut } = await runModelStep(ctx, marketAgent, prepared.input, 2, "Search the web and write market notes");
+      return { ok: true, output, sources, leftOut };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const noPages = /search returned no pages/.test(message);
@@ -96,7 +96,10 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
     });
     await setRun(ctx, "completed", {
       output: {
-        summary: `${saved} market notes saved from ${found.sources.length} pages, checked ${day}.`,
+        summary:
+          `${saved} market notes saved from ${found.sources.length} pages, checked ${day}.` +
+          (found.leftOut.length ? ` ${found.leftOut.length} more failed their checks and were left out (see the trail).` : ""),
+        leftOut: found.leftOut,
         sources: found.sources.map((s) => s.url),
         href: `/brands/${prepared.brandId}#market`,
         hrefLabel: "See the market notes",

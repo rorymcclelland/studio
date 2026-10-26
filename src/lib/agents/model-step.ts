@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { asUser } from "@/lib/db/scoped";
 import { generate, type WebSource } from "@/lib/models/generate";
+import { cachedReader } from "@/lib/web/page-text";
 import type { AgentDefinition } from "./contract";
 
 export type StepContext = { runId: string; workspaceId: string; userId: string };
@@ -46,7 +47,7 @@ export async function runModelStep<I, O>(
   input: I,
   seq: number,
   name: string,
-): Promise<{ output: O; stepId: string; sources: WebSource[] }> {
+): Promise<{ output: O; stepId: string; sources: WebSource[]; leftOut: string[] }> {
   const prompt = agent.buildPrompt(input);
   const [step] = await asUser(ctx.userId, (tx) => tx`
     insert into public.agent_steps (run_id, workspace_id, seq, name, kind, status, input)
@@ -65,6 +66,7 @@ export async function runModelStep<I, O>(
   let model: string | null = null;
   let raw = "";
   const sources = new Map<string, WebSource>();
+  const readPage = cachedReader();
   const log: { attempt: number; raw: string; truncated: boolean; problems: string[] }[] = [];
   const RAW_LIMIT = 8000;
 
@@ -104,11 +106,12 @@ export async function runModelStep<I, O>(
       raw = res.text;
       const json = extractJson(res.text);
       const parsed = json === undefined ? null : agent.output.safeParse(json);
-      const problems = parsed?.success && agent.check ? agent.check(input, parsed.data, { sources: [...sources.values()] }) : [];
+      const extra = { sources: [...sources.values()], readPage };
+      const problems = parsed?.success && agent.check ? await agent.check(input, parsed.data, extra) : [];
       if (parsed?.success && problems.length === 0) {
         log.push({ attempt: attempts, raw: res.text.slice(0, RAW_LIMIT), truncated: res.text.length > RAW_LIMIT, problems: [] });
         await finish("succeeded", parsed.data, null);
-        return { output: parsed.data, stepId, sources: [...sources.values()] };
+        return { output: parsed.data, stepId, sources: [...sources.values()], leftOut: [] };
       }
       const issues = parsed?.success ? problems.slice(0, 8).join("; ") : describeIssues(parsed ? parsed.error : null);
       log.push({
@@ -118,6 +121,12 @@ export async function runModelStep<I, O>(
         problems: parsed?.success ? problems : [issues],
       });
       if (attempts >= 2) {
+        const kept = parsed?.success && agent.salvage ? await agent.salvage(input, parsed.data, extra) : null;
+        if (kept) {
+          log[log.length - 1].problems = [...log[log.length - 1].problems, ...kept.leftOut.map((l) => `left out: ${l}`)];
+          await finish("succeeded", kept.output, null);
+          return { output: kept.output, stepId, sources: [...sources.values()], leftOut: kept.leftOut };
+        }
         throw new AgentOutputError(
           parsed?.success
             ? `The agent's reply failed its checks: ${issues}`
