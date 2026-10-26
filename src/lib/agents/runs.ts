@@ -128,6 +128,18 @@ export type RunDetail = {
 };
 
 /** A run with its trail, or null if it does not exist in the user's workspace. */
+export type ChildRun = { id: string; agent: string; status: string; cost_pence: string };
+
+/** Runs started inside another run (Make creative's Imagery and Copy runs, input.parentRunId), oldest first, with their costs. */
+export async function listChildRuns(userId: string, runId: string): Promise<ChildRun[]> {
+  if (!UUID.test(runId)) return [];
+  const rows = await asUser(userId, (tx) => tx`
+    select r.id, r.agent, r.status,
+      coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
+    from public.agent_runs r where r.input ->> 'parentRunId' = ${runId} order by r.created_at`);
+  return rows as unknown as ChildRun[];
+}
+
 export async function getRun(userId: string, runId: string): Promise<RunDetail | null> {
   if (!UUID.test(runId)) return null;
   return asUser(userId, async (tx) => {

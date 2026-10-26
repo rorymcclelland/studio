@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireMember } from "@/lib/auth/session";
-import { getRun, runTitle, type RunDetail } from "@/lib/agents/runs";
+import { getRun, listChildRuns, runTitle, type RunDetail } from "@/lib/agents/runs";
 import { getAgent } from "@/lib/agents/registry";
-import { AGENTS } from "@/lib/agents/registry";
+import { agentDisplayName, knownAgentName } from "@/lib/agents/names";
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/status-badge";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { TextLink } from "@/components/ui/button";
@@ -18,7 +18,9 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
   const run = await getRun(member.userId, id);
   if (!run) notFound();
 
-  const agent = AGENTS[run.agent as keyof typeof AGENTS];
+  const parentRunId = typeof run.input.parentRunId === "string" ? run.input.parentRunId : null;
+  const children = await listChildRuns(member.userId, run.id);
+  const withChildren = Number(run.cost_pence) + children.reduce((sum, c) => sum + Number(c.cost_pence), 0);
   const pending = run.approvals.find((a) => a.status === "pending");
 
   return (
@@ -29,13 +31,33 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
           <span aria-hidden>← </span>All runs
         </TextLink>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
-          <h1 className="min-w-0 text-title font-strong wrap-anywhere">{runTitle(run, agent?.name)}</h1>
+          <h1 className="min-w-0 text-title font-strong wrap-anywhere">{runTitle(run, knownAgentName(run.agent))}</h1>
           <StatusBadge status={run.status} />
         </div>
         <p className="mt-2 text-ink-2">
-          {agent?.name ?? run.agent} v{run.agent_version} · started {formatWhen(run.created_at)} · total cost{" "}
+          {agentDisplayName(run.agent)} v{run.agent_version} · started {formatWhen(run.created_at)} · total cost{" "}
           <span className="tabular-nums">{formatPence(run.cost_pence)}</span>
         </p>
+        {children.length > 0 && (
+          <div className="mt-2 text-sm" data-child-runs="">
+            <p className="text-ink-2">
+              With the runs inside it: <span className="font-semibold text-ink tabular-nums">{formatPence(withChildren)}</span>
+            </p>
+            <ul aria-label="Runs inside this run" className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
+              {children.map((c) => (
+                <li key={c.id} className="flex flex-wrap items-center gap-2">
+                  <TextLink href={`/runs/${c.id}`}>{agentDisplayName(c.agent)}</TextLink>
+                  <span className="text-ink-2 tabular-nums">{formatPence(c.cost_pence)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {parentRunId && (
+          <p className="mt-1 text-sm text-ink-2">
+            Part of a Make creative run. <TextLink href={`/runs/${parentRunId}`}>See the whole run</TextLink>
+          </p>
+        )}
       </div>
 
       {run.status === "completed" && run.output && <RunResult agent={run.agent} output={run.output} />}

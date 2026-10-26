@@ -122,6 +122,8 @@ export type CreativeView = {
   otherAudienceSets: CopySetView[];
   /** Discarded copy sets for undo (from the Copy agent's list). */
   discardedSets: CopySetView[];
+  /** Copy sets with new words being written, by set id (the run id), so the lists can say so. */
+  busySets: Record<string, string>;
   /** Creative, picture and copy runs for this campaign, newest first, with their costs. */
   runs: CreativeRunView[];
   totalCostPence: number;
@@ -309,6 +311,7 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
       textSets: copy.sets.filter((s) => TEXT_CHANNELS.includes(s.channel)),
       otherAudienceSets,
       discardedSets: copy.discarded,
+      busySets: Object.fromEntries(wordsBusy),
       runs,
       totalCostPence: runs.reduce((sum, r) => sum + r.costPence, 0),
       simulated: live.some((v) => v.simulated),

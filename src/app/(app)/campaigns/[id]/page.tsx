@@ -7,6 +7,7 @@ import { listContext } from "@/lib/context/store";
 import { getSignoffState } from "@/lib/approvals/repo";
 import { getReviews } from "@/lib/strategy/reviews";
 import { listMarketNotes, type MarketNote } from "@/lib/strategy/market";
+import { getCreative } from "@/lib/creative/gallery";
 import { daysSince } from "@/components/format-day";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
@@ -26,6 +27,7 @@ import {
   sectionPhrase,
   type Sources,
 } from "./brief-view";
+import { CreativeSection } from "./creative-section";
 import { PersonasSection, TestPlanSection } from "./review-sections";
 import { MARKET_WARNING_DAYS, SignoffPanel, type OldMarketSource } from "./signoff-panel";
 
@@ -41,12 +43,13 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
 
   const requested = typeof versionParam === "string" && /^\d+$/.test(versionParam) ? Number(versionParam) : null;
   const viewing = requested !== null && requested !== campaign.currentVersion ? requested : null;
-  const [context, old, signoff, reviews, market] = await Promise.all([
+  const [context, old, signoff, reviews, market, creative] = await Promise.all([
     listContext(member.userId, campaign.brand.id),
     viewing !== null ? getVersion(member.userId, campaign.id, viewing) : Promise.resolve(null),
     getSignoffState(member.userId, campaign.id),
     getReviews(member.userId, campaign.id),
     listMarketNotes(member.userId, campaign.brand.id),
+    getCreative(member.userId, campaign.id),
   ]);
   if (viewing !== null && !old) notFound();
 
@@ -135,6 +138,7 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
           />
           <PersonasSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
           <TestPlanSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
+          {creative && <CreativeSection view={creative} />}
         </>
       )}
 

@@ -8,7 +8,7 @@ import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatPence, formatWhen } from "@/lib/format";
-import { AGENTS } from "@/lib/agents/registry";
+import { agentDisplayName, knownAgentName } from "@/lib/agents/names";
 
 export const metadata = { title: "Agent runs" };
 
@@ -63,7 +63,7 @@ async function RunsPageContent() {
                 <tr key={r.id} className="border-line align-top not-first:border-t hover:bg-surface-2">
                   <td className="px-4 py-3.5 sm:px-6">
                     <Link href={`/runs/${r.id}`} className="font-semibold wrap-anywhere hover:text-primary">
-                      {runTitle(r, AGENTS[r.agent as keyof typeof AGENTS]?.name)}
+                      {runTitle(r, knownAgentName(r.agent))}
                     </Link>
                     {/* On narrow screens the hidden columns' facts sit under the name. */}
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 sm:hidden">
@@ -74,7 +74,7 @@ async function RunsPageContent() {
                     </div>
                   </td>
                   <td className="hidden px-4 py-3.5 text-ink-2 md:table-cell">
-                    {AGENTS[r.agent as keyof typeof AGENTS]?.name ?? r.agent}
+                    {agentDisplayName(r.agent)}
                   </td>
                   <td className="hidden px-4 py-3.5 sm:table-cell">
                     <StatusBadge status={r.status} />

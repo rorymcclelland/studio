@@ -4,7 +4,7 @@
 // Edit words, the /ads route, and the failure and hostile cases.
 import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { createRun, getRun, type Member } from "@/lib/agents/runs";
+import { createRun, getRun, listChildRuns, type Member } from "@/lib/agents/runs";
 import { executeRun, WORKFLOWS } from "@/lib/agents/workflows";
 import type { StepTools } from "@/lib/agents/workflow";
 import { decideSignoff, requestSignoff } from "@/lib/approvals/repo";
@@ -168,6 +168,13 @@ describe("S5-4 Make creative and the gallery", () => {
         where run_id = ${runId} or run_id in (select id from public.agent_runs where input ->> 'parentRunId' = ${runId})`);
       expect(r.costPence).toBeCloseTo(ledger.total, 4);
       expect(g.totalCostPence).toBeCloseTo(ledger.total, 4);
+
+      // The run page's list of runs inside it (listChildRuns): the same two, and none for another workspace.
+      const kids = await listChildRuns(a.userId, runId);
+      expect(kids.map((k) => k.agent).sort()).toEqual(["copy", "imagery"]);
+      expect(kids.reduce((sum, k) => sum + Number(k.cost_pence), 0)).toBeCloseTo(r.costPence, 4);
+      expect(await listChildRuns(b.userId, runId)).toEqual([]);
+      expect(await listChildRuns(a.userId, "not-a-uuid")).toEqual([]);
       // Four images at the image price, plus a few tokens' worth for prompts, checks and copy.
       expect(r.costPence).toBeGreaterThan(4 * imageCostPence("mock", "mock-image", "1K", 1));
       for (const c of r.children) expect((await getRun(a.userId, c.runId))!.input).toMatchObject({ parentRunId: runId, campaignId: id });
