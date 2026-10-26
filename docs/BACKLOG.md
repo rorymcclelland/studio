@@ -65,17 +65,31 @@ Evidence: 138 unit and database tests and 40 end-to-end tests passing against a 
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
-| F-13 | Record why a reply was repaired: the first attempt's problems and raw reply are not kept in the step trail (rule 4) | Production brief run (two attempts, reasons not shown) | Proposed for Sprint 4 |
-| F-14 | Loose quantities in words ("most are", "many") pass the checks; extend the quantity-word check or ask the model to cite a figure instead | Production Audience run | Proposed for Sprint 4, folded into the Persona and Market agents' checks |
-| F-15 | Inngest didn't pick up the changed function on deploy; it needed a manual resync. Add a post-deploy sync (or check) and a runbook step | Sprint 3 deploy | Proposed for Sprint 4 (runbook step done now) |
-| F-16 | Real-model evals: a manual GitHub Actions job with the key as a secret, so reports can be committed without keeping keys locally | Review finding 10 | Proposed for Sprint 4 |
+| F-13 | Record why a reply was repaired: the first attempt's problems and raw reply are not kept in the step trail (rule 4) | Production brief run (two attempts, reasons not shown) | Ready, Sprint 4 |
+| F-14 | Loose quantities in words ("most are", "many") pass the checks; extend the quantity-word check or ask the model to cite a figure instead | Production Audience run | Ready, Sprint 4 |
+| F-15 | Inngest didn't pick up the changed function on deploy; it needed a manual resync. Add a post-deploy sync (or check) and a runbook step | Sprint 3 deploy | Ready, Sprint 4, with F-3 (runbook step done) |
+| F-16 | Real-model evals: a manual GitHub Actions job with the key as a secret, so reports can be committed without keeping keys locally | Review finding 10 | Ready, Sprint 4 (stretch) |
+
+## Sprint 4: Strategy II, market, personas and approvals, demo gate 1 (refined and confirmed 26 October 2026)
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-13 | Keep every attempt (raw reply and problems) in the step trail | S | Ready, Sprint 4 |
+| F-14 | Refuse loose quantities ("most are", "the majority of") in model text | S | Ready, Sprint 4 |
+| S4-1 | Approvals inbox v1, brief sign-off as the first gate (14 days) | M | Ready, Sprint 4 |
+| S4-2 | Persona agent: four synthetic personas from the segments score and critique the brief (Haiku) | M | Ready, Sprint 4 |
+| S4-4 | Test plan: hypotheses, cells, success metric and decision rule, no figures (Haiku) | M | Ready, Sprint 4 |
+| S4-3 | Market agent: web search, sourced and dated notes, real rival names allowed in notes only (Sonnet; one-day time-box on search reporting) | L | Ready, Sprint 4 |
+| F-3, F-8, F-15 | Public address with invite links Rory sends himself; per-workspace cap; previews on a second Supabase project; automatic Inngest sync after deploy | M | Ready, Sprint 4 |
+| F-16 | Real-model evals in GitHub Actions | S | Ready, Sprint 4 (stretch) |
+
+Demo gate 1: objective to signed-off brief with market notes, persona scores and a test plan, on the public address. Detail: `docs/refinement/sprint-4.md`.
 
 ## Not yet in a sprint (ranked)
 
-1. F-8 Separate database for previews (Supabase branch or a second free project), before anyone but Rory uses the app; due with F-3 (public address) in Sprint 4
-2. F-9 Dark theme, once the light design system has settled
-3. F-10 SVG sanitiser false refusals, with logo upload in Sprint 5
-4. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+1. F-9 Dark theme, once the light design system has settled
+2. F-10 SVG sanitiser false refusals, with logo upload in Sprint 5
+3. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -86,3 +100,4 @@ Evidence: 138 unit and database tests and 40 end-to-end tests passing against a 
 | 25 Oct 2026 | Sprint 2 closed; demo data windows count back from each brand's "as of" time (`data_as_of`); Sprint 3 proposed |
 | 25 Oct 2026 | Sprint 3 refined; Rory accepted all seven recommendations (segments saved without approval, Sonnet for briefs, no chaining, section-level revise, keep every version, code-only graders, Campaigns in the nav) |
 | 26 Oct 2026 | Sprint 3 closed: Audience and Brief agents live on production; evidence checks in code (0009); Inngest resynced after the run-function change; Sprint 4 proposed |
+| 26 Oct 2026 | Sprint 4 refined: invites by link Rory sends himself (Supabase's own email only reaches team members); real rival names allowed in market notes only, rule 2 to be reworded; previews on a second free Supabase project; market on Sonnet, personas and test plan on Haiku; sign-offs open 14 days |
