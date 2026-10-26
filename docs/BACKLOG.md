@@ -47,23 +47,32 @@ Nothing returned to the backlog.
 
 Evidence: 82 unit and database tests and 33 end-to-end tests passing; fresh-eyes review with all nine fixable findings fixed before deploy; deploy `cb32f18` healthy with no runtime errors; demo brands loaded by Rory on production. Detail: `docs/refinement/sprint-2.md`. Nothing returned to the backlog.
 
-## Sprint 3: Strategy I, brief and audiences (refined and confirmed 25 October 2026)
+## Sprint 3: Strategy I, brief and audiences (closed 26 October 2026)
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| F-11 | Stable keys for brand rules (and legal lines, banned terms, claims) | S | Ready, Sprint 3 |
-| F-4 | Run any agent: workflow registry, one Inngest function, labels on run pages | M | Ready, Sprint 3 |
-| F-5 | Evals runner (`npm run eval`), eval database, committed reports, mock mode in CI | M | Ready, Sprint 3 |
-| S3-1 | Audience agent: SQL counts segments, Haiku names them, saved to the context store | M | Ready, Sprint 3 |
-| S3-2 | Campaigns and the Brief agent (Sonnet), with evidence checks in code | L | Ready, Sprint 3 |
-| S3-3 | Brief editor: hand edits, revise with AI (whole or per section), version history | M | Ready, Sprint 3 |
-| F-12 | Not-found pages return 404 (two-hour time-box) | S | Ready, Sprint 3 |
+| F-11 | Stable keys for brand rules (and legal lines, banned terms, claims) | S | Done, Sprint 3 (production re-keyed in place; SQL and app keys match). Residual: case folding is ASCII-only, accepted (decision 0009) |
+| F-4 | Run any agent: workflow registry, one Inngest function, labels on run pages | M | Done, Sprint 3. Needed a manual Inngest resync after deploy (F-15) |
+| F-5 | Evals runner (`npm run eval`), eval database, committed reports, mock mode in CI | M | Done, Sprint 3, for mock mode. The real-model eval report is split out as F-16 (no provider key is kept locally) |
+| S3-1 | Audience agent: SQL counts segments, Haiku names them, saved to the context store | M | Done, Sprint 3 (production: 11 s, 0.08p, nine segments, passed first time) |
+| S3-2 | Campaigns and the Brief agent (Sonnet), with evidence checks in code | L | Done, Sprint 3 (production: demo brief in 39 s against 60 s, 5.7p with one repair; every figure traced to its source) |
+| S3-3 | Brief editor: hand edits, revise with AI (whole or per section), version history | M | Done, Sprint 3. Test case 6 changed (legal lines are carried by code rather than a revision being refused), pending Rory's confirmation |
+| F-12 | Not-found pages return 404 (two-hour time-box) | S | Done, Sprint 3, for malformed ids (404 on production). Residual: a well-formed missing id shows not found with HTTP 200 and `noindex`, the agreed fallback |
 
-Demo: "Launch the winter range to lapsed customers" for Fernhollow becomes an evidenced brief in under a minute. Detail, test cases and answers: `docs/refinement/sprint-3.md`.
+Evidence: 138 unit and database tests and 40 end-to-end tests passing against a production build; mock evals 13 of 13; fresh-eyes review with 13 of its 15 findings fixed before deploy (the other two are F-16 and Rory's confirmation of S3-3 #6); production runs above. Detail: `docs/refinement/sprint-3.md`.
+
+## Where the Sprint 3 review items now live
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| F-13 | Record why a reply was repaired: the first attempt's problems and raw reply are not kept in the step trail (rule 4) | Production brief run (two attempts, reasons not shown) | Proposed for Sprint 4 |
+| F-14 | Loose quantities in words ("most are", "many") pass the checks; extend the quantity-word check or ask the model to cite a figure instead | Production Audience run | Proposed for Sprint 4, folded into the Persona and Market agents' checks |
+| F-15 | Inngest didn't pick up the changed function on deploy; it needed a manual resync. Add a post-deploy sync (or check) and a runbook step | Sprint 3 deploy | Proposed for Sprint 4 (runbook step done now) |
+| F-16 | Real-model evals: a manual GitHub Actions job with the key as a secret, so reports can be committed without keeping keys locally | Review finding 10 | Proposed for Sprint 4 |
 
 ## Not yet in a sprint (ranked)
 
-1. F-8 Separate database for previews (Supabase branch or a second free project), before anyone but Rory uses the app
+1. F-8 Separate database for previews (Supabase branch or a second free project), before anyone but Rory uses the app; due with F-3 (public address) in Sprint 4
 2. F-9 Dark theme, once the light design system has settled
 3. F-10 SVG sanitiser false refusals, with logo upload in Sprint 5
 4. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
@@ -76,3 +85,4 @@ Demo: "Launch the winter range to lapsed customers" for Fernhollow becomes an ev
 | 25 Oct 2026 | Soft machine design direction (0006); functions run in London; redeploy by pushing to GitHub; Sprint 2 confirmed, light theme only for now |
 | 25 Oct 2026 | Sprint 2 closed; demo data windows count back from each brand's "as of" time (`data_as_of`); Sprint 3 proposed |
 | 25 Oct 2026 | Sprint 3 refined; Rory accepted all seven recommendations (segments saved without approval, Sonnet for briefs, no chaining, section-level revise, keep every version, code-only graders, Campaigns in the nav) |
+| 26 Oct 2026 | Sprint 3 closed: Audience and Brief agents live on production; evidence checks in code (0009); Inngest resynced after the run-function change; Sprint 4 proposed |

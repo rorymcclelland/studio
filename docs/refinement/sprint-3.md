@@ -269,7 +269,7 @@ All seven recommendations accepted: Q1 (a) segments saved straight away, labelle
 | S3-3 #6 | Was "a revision asking to remove the legal lines fails validation and the person sees why". Now: the proposal still carries every legal line, because code adds them | A consequence of the change above; stronger than refusing. **For Rory to confirm** |
 | S3-3 | Hand edits check only the sections that changed; a typed figure is allowed and marked; restores take today's kit lists and are re-checked | Found while building the screens |
 | F-12 | Malformed ids on `/brands`, `/runs` and `/campaigns` pages answer 404 from the proxy. A well-formed id that doesn't exist shows the not-found screen with HTTP 200 and `noindex` (test case 2's agreed fallback): the app shell streams, and so commits to 200, before the page can look the record up (Next.js streaming guide, "The HTTP contract") | Known limit, recorded |
-| S3-2 #7 | Timing a real brief on production happens after deploy (below) | Needs the real model |
+| S3-2 #7 | Timed on production after deploy (below) | Needs the real model |
 
 ## Fresh-eyes review (25 October 2026)
 
@@ -292,4 +292,15 @@ A reviewer subagent checked `git diff main..sprint-3`. Tenancy, kit keys, prompt
 | 13 | Deleting a campaign erased its history; versions could be inserted out of order | Fixed: no delete policy; a version must be its campaign's current one |
 | 14 | Kit key case folding is ASCII-only | Accepted and documented (decision 0009) |
 | 15 | `removeContextItem` could delete any non-system item | Fixed: only the Audience agent's segments |
+
+## Production check (26 October 2026)
+
+Deploy `80e4f46`: `/api/health` ok, no runtime errors, `/campaigns/not-an-id` answers 404. Migrations 20261026000001 to 000004 were applied through the Supabase connector. 000005 (closing the old tagline run, removing campaign deletes) was refused by the connector's approval step three times, so Rory ran it in the SQL editor. The first two runs stayed queued because Inngest still had the old `tagline-run` function; Rory resynced the app from Vercel's Inngest integration and both runs then worked (F-15).
+
+| Test case | Target | Measured on production | Result |
+|---|---|---|---|
+| S3-1 | Segments sized by code, named in voice, no figures from the model | 11 s end to end (Haiku 8.2 s, 2,667 tokens in, 1,534 out, 0.08p, first attempt); nine segments, each labelled as proposed by the Audience agent and simulated | Pass |
+| S3-2 #7 | Demo brief in under 60 s, with cost recorded | 39 s from start to saved version 1 (Sonnet 36.4 s, 11,103 tokens in, 5,018 out, 5.7p, two attempts). Six cited insights, two audiences (lapsed and at risk), four channels; every figure is in its cited item | Pass |
+
+Found on production: the step trail doesn't record why the first attempt was repaired (F-13), and the Audience agent wrote "Most are open to hearing from us", a loose quantity in words the check doesn't catch (F-14).
 
