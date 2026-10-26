@@ -19,7 +19,10 @@ export type KitLists = {
 // A figure with its unit: "£45", "45%", "12 month", "5116 customer", or a bare "37".
 // Units matter: "45% of customers" is not supported by a £45.00 price, and
 // "12% of lapsed customers" is not supported by "no order in 12 months".
-const FIGURE = /(£\s?)?(\d[\d,]*(?:\.\d+)?)(\s?(?:%|per\s?cent\b))?(?:\s+([a-z]+))?/gi;
+// The unit is the first lower-case word after the figure; up to three capitalised
+// words in between are skipped (if no lower-case word follows, the first word is the unit: "12 September"), so "2,000 Quillmoor Money customers" is in customers
+// (production check, 26 Oct).
+const FIGURE = /(£\s?)?(\d[\d,]*(?:\.\d+)?)(\s?(?:%|[Pp]er\s?cent\b))?(?:\s+(?:(?:[A-Z][\w'’&.-]*\s+){0,3}([a-z]+)|([A-Za-z]+)))?/g;
 const STOP = new Set(["of", "in", "and", "or", "to", "the", "a", "an", "on", "at", "for", "by", "with", "from", "as", "is", "are", "was", "were", "have", "has", "than"]);
 
 export type Figure = { value: string; unit: string };
@@ -36,7 +39,8 @@ export function figuresIn(text: string): Figure[] {
   const out: Figure[] = [];
   for (const m of text.matchAll(FIGURE)) {
     const value = m[2].replace(/,/g, "").replace(/\.0+$/, "").replace(/(\.\d*?)0+$/, "$1");
-    const unit = m[1] ? "£" : m[3] ? "%" : m[4] && !STOP.has(m[4].toLowerCase()) ? stem(m[4]) : "";
+    const word = m[4] ?? m[5];
+    const unit = m[1] ? "£" : m[3] ? "%" : word && !STOP.has(word.toLowerCase()) ? stem(word.toLowerCase()) : "";
     out.push({ value, unit });
   }
   return out;

@@ -140,3 +140,15 @@ describe("review 2 and 18: market notes' names and figures", () => {
     expect(figureSupported(figuresIn("12 retailers")[0], figuresIn("now 12 retailers offer repair"))).toBe(true);
   });
 });
+
+describe("production check: a brand name between a figure and its unit", async () => {
+  const { figuresIn, figureSupported } = await import("@/lib/brief/checks");
+  it("reads past capitalised words to the unit", () => {
+    const pool = figuresIn("533 of 2,000 customers (26.6%) have not ordered in the 12 months.");
+    for (const f of figuresIn("533 of 2,000 Quillmoor Money customers (26.6%) have not ordered.")) expect(figureSupported(f, pool), f.value).toBe(true);
+    expect(figuresIn("2,000 Quillmoor Money customers")[0]).toEqual({ value: "2000", unit: "customer" });
+    // Still unit-aware: 12 customers is not 12 months, and 45 Per Cent is a percentage.
+    expect(figureSupported(figuresIn("12 Quillmoor customers")[0], pool)).toBe(false);
+    expect(figuresIn("45 Per cent")[0].unit).toBe("%");
+  });
+});
