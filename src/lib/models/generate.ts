@@ -54,6 +54,22 @@ export async function spendPosition(userId: string, workspaceId: string): Promis
   return asUser(userId, (tx) => positionIn(tx, workspaceId));
 }
 
+/**
+ * Today's simulated spend (rule 1, review finding 4): ledger rows from the mock
+ * models, for this workspace and across the app. Shown beside the spend; it
+ * never enters the cap arithmetic, which counts simulated pence like any others.
+ */
+export async function simulatedSpendToday(userId: string, workspaceId: string): Promise<{ workspace: number; total: number }> {
+  return asUser(userId, async (tx) => {
+    const [r] = await tx`
+      select coalesce((select sum(l.cost_pence) from public.usage_ledger l
+                        where l.workspace_id = ${workspaceId} and l.provider = 'mock'
+                          and l.created_at >= (date_trunc('day', now() at time zone 'Europe/London') at time zone 'Europe/London')), 0) as ws,
+             public.simulated_spend_today_pence() as total`;
+    return { workspace: Number(r.ws), total: Number(r.total) };
+  });
+}
+
 // F-21: every cap check takes the app-wide lock, then the workspace's, always in
 // that order (so two checks never deadlock). The app-wide lock is what keeps
 // the owner and guest split consistent, since a guest's room depends on what

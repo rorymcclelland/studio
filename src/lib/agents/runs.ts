@@ -94,6 +94,8 @@ export type RunDetail = {
   completed_at: Date | null;
   /** Total cost from the usage ledger, the same source the daily cap uses. */
   cost_pence: string;
+  /** The part of it from the mock models (rule 1: shown as simulated). */
+  simulated_pence: string;
   steps: {
     id: string;
     seq: number;
@@ -110,6 +112,8 @@ export type RunDetail = {
     input_tokens: number;
     output_tokens: number;
     cost_pence: string;
+    /** The step's simulated part, from its ledger rows. */
+    simulated_pence: string;
     duration_ms: number | null;
     error: string | null;
     started_at: Date;
@@ -128,14 +132,15 @@ export type RunDetail = {
 };
 
 /** A run with its trail, or null if it does not exist in the user's workspace. */
-export type ChildRun = { id: string; agent: string; status: string; cost_pence: string };
+export type ChildRun = { id: string; agent: string; status: string; cost_pence: string; simulated_pence: string };
 
 /** Runs started inside another run (Make creative's Imagery and Copy runs, input.parentRunId), oldest first, with their costs. */
 export async function listChildRuns(userId: string, runId: string): Promise<ChildRun[]> {
   if (!UUID.test(runId)) return [];
   const rows = await asUser(userId, (tx) => tx`
     select r.id, r.agent, r.status,
-      coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
+      coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence,
+      coalesce((select sum(l.cost_pence) filter (where l.provider = 'mock') from public.usage_ledger l where l.run_id = r.id), 0)::text as simulated_pence
     from public.agent_runs r where r.input ->> 'parentRunId' = ${runId} order by r.created_at`);
   return rows as unknown as ChildRun[];
 }
@@ -144,10 +149,13 @@ export async function getRun(userId: string, runId: string): Promise<RunDetail |
   if (!UUID.test(runId)) return null;
   return asUser(userId, async (tx) => {
     const [run] = await tx`
-      select r.*, coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
+      select r.*, coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence,
+        coalesce((select sum(l.cost_pence) filter (where l.provider = 'mock') from public.usage_ledger l where l.run_id = r.id), 0)::text as simulated_pence
       from public.agent_runs r where r.id = ${runId}`;
     if (!run) return null;
-    const steps = await tx`select * from public.agent_steps where run_id = ${runId} order by seq`;
+    const steps = await tx`
+      select s.*, coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.step_id = s.id and l.provider = 'mock'), 0)::text as simulated_pence
+      from public.agent_steps s where s.run_id = ${runId} order by s.seq`;
     const approvals = await tx`select * from public.approvals where run_id = ${runId} order by created_at`;
     return { ...run, steps, approvals } as unknown as RunDetail;
   });
@@ -161,13 +169,16 @@ export type RunSummary = {
   input: Record<string, unknown>;
   created_at: Date;
   cost_pence: string;
+  /** The part of it from the mock models (rule 1: shown as simulated). */
+  simulated_pence: string;
 };
 
 export async function listRuns(userId: string, limit = 50, brandId?: string): Promise<RunSummary[]> {
   if (brandId !== undefined && !UUID.test(brandId)) return [];
   return asUser(userId, (tx) => tx`
     select r.id, r.agent, r.label, r.status, r.input, r.created_at,
-      coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence
+      coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence,
+      coalesce((select sum(l.cost_pence) filter (where l.provider = 'mock') from public.usage_ledger l where l.run_id = r.id), 0)::text as simulated_pence
     from public.agent_runs r
     where ${brandId === undefined ? tx`true` : tx`r.brand_id = ${brandId}`}
     order by r.created_at desc

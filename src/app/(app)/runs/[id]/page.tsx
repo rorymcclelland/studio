@@ -9,7 +9,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { TextLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { formatMs, formatPence, formatWhen } from "@/lib/format";
+import { formatCost, formatMs, formatWhen } from "@/lib/format";
+import { SimulatedCostNote } from "@/components/simulated-cost-note";
 import { ApprovalForm } from "./approval-form";
 
 async function RunPageContent(props: PageProps<"/runs/[id]">) {
@@ -21,6 +22,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
   const parentRunId = typeof run.input.parentRunId === "string" ? run.input.parentRunId : null;
   const children = await listChildRuns(member.userId, run.id);
   const withChildren = Number(run.cost_pence) + children.reduce((sum, c) => sum + Number(c.cost_pence), 0);
+  const simulatedWithChildren = Number(run.simulated_pence) + children.reduce((sum, c) => sum + Number(c.simulated_pence), 0);
   const pending = run.approvals.find((a) => a.status === "pending");
 
   return (
@@ -36,23 +38,24 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
         </div>
         <p className="mt-2 text-ink-2">
           {agentDisplayName(run.agent)} v{run.agent_version} · started {formatWhen(run.created_at)} · total cost{" "}
-          <span className="tabular-nums">{formatPence(run.cost_pence)}</span>
+          <span className="tabular-nums">{formatCost(run.cost_pence, run.simulated_pence)}</span>
         </p>
         {children.length > 0 && (
           <div className="mt-2 text-sm" data-child-runs="">
             <p className="text-ink-2">
-              With the runs inside it: <span className="font-semibold text-ink tabular-nums">{formatPence(withChildren)}</span>
+              With the runs inside it: <span className="font-semibold text-ink tabular-nums">{formatCost(withChildren, simulatedWithChildren)}</span>
             </p>
             <ul aria-label="Runs inside this run" className="mt-1 flex flex-wrap gap-x-5 gap-y-1">
               {children.map((c) => (
                 <li key={c.id} className="flex flex-wrap items-center gap-2">
                   <TextLink href={`/runs/${c.id}`}>{agentDisplayName(c.agent)}</TextLink>
-                  <span className="text-ink-2 tabular-nums">{formatPence(c.cost_pence)}</span>
+                  <span className="text-ink-2 tabular-nums">{formatCost(c.cost_pence, c.simulated_pence)}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
+        {simulatedWithChildren > 0 && <SimulatedCostNote className="mt-1" />}
         {parentRunId && (
           <p className="mt-1 text-sm text-ink-2">
             Part of a Make creative run. <TextLink href={`/runs/${parentRunId}`}>See the whole run</TextLink>
@@ -104,7 +107,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
                   <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4">
                     <Meta label="Model" value={s.model ? `${s.provider} · ${s.model}` : "—"} />
                     <Meta label="Tokens in / out" value={`${s.input_tokens} / ${s.output_tokens}`} />
-                    <Meta label="Cost" value={formatPence(s.cost_pence)} />
+                    <Meta label="Cost" value={formatCost(s.cost_pence, s.simulated_pence)} />
                     <Meta label="Attempts" value={String(s.attempts)} />
                   </dl>
                 )}

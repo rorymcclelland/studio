@@ -11,6 +11,26 @@ export function formatPence(p: number | string): string {
   return `£${(n / 100).toFixed(2)}`;
 }
 
+/**
+ * A cost with its simulated part marked (rule 1, review finding 4). Simulated
+ * pence come from the mock models: they are priced like the real ones so the
+ * cap can be tried out, but no provider was paid. Wholly simulated reads
+ * "11.50p (simulated)"; mixed reads "14.00p (10.60p simulated)".
+ */
+export function formatCost(p: number | string, simulated: number | string | null | undefined): string {
+  const total = Number(p);
+  const sim = Number(simulated ?? 0);
+  const shown = formatPence(total);
+  if (!Number.isFinite(sim) || sim <= 0 || !Number.isFinite(total) || total <= 0) return shown;
+  // Sums from the database can differ in the last places; a hundredth of a hundredth of a penny is the same cost.
+  if (sim >= total - 0.0001) return `${shown} (simulated)`;
+  return `${shown} (${formatPence(sim)} simulated)`;
+}
+
+/** The one-line explanation shown beside simulated costs. */
+export const SIMULATED_COST_NOTE =
+  "Simulated costs come from the mock models: they are priced like the real ones so the daily cap can be tried out, and nothing is paid.";
+
 const dt = new Intl.DateTimeFormat("en-GB", {
   day: "numeric",
   month: "short",

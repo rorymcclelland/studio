@@ -7,7 +7,8 @@ import { AutoRefresh } from "@/components/auto-refresh";
 import { ButtonLink } from "@/components/ui/button";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { formatPence, formatWhen } from "@/lib/format";
+import { formatCost, formatWhen } from "@/lib/format";
+import { SimulatedCostNote } from "@/components/simulated-cost-note";
 import { agentDisplayName, knownAgentName } from "@/lib/agents/names";
 
 export const metadata = { title: "Agent runs" };
@@ -69,7 +70,7 @@ async function RunsPageContent() {
                     <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1 sm:hidden">
                       <StatusBadge status={r.status} />
                       <span className="text-sm text-ink-2 tabular-nums">
-                        {formatPence(r.cost_pence)} · {formatWhen(r.created_at)}
+                        {formatCost(r.cost_pence, r.simulated_pence)} · {formatWhen(r.created_at)}
                       </span>
                     </div>
                   </td>
@@ -80,7 +81,7 @@ async function RunsPageContent() {
                     <StatusBadge status={r.status} />
                   </td>
                   <td className="hidden px-4 py-3.5 text-right tabular-nums sm:table-cell">
-                    {formatPence(r.cost_pence)}
+                    {formatCost(r.cost_pence, r.simulated_pence)}
                   </td>
                   <td className="hidden px-4 py-3.5 text-right text-ink-2 tabular-nums sm:table-cell sm:pr-6">
                     {formatWhen(r.created_at)}
@@ -91,6 +92,7 @@ async function RunsPageContent() {
           </table>
         </div>
       )}
+      {runs.some((r) => Number(r.simulated_pence) > 0) && <SimulatedCostNote className="mt-3" />}
     </div>
   );
 }

@@ -1,6 +1,6 @@
 // S2-1 test case 6 (BUG-1): tiny costs must never read as free.
 import { describe, expect, it } from "vitest";
-import { formatCount, formatMonth, formatPence, formatPrice, formatShare } from "@/lib/format";
+import { formatCost, formatCount, formatMonth, formatPence, formatPrice, formatShare } from "@/lib/format";
 
 describe("formatPence", () => {
   it("S2-1 #6: the agreed examples", () => {
@@ -49,5 +49,27 @@ describe("brand overview figures", () => {
   it("names a month from its YYYY-MM key", () => {
     expect(formatMonth("2026-03")).toBe("Mar 2026");
     expect(formatMonth("2024-11", "long")).toBe("November 2024");
+  });
+});
+
+describe("formatCost (review finding 4, rule 1: simulated costs are labelled)", () => {
+  it("a cost with no simulated part reads as plain pence", () => {
+    expect(formatCost(11.5, 0)).toBe("11.50p");
+    expect(formatCost("0", "0")).toBe("0p");
+    expect(formatCost(123, undefined)).toBe("£1.23");
+  });
+
+  it("a wholly simulated cost says so", () => {
+    expect(formatCost(11.5, 11.5)).toBe("11.50p (simulated)");
+    expect(formatCost("2.6544", "2.6544")).toBe("2.65p (simulated)");
+    expect(formatCost(0.004, 0.004)).toBe("under 0.01p (simulated)");
+  });
+
+  it("a mixed cost names the simulated part", () => {
+    expect(formatCost(14, 10.6)).toBe("14.00p (10.60p simulated)");
+  });
+
+  it("rounding noise from summing in the database still reads as wholly simulated", () => {
+    expect(formatCost(3.0000001, 3)).toBe("3.00p (simulated)");
   });
 });

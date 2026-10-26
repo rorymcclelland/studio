@@ -9,7 +9,8 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { TextLink } from "@/components/ui/button";
 import { Ring, countTones } from "@/components/ui/ring";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { formatPence, formatWhen } from "@/lib/format";
+import { formatCost, formatWhen } from "@/lib/format";
+import { SimulatedCostNote } from "@/components/simulated-cost-note";
 import { StartRunForm } from "./start-run-form";
 
 const RECENT = 5;
@@ -68,13 +69,14 @@ async function HomePageContent() {
                   </span>
                   <StatusBadge status={r.status} />
                   <span className="ml-auto text-sm text-ink-2 tabular-nums">
-                    {formatPence(r.cost_pence)} · {formatWhen(r.created_at)}
+                    {formatCost(r.cost_pence, r.simulated_pence)} · {formatWhen(r.created_at)}
                   </span>
                 </Link>
               </li>
             ))}
           </ul>
         )}
+        {runs.some((r) => Number(r.simulated_pence) > 0) && <SimulatedCostNote className="mt-3" />}
       </section>
     </div>
   );
