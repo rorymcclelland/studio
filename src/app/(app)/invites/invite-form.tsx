@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
-import { inviteSomeone, revoke, type InviteState } from "./actions";
+import { inviteSomeone, makeNewSignInLink, revoke, type InviteState } from "./actions";
 
 /** F-3: invite someone by email. The link is shown once, here, for the owner to send themselves. */
 export function InviteForm() {
@@ -115,6 +115,37 @@ export function RevokeButton({ inviteId, email }: { inviteId: string; email: str
           {error}
         </p>
       )}
+    </div>
+  );
+}
+
+/** F-18a: a fresh sign-in link for someone who has used their invite, shown once here. */
+export function NewLinkButton({ inviteId, email }: { inviteId: string; email: string }) {
+  const [pending, start] = useTransition();
+  const [state, setState] = useState<InviteState>(null);
+  const box = useRef<HTMLDivElement>(null);
+  const link = state && "done" in state ? (state.link ?? null) : null;
+  useEffect(() => {
+    if (link) box.current?.focus();
+  }, [link]);
+  return (
+    <div className="flex w-full flex-col items-start gap-2 sm:items-end">
+      <Button
+        type="button"
+        size="sm"
+        variant="quiet"
+        disabled={pending}
+        aria-label={`Make a new sign-in link for ${email}`}
+        onClick={() => start(async () => setState(await makeNewSignInLink(inviteId)))}
+      >
+        {pending ? "Making…" : "New sign-in link"}
+      </Button>
+      {state && "error" in state && (
+        <p role="alert" className="text-sm font-medium text-attention-ink">
+          {state.error}
+        </p>
+      )}
+      {link && state && "done" in state && <CreatedLink ref={box} link={link} message={state.done} />}
     </div>
   );
 }

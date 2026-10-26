@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { headers } from "next/headers";
 import { requireMember } from "@/lib/auth/session";
-import { createInvite, InviteError, revokeInvite } from "@/lib/auth/invites";
+import { createInvite, InviteError, newSignInLink, revokeInvite } from "@/lib/auth/invites";
 
 export type InviteState = { error: string } | { done: string; link?: string } | null;
 
@@ -32,5 +32,21 @@ export async function revoke(inviteId: string): Promise<InviteState> {
   } catch (err) {
     if (err instanceof InviteError) return { error: err.message };
     throw err;
+  }
+}
+
+/** F-18a: a new one-time sign-in link for someone who has used their invite. */
+export async function makeNewSignInLink(inviteId: string): Promise<InviteState> {
+  const member = await requireMember();
+  try {
+    const { path, email } = await newSignInLink(member, inviteId);
+    const h = await headers();
+    const origin = `${h.get("x-forwarded-proto") ?? "https"}://${h.get("host")}`;
+    revalidatePath("/invites");
+    return { done: `New sign-in link for ${email}. Copy it now: it is shown once, works once and lasts 7 days.`, link: `${origin}${path}` };
+  } catch (err) {
+    if (err instanceof InviteError) return { error: err.message };
+    console.error("[makeNewSignInLink]", err);
+    return { error: "Couldn't make the link. Try again." };
   }
 }

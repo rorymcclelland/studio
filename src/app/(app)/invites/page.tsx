@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatWhen } from "@/lib/format";
-import { InviteForm, RevokeButton } from "./invite-form";
+import { InviteForm, NewLinkButton, RevokeButton } from "./invite-form";
 
 export const metadata = { title: "Invites" };
 
@@ -89,6 +89,7 @@ async function InvitesContent() {
                     </p>
                     {i.note && <p className="mt-1 text-sm wrap-anywhere">{i.note}</p>}
                   </div>
+                  {i.state === "used" && <NewLinkButton inviteId={i.id} email={i.email} />}
                   {(i.state === "open" || i.state === "used") && <RevokeButton inviteId={i.id} email={i.email} />}
                 </li>
               ))}

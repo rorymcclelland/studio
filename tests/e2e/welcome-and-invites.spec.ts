@@ -93,7 +93,7 @@ test("F-3 #2 and #3: an invite signs someone in once, to their own workspace, un
   await again.goto(new URL(link).pathname);
   await again.getByRole("button", { name: "Continue to Studio" }).click();
   await expect(again).toHaveURL(/\/signin\?invite=expired$/);
-  await expect(again.locator("[data-invite-notice=expired]")).toHaveText("This invite has expired or was already used. Ask Rory for a new one.");
+  await expect(again.locator("[data-invite-notice=expired]")).toHaveText("This link has expired or was already used. Ask Rory for a new sign-in link.");
   expect(await contrastViolations(again), "sign-in after an expired invite").toEqual([]);
   await again.goto("/brands");
   await expect(again).toHaveURL(/\/signin$/);

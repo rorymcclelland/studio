@@ -36,8 +36,11 @@ const ATTRIBUTES: Record<string, Attr[]> = {
   clipPath: ["id"],
 };
 
-// Paint and clip references may only point inside the logo: url(#id).
+// Paint and clip references may only point inside the logo: url(#id). Only
+// the attributes that can hold a reference are tested (F-10: an id or label
+// containing "https" or "data:" is just text, and no longer drops the shape).
 const EXTERNAL = /url\(\s*(?!['"]?#)|javascript:|data:|https?:/i;
+const REFERENCE_ATTRS = new Set(["fill", "stroke", "clip-path", "mask", "filter", "stop-color", "style", "href", "xlink:href", "src"]);
 
 /** Returns a safe copy of an SVG logo, or throws LogoError if it is not usable SVG. */
 export function sanitizeLogoSvg(input: string): string {
@@ -53,8 +56,32 @@ export function sanitizeLogoSvg(input: string): string {
     parser: { lowerCaseTags: false, lowerCaseAttributeNames: false, xmlMode: true },
     // The namespace declaration is an identifier, not a link, so it is exempt.
     exclusiveFilter: (frame) =>
-      Object.entries(frame.attribs).some(([k, v]) => k !== "xmlns" && EXTERNAL.test(v)),
+      Object.entries(frame.attribs).some(([k, v]) => REFERENCE_ATTRS.has(k.toLowerCase()) && EXTERNAL.test(v)),
   });
   if (!/^<svg[\s>]/.test(out.trim())) throw new LogoError("The logo must be an SVG image.");
-  return out.trim();
+  // F-10: without the namespace a logo shown through <img> doesn't display.
+  const svg = out.trim();
+  return /^<svg[^>]*\sxmlns=/.test(svg) ? svg : svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+}
+
+// What an uploaded logo may not contain. Stored logos are sanitised silently
+// (S2-2); an upload is refused with the reason instead, so the person knows
+// what to fix (F-10).
+const REFUSE: [RegExp, string][] = [
+  [/<script[\s>]/i, "it contains a script"],
+  [/\son[a-z]+\s*=/i, "it contains an event handler (such as onload)"],
+  [/<foreignObject[\s>]/i, "it embeds HTML (foreignObject)"],
+  [/<image[\s>]/i, "it contains an embedded or linked picture; use a vector-only SVG or upload a PNG"],
+  [/<use[^>]*\s(?:xlink:)?href\s*=\s*["'](?!#)/i, "it links to another file"],
+  [/(?:\s(?:xlink:)?href|\ssrc)\s*=\s*["']\s*(?:javascript:|https?:|data:|\/\/)/i, "it links to another file"],
+  [/url\(\s*['"]?(?!#)/i, "it refers to an outside file in a style or paint"],
+];
+
+/** F-10: checks an uploaded SVG logo, refusing it with a reason, then returns the sanitised copy. */
+export function checkUploadedSvg(input: string): string {
+  if (Buffer.byteLength(input, "utf8") > 200_000) throw new LogoError("The SVG is too large (200 KB at most).");
+  for (const [re, why] of REFUSE) if (re.test(input)) throw new LogoError(`This logo can't be used: ${why}.`);
+  const out = sanitizeLogoSvg(input.length > 50_000 ? input.replace(/<!--[\s\S]*?-->|<metadata[\s\S]*?<\/metadata>/g, "") : input);
+  if (out.length > 50_000) throw new LogoError("The logo is too detailed (50,000 characters at most once cleaned). Simplify it or upload a PNG.");
+  return out;
 }

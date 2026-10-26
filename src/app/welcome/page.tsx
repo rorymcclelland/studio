@@ -57,7 +57,7 @@ export default function WelcomePage() {
             <ButtonLink href="/signin" size="lg">
               Sign in
             </ButtonLink>
-            <p className="text-ink-2">Access is by invitation.</p>
+            <p className="text-ink-2">Access is by invitation. Invited before? Ask Rory for a new sign-in link.</p>
           </div>
         </Card>
 

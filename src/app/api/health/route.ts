@@ -1,6 +1,7 @@
 import { connection } from "next/server";
 import { getSql } from "@/lib/db/client";
 import { functions } from "@/inngest/functions";
+import { deployedCommit } from "@/lib/deploy/commit";
 
 // Keep-awake and health check (S1-1 #6). Vercel cron calls this daily so the
 // free Supabase project never reaches a week without activity.
@@ -13,9 +14,10 @@ export async function GET() {
     console.log(`[health] database ok in ${ms}ms`);
     // F-15: the deploy check compares this with what Inngest has registered.
     const inngestFunctions = functions.map((f) => f.id());
+    // F-17: `commit` lets the after-deploy Action wait for this deployment.
     // F-8: which database this deployment uses (host only), so a preview can be seen to use its own.
     const databaseHost = safeHost(process.env.DATABASE_URL);
-    return Response.json({ ok: true, database: "ok", ms, inngestFunctions, databaseHost, environment: process.env.VERCEL_ENV ?? "local" });
+    return Response.json({ ok: true, database: "ok", ms, inngestFunctions, databaseHost, environment: process.env.VERCEL_ENV ?? "local", commit: deployedCommit() });
   } catch (err) {
     console.error("[health] database check failed", { target: describeDatabaseUrl(process.env.DATABASE_URL) }, err);
     return Response.json({ ok: false, database: "unreachable" }, { status: 503 });

@@ -1,6 +1,6 @@
 // F-3 test cases 2 to 4 (server side): invite links and the per-workspace cap.
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { checkInvite, createInvite, InviteError, listInvites, revokeInvite, redeemInvite } from "@/lib/auth/invites";
+import { checkInvite, createInvite, InviteError, listInvites, newSignInLink, revokeInvite, redeemInvite } from "@/lib/auth/invites";
 import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { CapExceededError, generate } from "@/lib/models/generate";
@@ -122,5 +122,33 @@ describe("F-3 invites", () => {
       process.env.DAILY_CAP_PENCE = before;
       await getSql()`delete from public.usage_ledger`;
     }
+  });
+
+  it("F-18a #1 and #3: a used invite gets a new sign-in link for the same person and workspace; the old link stays used", async () => {
+    const person = await member("returning@example.test");
+    const first = await createInvite(owner, person.email);
+    expect(await redeemInvite(tokenOf(first.path), person.userId)).toBe(true);
+    const again = await newSignInLink(owner, first.id);
+    expect(again.email).toBe(person.email);
+    expect(await checkInvite(tokenOf(again.path))).toBe(person.email);
+    expect(await redeemInvite(tokenOf(again.path), person.userId)).toBe(true);
+    // Same workspace: ensure_workspace finds the one they already have.
+    const ws = await asUser(person.userId, async (tx) => (await tx`select public.ensure_workspace() as id`)[0].id as string);
+    expect(ws).toBe(person.workspaceId);
+    const [{ n }] = await getSql()`select count(*)::int as n from public.workspace_members where user_id = ${person.userId}`;
+    expect(n).toBe(1);
+    expect(await checkInvite(tokenOf(first.path))).toBeNull();
+    expect((await listInvites(owner)).find((i) => i.id === again.id)!.note).toBe("New sign-in link");
+  });
+
+  it("F-18a #2: no new link for a revoked person, an unused invite, or a guest asking", async () => {
+    const person = await member("revoked-again@example.test");
+    const inv = await createInvite(owner, person.email);
+    await expect(newSignInLink(owner, inv.id)).rejects.toThrow(/hasn't been used yet/);
+    await redeemInvite(tokenOf(inv.path), person.userId);
+    await revokeInvite(owner, inv.id);
+    await expect(newSignInLink(owner, inv.id)).rejects.toThrow(/revoked/);
+    await expect(newSignInLink(guest, inv.id)).rejects.toThrow(InviteError);
+    await expect(newSignInLink(owner, "not-an-id")).rejects.toThrow(/doesn't exist/);
   });
 });

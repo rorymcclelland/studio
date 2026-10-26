@@ -83,3 +83,23 @@ export async function redeemInvite(token: string, userId: string): Promise<boole
   const [r] = await asAnon((tx) => tx`select public.use_invite(${hashToken(token)}, ${userId}) as ok`);
   return r?.ok === true;
 }
+
+/**
+ * F-18a: a fresh one-time link for someone who has already used an invite, so
+ * they can sign back in (Supabase's own email only reaches team members).
+ * Accepting it signs in their existing account and workspace. A revoked person
+ * gets no new link; invite them again to restore access.
+ */
+export async function newSignInLink(owner: { userId: string; email: string }, inviteId: string): Promise<{ id: string; path: string; email: string }> {
+  requireOwner(owner.email);
+  if (!/^[0-9a-f-]{36}$/i.test(inviteId)) throw new InviteError("That invite doesn't exist.");
+  const [i] = await asUser(owner.userId, (tx) => tx`
+    select email, used_at, revoked_at,
+      exists (select 1 from public.invites o where o.email = invites.email and o.revoked_at is not null) as person_revoked
+    from public.invites where id = ${inviteId}`);
+  if (!i) throw new InviteError("That invite doesn't exist.");
+  if (i.revoked_at || i.person_revoked) throw new InviteError("That person's access is revoked. Invite them again to restore it.");
+  if (!i.used_at) throw new InviteError("That invite hasn't been used yet, so the original link still works.");
+  const made = await createInvite(owner, i.email as string, "New sign-in link");
+  return { ...made, email: i.email as string };
+}
