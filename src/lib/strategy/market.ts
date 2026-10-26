@@ -46,7 +46,7 @@ export async function startMarketRun(member: Member, brandId: string, send: Send
   if (!b) throw new StartRunError("That brand isn't in your workspace.");
   if (b.running > 0) throw new StartRunError("The Market agent is already researching this brand.");
   if (!opts.confirm && b.last && Date.now() - new Date(b.last).getTime() < REFRESH_GUARD_HOURS * 3_600_000) {
-    throw new RecentlyRefreshedError(`The market notes were refreshed less than ${REFRESH_GUARD_HOURS} hours ago. Each refresh costs up to about 10p; confirm to run it again.`);
+    throw new RecentlyRefreshedError(`The market notes were refreshed less than ${REFRESH_GUARD_HOURS} hours ago. Each refresh costs up to about 20p; confirm to run it again.`);
   }
   return createRun(member, "market", { brandId }, send, { brandId, label: `${b.name}: market notes` });
 }

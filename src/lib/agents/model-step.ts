@@ -124,13 +124,34 @@ export async function runModelStep<I, O>(
             : `The agent's reply did not match the expected format: ${issues}`,
         );
       }
-      currentPrompt =
-        `${prompt}\n\nYour previous reply could not be used (${issues}).\n` +
-        `Previous reply:\n${res.text.slice(0, 2000)}\n\nReply again with JSON only, in the required shape.`;
+      currentPrompt = repairPrompt(prompt, issues, res.text, agent.webSearch ? [...sources.values()] : null);
     }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     await finish("failed", null, message);
     throw err;
   }
+}
+
+/**
+ * The one repair attempt's prompt. An agent that searched can't search again,
+ * so it is shown the pages its search found (production check, Sprint 4: the
+ * repair otherwise tried to write a search instead of JSON).
+ */
+export function repairPrompt(prompt: string, issues: string, previous: string, pages: WebSource[] | null): string {
+  const json = previous.indexOf("{");
+  const reply = (json >= 0 ? previous.slice(json) : previous).slice(0, 12000);
+  const parts = [prompt, "", `Your previous reply could not be used (${issues}).`, `Previous reply:\n${reply}`];
+  if (pages) {
+    const listed = pages.slice(0, 20).map((p) =>
+      [`- ${p.url}${p.title ? ` (${p.title.slice(0, 120)})` : ""}`, ...p.citedText.slice(0, 4).map((t) => `  passage: ${JSON.stringify(t.slice(0, 400))}`)].join("\n"),
+    );
+    parts.push(
+      "",
+      "Searching is finished and no tools are available. Fix the reply using only these pages your searches found, and cite only these URLs:",
+      listed.length ? listed.join("\n") : "(none)",
+    );
+  }
+  parts.push("", "Reply again with JSON only, in the required shape. Do not write any tool calls or other text.");
+  return parts.join("\n");
 }

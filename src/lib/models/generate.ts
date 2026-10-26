@@ -101,8 +101,9 @@ const SEARCH_TIMEOUT_MS = 180_000;
 export async function generate(input: GenerateInput): Promise<GenerateResult> {
   const cfg = resolveAgentModel(input.agent);
   const fullText = `${input.instructions ?? ""}\n${input.prompt}`;
-  // Search results come back into the prompt, so a search call is estimated generously.
-  const searchTokens = input.webSearch ? input.webSearch.maxUses * 6000 : 0;
+  // Search results come back into the prompt and are re-read on each search, so
+  // a search call is estimated generously (production: 5 searches read 140k tokens).
+  const searchTokens = input.webSearch ? input.webSearch.maxUses * 30000 : 0;
   const estimate =
     costPence(cfg.provider, cfg.model, estimateTokens(fullText) + searchTokens, cfg.maxOutputTokens) +
     (input.webSearch ? searchCostPence(cfg.provider, input.webSearch.maxUses) : 0);

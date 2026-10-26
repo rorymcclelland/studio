@@ -4,13 +4,15 @@ import type { WebSource } from "@/lib/models/generate";
 import { defineAgent } from "./contract";
 
 // S4-3: the Market agent (Strategy squad). Claude searches the web (at most
-// five searches, UK) about the brand's category, and writes sourced, dated
+// three searches, UK) about the brand's category, and writes sourced, dated
 // market notes. Code checks every source was really returned, every figure is
 // in a cited passage, and declares the real companies each note names (rule 2,
 // as reworded in Sprint 4: names stay in the notes and never reach a brief).
 
 export const NOTE_KINDS = ["trend", "timing", "rival_move", "gap"] as const;
-export const MAX_SEARCHES = 5;
+// Five searches pulled about 140,000 tokens of pages into one call (30p) on
+// the first production run, so three (Sprint 4 production check).
+export const MAX_SEARCHES = 3;
 
 export const marketStart = z.object({ brandId: z.uuid() });
 
@@ -32,7 +34,8 @@ export const marketOutput = z.object({
       z.object({
         kind: z.enum(NOTE_KINDS),
         title: z.string().trim().min(5).max(120),
-        text: z.string().trim().min(20).max(500),
+        // Asked for at most 400 characters; the schema allows some slack.
+        text: z.string().trim().min(20).max(700),
         sources: z.array(z.string().url().max(500)).min(1).max(3),
         /** Real companies, brands or products the note names, exactly as written in it. */
         names: z.array(z.string().trim().min(2).max(60)).max(6),
@@ -138,7 +141,8 @@ export const marketAgent = defineAgent({
   instructions: [
     "You are a market analyst on the Strategy squad. Use web search to find what is happening now in a brand's category in the United Kingdom.",
     "The brand is fictional: search about the category and its customers, never about the brand.",
-    "Write four to eight short notes, each one of: trend (what customers are doing or wanting), timing (when they buy), rival_move (what a named company in the category has done), gap (something customers want that the category does not offer well).",
+    "You have three searches; make each one count.",
+    "Write four to eight short notes (each text at most 400 characters), each one of: trend (what customers are doing or wanting), timing (when they buy), rival_move (what a named company in the category has done), gap (something customers want that the category does not offer well).",
     "Every note cites one to three pages your searches returned, by URL, and rests only on what those pages say.",
     "Use a figure only if a page you cite states it, written as it is there. Never estimate. Do not write quantities in words (\"most\", \"half of\").",
     "List in `names` every real company, brand, product or publication the note names, exactly as written in it. Any capitalised name that is not a place or a date must be listed.",

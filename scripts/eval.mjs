@@ -34,7 +34,9 @@ let carried = 0;
 try {
   const { default: postgres } = await import("postgres");
   const old = postgres(base, { onnotice: () => {}, connect_timeout: 3 });
-  const [r] = await old`select public.spend_today_pence('Europe/London')::float as p`;
+  // Mock calls cost nothing real, so only real-model spend is carried.
+  const [r] = await old`select coalesce(sum(cost_pence), 0)::float as p from public.usage_ledger
+    where provider <> 'mock' and (created_at at time zone 'Europe/London')::date = (now() at time zone 'Europe/London')::date`;
   carried = Number(r.p);
   await old.end();
 } catch {
@@ -51,6 +53,10 @@ const env = {
   EVAL_CONFIRMED: yes ? "1" : "",
   EVAL_CARRIED_PENCE: String(carried),
   DAILY_CAP_PENCE: process.env.DAILY_CAP_PENCE ?? "100",
+  // The eval database has one workspace, so it may use the whole cap (decision 0010's
+  // per-workspace limit is for production's invited workspaces).
+  WORKSPACE_DAILY_CAP_PENCE: process.env.DAILY_CAP_PENCE ?? "100",
+  OWNER_RESERVE_PENCE: "0",
 };
 if (mock) env.MODEL_PROVIDER_OVERRIDE = "mock";
 else delete env.MODEL_PROVIDER_OVERRIDE;

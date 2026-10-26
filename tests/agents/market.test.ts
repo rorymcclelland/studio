@@ -8,6 +8,7 @@ import { createCampaign, getCampaign, saveBriefEdit } from "@/lib/brief/repo";
 import { closeSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
+import { repairPrompt } from "@/lib/agents/model-step";
 import { mockBehaviour } from "@/lib/models/mock";
 import { listMarketNotes, RecentlyRefreshedError, startMarketRun } from "@/lib/strategy/market";
 import { createMember, truncateAll } from "../helpers/db";
@@ -78,6 +79,26 @@ describe("S4-3 Market agent", () => {
     const failed = await research();
     expect(failed.status).toBe("failed");
     expect(failed.error).toContain('declares "Cairnwick Outdoor", which it does not name');
+  });
+
+  it("production check: a repair after searching is shown the pages found, can't search, and gets the whole reply", async () => {
+    mockBehaviour.searchPages = PAGES;
+    mockBehaviour.next(reply([note({ text: "x".repeat(701) })]));
+    mockBehaviour.next(reply([note()]));
+    const ok = await research();
+    expect(ok.status).toBe("completed");
+    expect(ok.steps[1].attempt_log[0].problems.join(" ")).toMatch(/700 characters/);
+    const p = mockBehaviour.lastPlainPrompt;
+    expect(p).toContain("Searching is finished and no tools are available");
+    expect(p).toContain(PAGES[0].url);
+    expect(p).toContain("rose 12% in the autumn");
+    expect((await ledger(ok.id)).s).toBe(2);
+    // Words before the JSON are dropped and a long reply is not cut at 2,000 characters.
+    const long = `Try more searches.{"notes":[${'"y",'.repeat(800)}"z"]}`;
+    const r = repairPrompt("P", "bad", long, null);
+    expect(r).not.toContain("Try more searches");
+    expect(r).toContain('"z"]}');
+    expect(r).not.toContain("Searching is finished");
   });
 
   it("#3 the cap refuses a run that could cost more than is left, before it starts", async () => {

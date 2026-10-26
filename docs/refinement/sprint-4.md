@@ -153,7 +153,7 @@ All of it on the public address.
 - **Caching:** notes are reused for 7 days. "Refresh" is disabled within 24 hours of the last run unless the person confirms.
 - **Cost:**
   - `generate()` gains tool support;
-  - the cap estimate adds up to 5 searches at the search price (from `prices.ts`);
+  - the cap estimate adds up to 3 searches at the search price (from `prices.ts`), and 30,000 tokens of pages per search (was 5 searches; see the production check);
   - the ledger records the searches the provider reports, or 5 if it reports none.
 
 **Test cases.**
@@ -278,7 +278,7 @@ All of it on the public address.
 
 | Run | Model | Estimated cost |
 | --- | --- | --- |
-| Market agent | Sonnet, up to 5 searches | about 6 to 10p per brand. Anthropic launched search at $10 per 1,000; re-check the current price before the build |
+| Market agent | Sonnet, up to 3 searches (was 5) | up to about 20p per brand (first production run, 5 searches: 30p). Anthropic launched search at $10 per 1,000; re-check the current price before the build |
 | Personas | Haiku | about 1p |
 | Test plan | Haiku | under 1p |
 
@@ -314,3 +314,7 @@ All of it on the public address.
 
 The `invites` table is app-level, like `profiles`: it has no `workspace_id` because it is about who may sign in, not workspace data. Only the owner can read or write it (RLS); a cross-user test covers it.
 
+
+## Production check notes
+
+- **26 Oct, first real Market run (Quillmoor): failed, 30p.** Five searches read about 140,000 tokens of pages into one call. One note ran past 500 characters; the repair could not search and was not shown the pages, so it wrote a search instead of JSON. Fixed: three searches, notes asked for 400 characters (schema allows 700), the repair is shown the pages and passages found and the whole earlier reply, and the cap estimate counts 30,000 tokens a search. Evals now carry only real-model spend and give their one workspace the whole cap.

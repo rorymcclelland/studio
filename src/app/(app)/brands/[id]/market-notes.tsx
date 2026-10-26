@@ -93,7 +93,7 @@ export function MarketNotes({
           <Card>
             <p className="max-w-prose text-ink-2">
               No market notes yet. Refresh market notes to have the Market agent search the web. Each refresh costs up to
-              about 10p and counts against the daily cap.
+              about 20p and counts against the daily cap.
             </p>
           </Card>
         )
