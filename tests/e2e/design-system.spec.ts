@@ -28,6 +28,8 @@ let fernhollow = "";
 type Screen = { name: string; path: () => string; signedIn: boolean };
 const SCREENS: Screen[] = [
   { name: "sign-in", path: () => "/signin", signedIn: false },
+  { name: "public welcome page", path: () => "/", signedIn: false },
+  { name: "sign-in after an expired invite", path: () => "/signin?invite=expired", signedIn: false },
   { name: "home", path: () => "/", signedIn: true },
   { name: "runs", path: () => "/runs", signedIn: true },
   { name: "run detail with approval form", path: () => awaitingRun, signedIn: true },
@@ -79,9 +81,9 @@ test.describe("S2-1 #3: a dark operating system still gets the light theme", () 
   test("every screen looks the same with the system set to dark", async ({ page }) => {
     test.setTimeout(240_000); // two visits, two screenshots and an axe check for every screen
     await page.setViewportSize({ width: 1440, height: 900 });
-    // Today's AI spend in the header moves when other specs' runs finish
-    // between the two captures, so it is masked in both.
-    const mask = [page.locator('[title^="AI spend today"]')];
+    // Today's AI spend and the approvals count in the header move when other
+    // specs' runs finish between the two captures, so they are masked in both.
+    const mask = [page.locator('[title^="AI spend today"]'), page.locator("[data-nav-count]")];
     for (const signedIn of [false, true]) {
       if (signedIn) await signIn(page);
       for (const s of SCREENS.filter((x) => x.signedIn === signedIn)) {
