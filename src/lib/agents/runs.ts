@@ -30,15 +30,44 @@ export async function createRun(
   if (!parsed.success) throw new StartRunError(parsed.error.issues[0]?.message ?? "Invalid input.");
 
   const label = (opts.label ?? (agent.start ? agent.name : agent.label(parsed.data))).slice(0, 200);
+  return queueRun(member, agent.key, agent.version, parsed.data, label, opts.brandId ?? null, send);
+}
+
+/**
+ * S5-4: a run of a workflow that is not a model agent of its own (Make
+ * creative, which runs the Imagery and Copy agents and then composes ads in
+ * code). The caller has validated the input. Recorded and handed off exactly
+ * like an agent's run, so it has a trail, a status and a cost.
+ */
+export async function createWorkflowRun(
+  member: Member,
+  key: string,
+  version: number,
+  input: Record<string, unknown>,
+  send: SendEvent,
+  opts: { label: string; brandId?: string | null },
+): Promise<string> {
+  return queueRun(member, key, version, input, opts.label.slice(0, 200), opts.brandId ?? null, send);
+}
+
+async function queueRun(
+  member: Member,
+  key: string,
+  version: number,
+  input: unknown,
+  label: string,
+  brandId: string | null,
+  send: SendEvent,
+): Promise<string> {
   const [row] = await asUser(member.userId, (tx) => tx`
     insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)
-    values (${member.workspaceId}, ${agent.key}, ${agent.version}, ${tx.json(parsed.data as never)}, ${member.userId},
-            ${label}, ${opts.brandId ?? null})
+    values (${member.workspaceId}, ${key}, ${version}, ${tx.json(input as never)}, ${member.userId},
+            ${label}, ${brandId})
     returning id`);
   const runId = row.id as string;
 
   try {
-    await send({ name: RUN_REQUESTED, data: { runId, workspaceId: member.workspaceId, userId: member.userId, agent: agent.key } });
+    await send({ name: RUN_REQUESTED, data: { runId, workspaceId: member.workspaceId, userId: member.userId, agent: key } });
   } catch (err) {
     const detail = err instanceof Error ? err.message : String(err);
     await asUser(member.userId, (tx) => tx`

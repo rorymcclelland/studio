@@ -21,10 +21,16 @@ type Prepared =
   | { ok: true; campaignId: string; version: number; brandId: string; paletteHex: string[]; input: ImageryInput }
   | { ok: false; message: string };
 
+/** What drawing one picture needs to know (S5-4's New picture draws one outside a full Imagery run). */
+export type DrawTarget = { campaignId: string; version: number; brandId: string; paletteHex: string[] };
+
+/** Where a draw or check goes in the trail, when it isn't part of a full Imagery run. */
+export type TrailSlot = { seq: number; name: string };
+
 type Written = { ok: true; output: ImageryOutput } | { ok: false; reason: "cap" | "error"; message: string };
 
-type Drawn = { ok: true; assetId: string } | { ok: false; reason: "cap" | "error"; message: string };
-type Checked = { ok: true; hasText: boolean; reason: string } | { ok: false; reason: "cap" | "error"; message: string };
+export type Drawn = { ok: true; assetId: string } | { ok: false; reason: "cap" | "error"; message: string };
+export type Checked = { ok: true; hasText: boolean; reason: string } | { ok: false; reason: "cap" | "error"; message: string };
 
 export type PictureOutcome =
   | { picture: number; outcome: "kept"; assetId: string; attempts: number; idea: string }
@@ -104,9 +110,16 @@ async function readBrief(ctx: StepContext): Promise<Prepared> {
 }
 
 /** One image call, recorded as its own costed step; the picture is stored as a WebP asset at once. */
-async function drawOne(ctx: StepContext, prepared: Extract<Prepared, { ok: true }>, p: Prompt, picture: number, attempt: number): Promise<Drawn> {
-  const seq = seqFor(picture, attempt, "draw");
-  const name = attempt === 1 ? `Draw picture ${picture}` : `Redraw picture ${picture}`;
+export async function drawOne(
+  ctx: StepContext,
+  prepared: DrawTarget,
+  p: Pick<Prompt, "prompt" | "idea" | "aspect">,
+  picture: number,
+  attempt: number,
+  at?: TrailSlot & { seed?: number; meta?: Record<string, unknown> },
+): Promise<Drawn> {
+  const seq = at?.seq ?? seqFor(picture, attempt, "draw");
+  const name = at?.name ?? (attempt === 1 ? `Draw picture ${picture}` : `Redraw picture ${picture}`);
   const [s] = await asUser(ctx.userId, (tx) => tx`
     insert into public.agent_steps (run_id, workspace_id, seq, name, kind, status, input)
     values (${ctx.runId}, ${ctx.workspaceId}, ${seq}, ${name}, 'model', 'running',
@@ -131,7 +144,7 @@ async function drawOne(ctx: StepContext, prepared: Extract<Prepared, { ok: true 
       stepId,
       prompt: p.prompt,
       aspect: p.aspect,
-      seed: picture * 10 + attempt,
+      seed: at?.seed ?? picture * 10 + attempt,
       palette: prepared.paletteHex,
     });
     const webp = await toWebp(img.bytes);
@@ -145,7 +158,7 @@ async function drawOne(ctx: StepContext, prepared: Extract<Prepared, { ok: true 
         webp,
         simulated: img.simulated,
         createdByKind: "agent",
-        meta: { picture, attempt, idea: p.idea, prompt: p.prompt, briefVersion: prepared.version, provider: img.provider, model: img.model, size: img.size },
+        meta: { picture, attempt, idea: p.idea, prompt: p.prompt, briefVersion: prepared.version, provider: img.provider, model: img.model, size: img.size, ...at?.meta },
       }),
     );
     await finish("succeeded", {
@@ -163,15 +176,15 @@ async function drawOne(ctx: StepContext, prepared: Extract<Prepared, { ok: true 
 }
 
 /** The vision check on one stored picture; a picture with text, or one that couldn't be checked, is discarded. */
-async function checkOne(ctx: StepContext, assetId: string, picture: number, attempt: number): Promise<Checked> {
+export async function checkOne(ctx: StepContext, assetId: string, picture: number, attempt: number, at?: TrailSlot): Promise<Checked> {
   const [a] = await asUser(ctx.userId, (tx) => tx`select bytes, mime from public.assets where id = ${assetId}`);
   try {
     const { output } = await runModelStep(
       ctx,
       imageCheckAgent,
       { picture, attempt, image: { data: new Uint8Array(a.bytes as Buffer), mediaType: a.mime as "image/webp" } },
-      seqFor(picture, attempt, "check"),
-      attempt === 1 ? `Check picture ${picture} for text` : `Check picture ${picture} again`,
+      at?.seq ?? seqFor(picture, attempt, "check"),
+      at?.name ?? (attempt === 1 ? `Check picture ${picture} for text` : `Check picture ${picture} again`),
     );
     if (output.hasText) await asUser(ctx.userId, (tx) => discardIn(tx, assetId));
     return { ok: true, hasText: output.hasText, reason: output.reason };

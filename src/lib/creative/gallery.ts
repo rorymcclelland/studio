@@ -1,0 +1,586 @@
+import { CREATIVE_KEY, CREATIVE_VERSION, makeCreativeRefusal } from "@/lib/agents/creative-workflow";
+import { createWorkflowRun, type Member, type SendEvent } from "@/lib/agents/runs";
+import { asUser } from "@/lib/db/scoped";
+import { loadCopyContext, rulesFor } from "./copy-context";
+import { CopyEditError, CopyError, listCopySets, saveCopyEdit, startNewWords, type CopySetView } from "./copy";
+import { EDIT_COPY, setProblems, type AnyCopy } from "./copy-rules";
+import { makeCreativeEstimate, newPictureEstimate, newWordsEstimate, type Estimate } from "./costs";
+import { NOT_SIGNED_OFF } from "./imagery";
+import type { RenderChecks } from "./render/render";
+import {
+  AD_CHANNELS,
+  firstLayoutThatRenders,
+  insertVariant,
+  LAYOUT_IDS,
+  LAYOUT_NAMES,
+  loadParts,
+  refusalText,
+  renderInputFor,
+  type AdChannel,
+  type AdWords,
+  type KitSnapshot,
+  type LayoutId,
+  type Rendered,
+} from "./variants";
+import { renderAd } from "./render/render";
+
+// S5-4: what the Creative section of a campaign shows and does. The gallery
+// reads through getCreative(); every action is a mark (pick, discard), a
+// layout switch checked by the renderer, or a costed run that goes through
+// the cap (Make creative, New picture, New words). Nothing here spends ad
+// money or publishes (rule 3). Words follow their copy set: a set is shared
+// by the ads for each picture, so new or edited words move every current ad on
+// that set, and only when a person chooses them.
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** A refusal the gallery shows as it is (the message says what to do). */
+export class CreativeError extends Error {}
+
+export { CopyEditError, NOT_SIGNED_OFF };
+
+export type Badge = {
+  key: "contrast" | "fit" | "legal" | "logo" | "simulated";
+  label: string;
+  /** good: passed; warn: worth a look (no legal line in the kit, no logo); info: a label (simulated). */
+  tone: "good" | "warn" | "info";
+  detail: string;
+};
+
+export type VariantView = {
+  id: string;
+  /** The drawn ad (PNG, 1080 × 1080). */
+  src: string;
+  campaignId: string;
+  briefVersion: number;
+  channel: AdChannel;
+  layout: LayoutId;
+  layoutName: string;
+  image: { assetId: string; src: string; simulated: boolean; idea: string | null; runId: string | null; discarded: boolean };
+  words: {
+    setId: string;
+    audience: { segmentRef: string | null; title: string };
+    headline: string;
+    body: string;
+    cta: string;
+    legalLines: string[];
+    source: "agent" | "person";
+    runId: string | null;
+    discarded: boolean;
+  };
+  badges: Badge[];
+  checks: RenderChecks;
+  /** The picture came from the mock image model (rule 1: labelled "Simulated image"). */
+  simulated: boolean;
+  picked: boolean;
+  pickedAt: Date | null;
+  discardedAt: Date | null;
+  origin: "composed" | "new picture" | "new words" | "edited words";
+  basedOn: string | null;
+  createdAt: Date;
+  /** The creative run that composed it or drew its new picture (null for a person's choice of words). */
+  runId: string | null;
+  /** New words waiting beside this ad's words: a person keeps them (keepWords) or the old ones. */
+  pendingWords: { setId: string; headline: string; body: string; cta: string; runId: string | null } | null;
+  /** Runs in progress on this ad: a new picture, or new words for its set. */
+  busy: { picture: string | null; words: string | null };
+  /** For discarded ads: whether Restore works, and why not. */
+  restore: { allowed: boolean; reason: string | null };
+};
+
+export type CreativeRunView = {
+  runId: string;
+  href: string;
+  kind: "make" | "picture" | "words" | "imagery" | "copy";
+  label: string | null;
+  status: string;
+  error: string | null;
+  /** This run's cost plus its child runs' (Make creative runs the Imagery and Copy agents). */
+  costPence: number;
+  createdAt: Date;
+  children: { runId: string; href: string; agent: string; status: string; costPence: number }[];
+};
+
+export type CreativeView = {
+  campaignId: string;
+  brandId: string;
+  /** The signed-off version the creative is for; null until the brief is signed off. */
+  version: number | null;
+  signedOff: boolean;
+  makeCreative: { allowed: boolean; reason: string | null; estimate: Estimate; runningRunId: string | null };
+  estimates: { newPicture: Estimate; newWords: Estimate };
+  layouts: { id: LayoutId; name: string }[];
+  /** Current ads, in gallery order (by picture, then words). */
+  variants: VariantView[];
+  /** Discarded ads, newest first, and ads whose words or picture were discarded elsewhere. */
+  discarded: VariantView[];
+  /** "Ads use the words for ..., the brief's first audience; ..." when the brief has several audiences. */
+  audienceNote: string | null;
+  /** Current copy for the text-only channels (search, email, app push), shown as lists beside the gallery. */
+  textSets: CopySetView[];
+  /** Current ad words for the other audiences (not in the gallery), for the lists. */
+  otherAudienceSets: CopySetView[];
+  /** Discarded copy sets for undo (from the Copy agent's list). */
+  discardedSets: CopySetView[];
+  /** Creative, picture and copy runs for this campaign, newest first, with their costs. */
+  runs: CreativeRunView[];
+  totalCostPence: number;
+  /** Any ad's picture is simulated (mock model): the section says so. */
+  simulated: boolean;
+};
+
+const TEXT_CHANNELS = ["search", "email", "app push"];
+
+function badgesFor(checks: RenderChecks, simulated: boolean): Badge[] {
+  const c = checks.contrast;
+  const lowest = Math.min(c.body, c.legal, c.cta);
+  const badges: Badge[] = [
+    {
+      key: "contrast",
+      label: `Contrast ${lowest.toFixed(1)}:1`,
+      tone: "good",
+      detail: `Text ${c.body.toFixed(1)}:1, button ${c.cta.toFixed(1)}:1 (AA needs 4.5:1).${c.source === "fallback" ? ` ${c.note}` : ""}`,
+    },
+    {
+      key: "fit",
+      label: `Fits ${LAYOUT_NAMES[checks.layout]}`,
+      tone: "good",
+      detail: `Headline ${checks.fit.headline.size} px on ${checks.fit.headline.lines.length} line${checks.fit.headline.lines.length === 1 ? "" : "s"}, body ${checks.fit.body.size} px.`,
+    },
+    checks.legalLinePresent
+      ? { key: "legal", label: "Legal line", tone: "good", detail: `${checks.fit.legal.paragraphs} legal line${checks.fit.legal.paragraphs === 1 ? "" : "s"} at ${checks.fit.legal.size} px.` }
+      : { key: "legal", label: "No legal line in the kit", tone: "warn", detail: checks.legalNote ?? "no legal line in the kit" },
+  ];
+  if (checks.logo === "none") badges.push({ key: "logo", label: "No logo", tone: "warn", detail: "The brand has no logo yet. Upload one on the brand page." });
+  if (simulated) badges.push({ key: "simulated", label: "Simulated image", tone: "info", detail: "Drawn by the mock image model, not a real one." });
+  return badges;
+}
+
+const kindOf = (agent: string, input: Record<string, unknown>): CreativeRunView["kind"] =>
+  agent === "creative" ? (input.mode === "picture" ? "picture" : "make") : agent === "copy" ? (input.mode === "replace" ? "words" : "copy") : "imagery";
+
+/** Everything the Creative section needs for a campaign, or null if it isn't in the user's workspace. */
+export async function getCreative(userId: string, campaignId: string): Promise<CreativeView | null> {
+  if (!UUID.test(campaignId)) return null;
+  const copy = await listCopySets(userId, campaignId);
+  return asUser(userId, async (tx) => {
+    const [c] = await tx`select id, brand_id, status, approved_version from public.campaigns where id = ${campaignId}`;
+    if (!c) return null;
+    const version = (c.approved_version as number | null) ?? null;
+    const signedOff = c.status === "approved" && version !== null;
+
+    const rows = version
+      ? await tx`
+          select v.*, a.simulated, a.meta as image_meta, a.run_id as image_run_id, a.discarded_at as image_discarded,
+            s.channel, s.set, s.segment_ref, s.segment_title, s.legal_lines, s.source as words_source, s.run_id as words_run_id,
+            s.discarded_at as words_discarded
+          from public.ad_variants v
+          join public.assets a on a.id = v.image_asset_id
+          join public.copy_sets s on s.id = v.copy_set_id
+          where v.campaign_id = ${campaignId} and v.brief_version = ${version}
+          order by coalesce((a.meta ->> 'picture')::int, 0), v.created_at, v.id`
+      : [];
+
+    const busyRuns = await tx`
+      select id, agent, input from public.agent_runs
+      where status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId} and agent in ('creative', 'copy')`;
+    const pictureBusy = new Map<string, string>();
+    const wordsBusy = new Map<string, string>();
+    let makeRunning: string | null = null;
+    for (const r of busyRuns) {
+      if (r.agent === "creative" && r.input.mode === "picture") pictureBusy.set(r.input.variantId, r.id);
+      else if (r.agent === "creative") makeRunning = r.id;
+      else if (r.agent === "copy" && r.input.mode === "replace") wordsBusy.set(r.input.setId, r.id);
+    }
+    const pending = new Map(copy.sets.filter((s) => s.replaces).map((s) => [s.replaces as string, s]));
+    const currentPairs = new Set(rows.filter((r) => !r.discarded_at).map((r) => `${r.image_asset_id}:${r.copy_set_id}`));
+
+    const views: VariantView[] = rows.map((r) => {
+      const words = r.set as AdWords;
+      const waiting = pending.get(r.copy_set_id);
+      const partsGone = Boolean(r.image_discarded || r.words_discarded);
+      const restore = !r.discarded_at
+        ? { allowed: false, reason: partsGone ? (r.words_discarded ? "Its words were discarded. Restore them in the copy list to bring the ad back." : "Its picture was discarded.") : null }
+        : partsGone
+          ? { allowed: false, reason: r.words_discarded ? "Its words were replaced or discarded, so it can't come back. Its replacement is in the gallery." : "Its picture was replaced, so it can't come back." }
+          : currentPairs.has(`${r.image_asset_id}:${r.copy_set_id}`)
+            ? { allowed: false, reason: "The same picture and words are already in the gallery." }
+            : { allowed: true, reason: null };
+      return {
+        id: r.id,
+        src: `/ads/${r.id}.png`,
+        campaignId,
+        briefVersion: r.brief_version,
+        channel: r.channel,
+        layout: r.layout,
+        layoutName: LAYOUT_NAMES[r.layout as LayoutId],
+        image: {
+          assetId: r.image_asset_id,
+          src: `/assets/${r.image_asset_id}`,
+          simulated: r.simulated,
+          idea: (r.image_meta?.idea as string | undefined) ?? null,
+          runId: r.image_run_id,
+          discarded: Boolean(r.image_discarded),
+        },
+        words: {
+          setId: r.copy_set_id,
+          audience: { segmentRef: r.segment_ref, title: r.segment_title },
+          headline: words.headline,
+          body: words.body,
+          cta: words.cta,
+          legalLines: r.legal_lines,
+          source: r.words_source,
+          runId: r.words_run_id,
+          discarded: Boolean(r.words_discarded),
+        },
+        badges: badgesFor(r.checks as RenderChecks, r.simulated),
+        checks: r.checks as RenderChecks,
+        simulated: r.simulated,
+        picked: Boolean(r.picked_at),
+        pickedAt: r.picked_at,
+        discardedAt: r.discarded_at,
+        origin: r.origin,
+        basedOn: r.based_on,
+        createdAt: r.created_at,
+        runId: r.run_id,
+        pendingWords: waiting
+          ? { setId: waiting.id, ...(waiting.copy as AdWords), runId: waiting.runId }
+          : null,
+        busy: { picture: pictureBusy.get(r.id) ?? null, words: wordsBusy.get(r.copy_set_id) ?? null },
+        restore,
+      };
+    });
+    const live = views.filter((v) => !v.discardedAt && !v.image.discarded && !v.words.discarded);
+    const discarded = views
+      .filter((v) => !live.includes(v))
+      .sort((x, y) => (y.discardedAt?.getTime() ?? y.createdAt.getTime()) - (x.discardedAt?.getTime() ?? x.createdAt.getTime()));
+
+    // The audience whose words are in the gallery (the first live ad's), and a note when the brief has others.
+    const adSets = copy.sets.filter((s) => (AD_CHANNELS as readonly string[]).includes(s.channel) && !s.replaces);
+    const galleryRef = live[0]?.words.audience.segmentRef ?? adSets[0]?.audience.segmentRef ?? null;
+    const audiences = new Map(adSets.map((s) => [s.audience.segmentRef, s.audience.title]));
+    const otherAudienceSets = adSets.filter((s) => s.audience.segmentRef !== galleryRef);
+    const audienceNote =
+      audiences.size > 1 && audiences.has(galleryRef)
+        ? `Ads use the words for ${audiences.get(galleryRef)}, the brief's first audience; the words for the other ${audiences.size - 1 === 1 ? "audience are" : `${audiences.size - 1} audiences are`} in the copy lists.`
+        : null;
+
+    const runRows = await tx`
+      select r.id, r.agent, r.label, r.status, r.error, r.input, r.created_at,
+        coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::float8 as cost
+      from public.agent_runs r
+      where r.agent in ('creative', 'imagery', 'copy') and r.input ->> 'campaignId' = ${campaignId}
+      order by r.created_at desc limit 60`;
+    const byParent = new Map<string, typeof runRows>();
+    for (const r of runRows) {
+      const parent = r.input.parentRunId as string | undefined;
+      if (parent) byParent.set(parent, [...(byParent.get(parent) ?? []), r] as unknown as typeof runRows);
+    }
+    const runs: CreativeRunView[] = runRows
+      .filter((r) => !r.input.parentRunId)
+      .map((r) => {
+        const kids = (byParent.get(r.id) ?? []) as unknown as typeof runRows;
+        return {
+          runId: r.id,
+          href: `/runs/${r.id}`,
+          kind: kindOf(r.agent, r.input),
+          label: r.label,
+          status: r.status,
+          error: r.error,
+          costPence: Number(r.cost) + kids.reduce((sum, k) => sum + Number(k.cost), 0),
+          createdAt: r.created_at,
+          children: kids.map((k) => ({ runId: k.id, href: `/runs/${k.id}`, agent: k.agent, status: k.status, costPence: Number(k.cost) })),
+        };
+      });
+
+    const refusal = await makeCreativeRefusal(tx, campaignId);
+    const writesCopy = !copy.sets.length;
+    return {
+      campaignId,
+      brandId: c.brand_id,
+      version,
+      signedOff,
+      makeCreative: { allowed: refusal === null, reason: refusal, estimate: makeCreativeEstimate({ writesCopy }), runningRunId: makeRunning },
+      estimates: { newPicture: newPictureEstimate(), newWords: newWordsEstimate() },
+      layouts: LAYOUT_IDS.map((id) => ({ id, name: LAYOUT_NAMES[id] })),
+      variants: live,
+      discarded,
+      audienceNote,
+      textSets: copy.sets.filter((s) => TEXT_CHANNELS.includes(s.channel)),
+      otherAudienceSets,
+      discardedSets: copy.discarded,
+      runs,
+      totalCostPence: runs.reduce((sum, r) => sum + r.costPence, 0),
+      simulated: live.some((v) => v.simulated),
+    };
+  });
+}
+
+/** Starts Make creative for a campaign's signed-off brief. Refused (CreativeError, with the reason) for a draft, while it runs, or while the version has ads. */
+export async function startMakeCreative(member: Member, campaignId: string, send: SendEvent): Promise<string> {
+  if (!UUID.test(campaignId)) throw new CreativeError("That campaign isn't in your workspace.");
+  const { refusal, c } = await asUser(member.userId, async (tx) => {
+    const [c] = await tx`
+      select c.brand_id, c.approved_version, b.name from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
+    return { c, refusal: c ? await makeCreativeRefusal(tx, campaignId) : "That campaign isn't in your workspace." };
+  });
+  if (refusal) throw new CreativeError(refusal);
+  const version = c.approved_version as number;
+  return createWorkflowRun(member, CREATIVE_KEY, CREATIVE_VERSION, { mode: "make", campaignId, version }, send, {
+    label: `${c.name}: make creative (v${version})`,
+    brandId: c.brand_id,
+  });
+}
+
+type VariantRow = Record<string, unknown> & {
+  id: string;
+  workspace_id: string;
+  campaign_id: string;
+  brief_version: number;
+  image_asset_id: string;
+  copy_set_id: string;
+  layout: LayoutId;
+  kit: KitSnapshot;
+  discarded_at: Date | null;
+  image_discarded: Date | null;
+  words_discarded: Date | null;
+  status: string;
+  approved_version: number | null;
+  brand_id: string;
+  brand_name: string;
+};
+
+async function variantFor(userId: string, variantId: string): Promise<VariantRow> {
+  if (!UUID.test(variantId)) throw new CreativeError("That ad isn't in your workspace.");
+  const [v] = await asUser(userId, (tx) => tx`
+    select v.*, a.discarded_at as image_discarded, s.discarded_at as words_discarded,
+      c.status, c.approved_version, c.brand_id, b.name as brand_name
+    from public.ad_variants v
+    join public.assets a on a.id = v.image_asset_id
+    join public.copy_sets s on s.id = v.copy_set_id
+    join public.campaigns c on c.id = v.campaign_id
+    join public.brands b on b.id = c.brand_id
+    where v.id = ${variantId}`);
+  if (!v) throw new CreativeError("That ad isn't in your workspace.");
+  return v as VariantRow;
+}
+
+function current(v: VariantRow) {
+  if (v.discarded_at) throw new CreativeError("That ad was discarded. Restore it first.");
+  if (v.image_discarded || v.words_discarded) throw new CreativeError("That ad's picture or words were replaced. Use the ad that replaced it.");
+}
+
+function signedOffFor(v: VariantRow) {
+  if (v.status !== "approved" || !v.approved_version) throw new CreativeError(NOT_SIGNED_OFF);
+  if (v.approved_version !== v.brief_version) {
+    throw new CreativeError(`That ad was made for version ${v.brief_version}; the signed-off brief is now version ${v.approved_version}.`);
+  }
+}
+
+async function mark(member: Member, variantId: string, sql: "pick" | "unpick" | "discard", refusal: string) {
+  const v = await variantFor(member.userId, variantId);
+  const res = await asUser(member.userId, (tx) =>
+    sql === "pick"
+      ? tx`update public.ad_variants set picked_at = now() where id = ${v.id} and picked_at is null and discarded_at is null`
+      : sql === "unpick"
+        ? tx`update public.ad_variants set picked_at = null where id = ${v.id} and picked_at is not null`
+        : tx`update public.ad_variants set discarded_at = now() where id = ${v.id} and discarded_at is null`,
+  );
+  if (res.count !== 1) throw new CreativeError(refusal);
+}
+
+/** Shortlists an ad (a mark only: nothing is published or spent). */
+export async function pickVariant(member: Member, variantId: string): Promise<void> {
+  await mark(member, variantId, "pick", "That ad is already picked, or was discarded.");
+}
+
+export async function unpickVariant(member: Member, variantId: string): Promise<void> {
+  await mark(member, variantId, "unpick", "That ad isn't picked.");
+}
+
+/** Moves an ad to Discarded (undo with restoreVariant). Its picture and words stay. */
+export async function discardVariant(member: Member, variantId: string): Promise<void> {
+  await mark(member, variantId, "discard", "That ad is already discarded.");
+}
+
+/** Undoes a discard, when its picture and words are still current and the pair isn't in the gallery again. */
+export async function restoreVariant(member: Member, variantId: string): Promise<void> {
+  const v = await variantFor(member.userId, variantId);
+  if (!v.discarded_at) throw new CreativeError("That ad isn't discarded.");
+  if (v.words_discarded) throw new CreativeError("Its words were replaced or discarded, so it can't come back. Its replacement is in the gallery.");
+  if (v.image_discarded) throw new CreativeError("Its picture was replaced, so it can't come back.");
+  try {
+    await asUser(member.userId, (tx) => tx`update public.ad_variants set discarded_at = null where id = ${v.id}`);
+  } catch (err) {
+    if ((err as { code?: string }).code === "23505") throw new CreativeError("The same picture and words are already in the gallery.");
+    throw err;
+  }
+}
+
+/** Switches an ad's layout after drawing it in that layout; refused with the renderer's reason ("headline too long for Split"). */
+export async function setLayout(member: Member, variantId: string, layout: string): Promise<{ layout: LayoutId; checks: RenderChecks }> {
+  if (!(LAYOUT_IDS as readonly string[]).includes(layout)) throw new CreativeError("Choose Full bleed, Split or Card.");
+  const v = await variantFor(member.userId, variantId);
+  current(v);
+  const parts = await asUser(member.userId, (tx) => loadParts(tx, v.image_asset_id, v.copy_set_id, v.kit));
+  if (!parts) throw new CreativeError("That ad's picture or words couldn't be read.");
+  const r = await renderAd(renderInputFor(parts, layout as LayoutId));
+  if ("refused" in r) throw new CreativeError(`${LAYOUT_NAMES[layout as LayoutId]} can't be used for this ad: ${r.refused}.`);
+  await asUser(member.userId, (tx) => tx`
+    update public.ad_variants set layout = ${layout}, checks = ${tx.json(r.checks as never)} where id = ${v.id}`);
+  return { layout: layout as LayoutId, checks: r.checks };
+}
+
+/** New picture: a costed run (one image call and its check) that, when it passes, replaces this ad with one on the new picture. */
+export async function newPicture(member: Member, variantId: string, send: SendEvent): Promise<string> {
+  const v = await variantFor(member.userId, variantId);
+  current(v);
+  signedOffFor(v);
+  const [busy] = await asUser(member.userId, (tx) => tx`
+    select count(*)::int as n from public.agent_runs
+    where agent = 'creative' and status in ('queued', 'running') and input ->> 'variantId' = ${v.id}`);
+  if (busy.n > 0) throw new CreativeError("A new picture is already being drawn for this ad.");
+  return createWorkflowRun(member, CREATIVE_KEY, CREATIVE_VERSION, { mode: "picture", campaignId: v.campaign_id, variantId: v.id }, send, {
+    label: `${v.brand_name}: new picture`,
+    brandId: v.brand_id,
+  });
+}
+
+/** New words for this ad's set: a Copy run whose replacement waits beside it until a person keeps one (keepWords). */
+export async function newWords(member: Member, variantId: string, send: SendEvent): Promise<string> {
+  const v = await variantFor(member.userId, variantId);
+  current(v);
+  signedOffFor(v);
+  try {
+    return await startNewWords(member, v.copy_set_id, send);
+  } catch (err) {
+    if (err instanceof CopyError) throw new CreativeError(err.message);
+    throw err;
+  }
+}
+
+/** Every current ad on a set, drawn with other words (the picture and preferred layout kept). Throws if any can't be drawn in any layout. */
+type MovedAd = { id: string; imageAssetId: string; rendered: Extract<Rendered, { ok: true }>; kit: KitSnapshot; pickedAt: Date | null };
+
+async function redrawWithWords(userId: string, setId: string, override: { words: AdWords; legalLines: string[] } | null, newSetId: string | null) {
+  const ads = await asUser(userId, (tx) => tx`
+    select id, image_asset_id, layout, kit, picked_at from public.ad_variants where copy_set_id = ${setId} and discarded_at is null order by created_at`);
+  const out: MovedAd[] = [];
+  for (const ad of ads) {
+    const parts = await asUser(userId, (tx) => loadParts(tx, ad.image_asset_id, newSetId ?? setId, ad.kit as KitSnapshot, override ?? undefined));
+    if (!parts) throw new CreativeError("The ad's picture or words couldn't be read.");
+    const rendered = await firstLayoutThatRenders(parts, ad.layout as LayoutId);
+    if (!rendered.ok) return { ok: false as const, reason: refusalText(rendered.tried) };
+    out.push({ id: ad.id, imageAssetId: ad.image_asset_id, rendered, kit: ad.kit as KitSnapshot, pickedAt: ad.picked_at as Date | null });
+  }
+  return { ok: true as const, ads: out };
+}
+
+function fitErrors(reason: string): Record<string, string> {
+  const errors: Record<string, string> = {};
+  if (/headline too long/.test(reason)) errors.headline = "Too long to fit the ad. Shorten it a little.";
+  if (/body too long|copy too long/.test(reason)) errors.body = "Too long to fit the ad. Shorten it a little.";
+  if (/call to action too long/.test(reason)) errors.cta = "Too long to fit the button. Shorten it.";
+  return errors;
+}
+
+/**
+ * Keeps one of an ad's two sets of words after New words: "new" discards the
+ * old set and moves every current ad on it to the new words (new ads, the old
+ * ones discarded); "old" discards the new words. Returns the ads now showing
+ * the kept words.
+ */
+export async function keepWords(member: Member, variantId: string, keep: "new" | "old"): Promise<{ variantIds: string[] }> {
+  const v = await variantFor(member.userId, variantId);
+  current(v);
+  signedOffFor(v);
+  const [waiting] = await asUser(member.userId, (tx) => tx`
+    select id, set from public.copy_sets
+    where based_on = ${v.copy_set_id} and source = 'agent' and discarded_at is null
+    order by created_at desc limit 1`);
+  if (!waiting) throw new CreativeError("There are no new words waiting for this ad.");
+  if (keep === "old") {
+    await asUser(member.userId, (tx) => tx`update public.copy_sets set discarded_at = now() where id = ${waiting.id} and discarded_at is null`);
+    const ads = await asUser(member.userId, (tx) => tx`select id from public.ad_variants where copy_set_id = ${v.copy_set_id} and discarded_at is null`);
+    return { variantIds: ads.map((a) => a.id as string) };
+  }
+  const redrawn = await redrawWithWords(member.userId, v.copy_set_id, null, waiting.id as string);
+  if (!redrawn.ok) throw new CreativeError(`The new words don't fit any layout (${redrawn.reason}). Keep the old words, or edit them.`);
+  return moveAds(member, v, redrawn.ads, waiting.id as string, "new words", null);
+}
+
+async function moveAds(
+  member: Member,
+  v: VariantRow,
+  ads: MovedAd[],
+  newSetId: string,
+  origin: "new words" | "edited words",
+  alreadyDiscarded: "old set discarded" | null,
+): Promise<{ variantIds: string[] }> {
+  return asUser(member.userId, async (tx) => {
+    if (!alreadyDiscarded) {
+      const res = await tx`update public.copy_sets set discarded_at = now() where id = ${v.copy_set_id} and discarded_at is null`;
+      if (res.count !== 1) throw new CreativeError("Those words were changed meanwhile. Reload the gallery.");
+    }
+    const ids: string[] = [];
+    for (const ad of ads) {
+      const res = await tx`update public.ad_variants set discarded_at = now() where id = ${ad.id} and discarded_at is null`;
+      if (res.count !== 1) continue; // discarded meanwhile by the person: not brought back
+      const id = await insertVariant(tx, {
+        workspaceId: v.workspace_id,
+        userId: member.userId,
+        campaignId: v.campaign_id,
+        briefVersion: v.brief_version,
+        imageAssetId: ad.imageAssetId,
+        copySetId: newSetId,
+        layout: ad.rendered.layout,
+        checks: ad.rendered.checks,
+        kit: ad.kit,
+        origin,
+        runId: null,
+        basedOn: ad.id,
+        pickedAt: ad.pickedAt,
+      });
+      if (id) ids.push(id);
+    }
+    return { variantIds: ids };
+  });
+}
+
+/**
+ * Edit words: a person's hand edit of this ad's set (S5-2's saveCopyEdit, the
+ * same checks), then every current ad on the old set moves to the edited
+ * words. Nothing is saved if the words break a rule (CopyEditError, with field
+ * errors for the editor) or don't fit any layout.
+ */
+export async function editWords(member: Member, variantId: string, fields: unknown): Promise<{ setId: string; variantId: string | null; variantIds: string[] }> {
+  const v = await variantFor(member.userId, variantId);
+  current(v);
+  signedOffFor(v);
+  const [s] = await asUser(member.userId, (tx) => tx`select channel from public.copy_sets where id = ${v.copy_set_id}`);
+  const channel = s.channel as AdChannel;
+  const parsed = EDIT_COPY[channel].safeParse(fields);
+  if (!parsed.success) {
+    const fieldErrors: Record<string, string> = {};
+    for (const i of parsed.error.issues) fieldErrors[i.path.join(".") || "form"] ??= i.message;
+    throw new CopyEditError(Object.entries(fieldErrors).map(([f, m]) => `${f}: ${m}`), fieldErrors);
+  }
+  const words = parsed.data as AdWords;
+  // The rules first (banned terms, claims, names), as saveCopyEdit will check them, so a refusal names the rule rather than the fit.
+  const { problems, legalLines } = await asUser(member.userId, async (tx) => {
+    const ctx = await loadCopyContext(tx, v.campaign_id, v.brief_version);
+    if (!ctx) throw new CreativeError("The signed-off brief version no longer exists.");
+    // saveCopyEdit attaches the kit's legal lines as they are now, so the ads are checked with those.
+    return { problems: setProblems(channel, words as AnyCopy, rulesFor(ctx), { where: "the", allowFigures: true }), legalLines: ctx.kit.legalLines };
+  });
+  if (problems.length) throw new CopyEditError(problems);
+  const redrawn = await redrawWithWords(member.userId, v.copy_set_id, { words, legalLines }, null);
+  if (!redrawn.ok) throw new CopyEditError([`The words don't fit any layout: ${redrawn.reason}.`], fitErrors(redrawn.reason));
+
+  const setId = await saveCopyEdit(member, v.copy_set_id, words);
+  const { variantIds } = await moveAds(member, v, redrawn.ads, setId, "edited words", "old set discarded");
+  const [mine] = variantIds.length
+    ? await asUser(member.userId, (tx) => tx`select id from public.ad_variants where based_on = ${v.id} and discarded_at is null limit 1`)
+    : [];
+  return { setId, variantId: (mine?.id as string | undefined) ?? null, variantIds };
+}

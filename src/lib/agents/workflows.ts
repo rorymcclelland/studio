@@ -3,6 +3,7 @@ import type { StepContext } from "./model-step";
 import { executeAudienceRun } from "./audience-workflow";
 import { executeBriefRun } from "./brief-workflow";
 import { executeCopyRun } from "./copy-workflow";
+import { executeCreativeRun } from "./creative-workflow";
 import { executeImageryRun } from "./imagery-workflow";
 import { executeMarketRun } from "./market-workflow";
 import { executePersonaRun, executeTestPlanRun } from "./review-workflows";
@@ -23,7 +24,12 @@ export const WORKFLOWS: Record<string, Workflow> = {
   market: executeMarketRun,
   copy: executeCopyRun,
   imagery: executeImageryRun,
+  // S5-4: not a model agent of its own; runs the Imagery and Copy workflows, then composes ads in code.
+  creative: executeCreativeRun,
 };
+
+/** Names for workflows that aren't model agents (run lists fall back to these). */
+export const WORKFLOW_NAMES: Record<string, string> = { creative: "Make creative" };
 
 /** Runs the workflow for an agent; an agent without one fails its run instead of leaving it queued. */
 export async function executeRun(agent: string, ctx: StepContext, step: StepTools): Promise<string> {

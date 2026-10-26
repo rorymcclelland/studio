@@ -43,8 +43,8 @@ export async function saveBrand(brandId: string, draft: BrandDraft): Promise<Sav
     return { ok: false, error: "This brand isn't in your workspace any more, so nothing was saved.", fieldErrors: {} };
   }
   try {
-    // The logo is kept as it is: it is not part of the editor (upload arrives with imagery).
-    const saved = await updateBrand(member, brandId, { ...draft, logoSvg: current.logoSvg });
+    // The logo is kept as it is (SVG or PNG): it changes only through an upload (F-10, uploadBrandLogo).
+    const saved = await updateBrand(member, brandId, draft);
     if (!saved) {
       return { ok: false, error: "This brand isn't in your workspace any more, so nothing was saved.", fieldErrors: {} };
     }
