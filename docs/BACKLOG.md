@@ -70,26 +70,46 @@ Evidence: 138 unit and database tests and 40 end-to-end tests passing against a 
 | F-15 | Inngest didn't pick up the changed function on deploy; it needed a manual resync. Add a post-deploy sync (or check) and a runbook step | Sprint 3 deploy | Ready, Sprint 4, with F-3 (runbook step done) |
 | F-16 | Real-model evals: a manual GitHub Actions job with the key as a secret, so reports can be committed without keeping keys locally | Review finding 10 | Ready, Sprint 4 (stretch) |
 
-## Sprint 4: Strategy II, market, personas and approvals, demo gate 1 (refined and confirmed 26 October 2026)
+## Sprint 4: Strategy II, market, personas and approvals, demo gate 1 (closed 26 October 2026)
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| F-13 | Keep every attempt (raw reply and problems) in the step trail | S | Ready, Sprint 4 |
-| F-14 | Refuse loose quantities ("most are", "the majority of") in model text | S | Ready, Sprint 4 |
-| S4-1 | Approvals inbox v1, brief sign-off as the first gate (14 days) | M | Ready, Sprint 4 |
-| S4-2 | Persona agent: four synthetic personas from the segments score and critique the brief (Haiku) | M | Ready, Sprint 4 |
-| S4-4 | Test plan: hypotheses, cells, success metric and decision rule, no figures (Haiku) | M | Ready, Sprint 4 |
-| S4-3 | Market agent: web search, sourced and dated notes, real rival names allowed in notes only (Sonnet; one-day time-box on search reporting) | L | Ready, Sprint 4 |
-| F-3, F-8, F-15 | Public address with invite links Rory sends himself; per-workspace cap; previews on a second Supabase project; automatic Inngest sync after deploy | M | Ready, Sprint 4 |
-| F-16 | Real-model evals in GitHub Actions | S | Ready, Sprint 4 (stretch) |
+| F-13 | Keep every attempt (raw reply and problems) in the step trail | S | Done, Sprint 4 (production: each repaired run shows both attempts and why the first was sent back) |
+| F-14 | Refuse loose quantities ("most are", "the majority of") in model text | S | Done, Sprint 4 (production: "Many people" sent back in two briefs; "many budgeters" added after the Market run) |
+| S4-1 | Approvals inbox v1, brief sign-off as the first gate (14 days) | M | Done, Sprint 4 (production: Quillmoor version 1 sent and approved by Rory) |
+| S4-2 | Persona agent: four synthetic personas from the segments score and critique the brief (Haiku) | M | Done, Sprint 4 (production: started by sign-off, 9 s, 0.09p, first attempt) |
+| S4-4 | Test plan: hypotheses, cells, success metric and decision rule, no figures (Haiku) | M | Done, Sprint 4 (production: started by sign-off, 7.6 s, 0.07p, first attempt) |
+| S4-3 | Market agent: web search, sourced and dated notes, real rival names allowed in notes only (Sonnet) | L | Done, Sprint 4, after four production fixes (below). Production: six notes from 25 pages in 37 s for 14.6p, every figure found on its cited page, real names kept out of the brief. Residual: a refresh costs 15 to 20p against the refined 6 to 10p (F-21), and pages that block automated readers lose their figure notes |
+| F-3, F-8 | Public address with invite links Rory sends himself; per-workspace cap; previews on a second Supabase project | M | Done, Sprint 4 (welcome page public under Standard Protection; invite used in a private window, the invitee got an empty workspace of their own; preview build's health check reached `campaign-studio-preview`) |
+| F-15 | Automatic Inngest sync after each production deploy | S | Split. Done, Sprint 4: the "After production deploy" Action and the runbook step. Returned as F-17: the Action has never been triggered |
+| F-16 | Real-model evals in GitHub Actions | S | Split. Done, Sprint 4: `evals.yml` (manual run, key on the eval step only). Returned as F-16a: the first real-model run and its committed report |
 
-Demo gate 1: objective to signed-off brief with market notes, persona scores and a test plan, on the public address. Detail: `docs/refinement/sprint-4.md`.
+Evidence: 180 unit, database and agent tests and 45 end-to-end tests passing; mock evals for all six agents (audience 4, brief 6, market 2, persona 4, tagline 3, test plan 3); fresh-eyes review with 18 of 19 findings fixed before deploy and finding 14 accepted (decision 0010); production runs above. Demo gate 1 met on the public address: objective to signed-off brief with market notes, persona scores and a test plan. Detail: `docs/refinement/sprint-4.md`, "Production check notes".
+
+Fixed during the production check (26 Oct, all deployed and tested): five searches read 140,000 tokens (30p), now three with an honest cap estimate; the repair after searching now sees the pages found; figures are checked against the cited page's own text (the search's passages only come with prose replies); possessives, hyphens, finance abbreviations and sentence openers are no longer read as company names; notes that still fail after the repair are left out, not the whole run; a brand name between a figure and its unit ("2,000 Quillmoor Money customers") no longer fails the brief; evals carry only real-model spend and give their one workspace the whole cap.
+
+## Where the Sprint 4 review items now live
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| F-16a | First real-model eval run in GitHub Actions, report committed; add today's production replies (the long note, the possessive names, the brand-name figure) as regression cases | F-16 split | Backlog, returned from Sprint 4 |
+| F-17 | The "After production deploy" Action has never run: Vercel does not appear to send GitHub deployment events. Check the repo's Deployments, then trigger on Vercel's event or a check after the CI run | F-15 split | Backlog, returned from Sprint 4 |
+| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Backlog, from Sprint 4 review |
+| F-19 | A withdrawn sign-off shows as "expired" in the history; give it its own state | Sprint 4 build | Backlog, from Sprint 4 review |
+| F-20 | The persona facts check compares segment keys only, not age or region | Sprint 4 build | Backlog, from Sprint 4 review |
+| F-21 | Two runs started together can both pass the cap check before either is charged; and a Market refresh costs 15 to 20p. Reserve the estimate when a call starts; consider Haiku for the Market agent | Sprint 4 review and production check | Backlog, from Sprint 4 review |
+| F-22 | A test pack (Markdown and PDF in `docs/testing/`) for each sprint's hand checks, per the sprint-close routine agreed 26 Oct; Sprint 4's checks were given in chat | Sprint 4 close | Folded into the Sprint 5 refinement |
 
 ## Not yet in a sprint (ranked)
 
-1. F-9 Dark theme, once the light design system has settled
-2. F-10 SVG sanitiser false refusals, with logo upload in Sprint 5
-3. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+Proposed for Sprint 5 (Creative I: copy and imagery), to refine and confirm: the Copy agent, the Imagery agent, code-drawn ad templates, the variant gallery, F-10 with logo upload, F-21 (images make the cap race expensive) and F-17 (Sprint 5 changes the run function, so the sync matters).
+
+1. F-18 Invitees signing back in, before more interviewers are invited (M)
+2. F-16a First real-model eval report and regression cases (S)
+3. F-20 Persona facts check compares age and region (S)
+4. F-19 Withdrawn sign-offs get their own state (S)
+5. F-9 Dark theme, once the light design system has settled
+6. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -101,3 +121,4 @@ Demo gate 1: objective to signed-off brief with market notes, persona scores and
 | 25 Oct 2026 | Sprint 3 refined; Rory accepted all seven recommendations (segments saved without approval, Sonnet for briefs, no chaining, section-level revise, keep every version, code-only graders, Campaigns in the nav) |
 | 26 Oct 2026 | Sprint 3 closed: Audience and Brief agents live on production; evidence checks in code (0009); Inngest resynced after the run-function change; Sprint 4 proposed |
 | 26 Oct 2026 | Sprint 4 refined: invites by link Rory sends himself (Supabase's own email only reaches team members); real rival names allowed in market notes only, rule 2 to be reworded; previews on a second free Supabase project; market on Sonnet, personas and test plan on Haiku; sign-offs open 14 days |
+| 26 Oct 2026 | Sprint 4 closed: demo gate 1 met on the public address; Market agent fixed in four production rounds (three searches, figures checked against the cited pages, notes that fail are left out); previews on their own Supabase project; Sprint 5 proposed |
