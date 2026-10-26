@@ -73,3 +73,18 @@ Done once, in this order, after the Sprint 4 deploy.
 7. **Real-model evals (F-16, optional).** GitHub → the repo → Settings → Secrets and variables → Actions → New repository secret `ANTHROPIC_API_KEY` (a key with its own spending limit). Run them from Actions → Real-model evals → Run workflow; the reports are attached to the run.
 
 **Inviting someone:** sign in, open the account menu → **Invites**, enter their email, copy the link and send it in your own message. It works once, for 7 days. If they lose their session later, make a new invite. Revoke an invite to stop the link, or to remove someone who has used it.
+
+## Sprint 5: migrations and the image key
+
+Done once, before or with the Sprint 5 deploy, for production and then the preview project.
+
+1. **Migrations.** Apply these five, in order (everything up to `20261027000006` should already be applied by the Sprint 4 deploy; check the project's migration list first):
+   - `20261028000001_spend_reservations.sql`
+   - `20261028000002_assets_and_images.sql`
+   - `20261028000003_copy_sets.sql`
+   - `20261028000004_ad_variants_and_logos.sql`
+   - `20261028000005_sprint5_review_fixes.sql` (the latest `20261028` file)
+
+   All five contain `REVOKE` statements (the anon role loses its grants on the new tables and on the simulated-spend function, and authenticated users lose update, delete or truncate on the new tables). The Supabase connector may refuse a `REVOKE` at its approval step, as noted above. If it does, Rory runs that migration file in full in the Supabase SQL Editor (Supabase → SQL Editor → New query, paste the file, Run), and notes it in `docs/refinement/sprint-5.md`. Don't skip the `REVOKE` lines: without them the anon role keeps its default grants on the new tables.
+2. **Google key for pictures.** In Vercel → campaign-studio → Settings → Environment Variables, add `GOOGLE_GENERATIVE_AI_API_KEY` for **Production** only (previews use the mock image model through `MODEL_PROVIDER_OVERRIDE=mock`). Without it, the startup check names the missing key, and no picture can be drawn.
+3. **Redeploy** by pushing to GitHub; the after-deploy Action resyncs Inngest.
