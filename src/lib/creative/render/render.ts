@@ -2,7 +2,7 @@ import { ImageResponse } from "next/og";
 import { logoPlate, pickButton, pickTextPair, recordRatio, contrastRatio, type PaletteColour } from "./colour";
 import { fitText, missingGlyphs, normaliseText, wrapText, type FitResult } from "./fit";
 import { imageResponseFonts, loadOpenType, mapBrandFont, type BundledFamily, type FontMatch, type FontWeight } from "./fonts";
-import { AD_SIZE, LAYOUT_SPECS, drawLayout, linesHeight, type DrawProps, type LayoutId, type TextStyle } from "./layouts";
+import { AD_SIZE, LAYOUT_SPECS, SIMULATED_LABEL_BOX, SIMULATED_LABEL_TEXT, drawLayout, linesHeight, type DrawProps, type LayoutId, type TextStyle } from "./layouts";
 import { prepareLogo, type LogoInput } from "./logo";
 
 // Renders a finished ad (S5-3, rule 8): the picture, the words, the logo and the
@@ -26,6 +26,8 @@ export type RenderInput = {
   fontPrimary: string;
   fontSecondary: string;
   brandName: string;
+  /** The picture came from the mock image model: the ad is labelled "Simulated image" (rule 1). */
+  simulated?: boolean;
 };
 
 export type RenderChecks = {
@@ -56,6 +58,8 @@ export type RenderChecks = {
   legalNote?: string;
   logo: "drawn" | "none";
   fonts: { primary: FontMatch; secondary: FontMatch };
+  /** True when the ad carries the "Simulated image" label. Ads drawn before review finding 3 don't record it. */
+  simulatedLabel?: boolean;
 };
 
 export type RenderResult = { png: Buffer; checks: RenderChecks } | { refused: string };
@@ -189,6 +193,15 @@ export async function renderAd(input: RenderInput): Promise<RenderResult> {
   const headlineFit = chosen.headline;
   const bodyFit = chosen.body;
 
+  // The "Simulated image" label, in the body font at its semibold weight; it must fit its pill.
+  const labelStyle: TextStyle = { family: secondary.family, weight: 600, letterSpacing: 0 };
+  if (input.simulated) {
+    if (!fonts.has(`${labelStyle.family}:600`)) fonts.set(`${labelStyle.family}:600`, await loadOpenType(labelStyle.family, 600));
+    const b = SIMULATED_LABEL_BOX;
+    const fit = fitText(SIMULATED_LABEL_TEXT, fontOf(labelStyle), [b.size], b.width - 2 * b.padX, 1, 0);
+    if (!fit.ok) return { refused: `the "${SIMULATED_LABEL_TEXT}" label doesn't fit` };
+  }
+
   const props: DrawProps = {
     spec,
     picture: `data:${pictureType};base64,${input.image.bytes.toString("base64")}`,
@@ -198,6 +211,7 @@ export async function renderAd(input: RenderInput): Promise<RenderResult> {
     body: { size: bodyFit.size, lines: bodyFit.lines, style: styles.body },
     cta: { size: ctaFit.size, text: cta, width: ctaWidth, style: styles.cta },
     legal: { size: legalFit.size, paragraphs: legalFit.paragraphs, style: styles.legal },
+    ...(input.simulated ? { simulated: { style: labelStyle } } : {}),
   };
 
   let png: Buffer;
@@ -240,6 +254,7 @@ export async function renderAd(input: RenderInput): Promise<RenderResult> {
       ...(legalFit.paragraphs.length === 0 ? { legalNote: "no legal line in the kit" } : {}),
       logo: logo ? "drawn" : "none",
       fonts: { primary, secondary },
+      simulatedLabel: input.simulated === true,
     },
   };
 }

@@ -104,6 +104,19 @@ export const LAYOUT_SPECS: Record<LayoutId, LayoutSpec> = {
 
 export type TextStyle = { family: BundledFamily; weight: FontWeight; letterSpacing: number };
 
+/**
+ * Where "Simulated image" is drawn on an ad whose picture came from the mock
+ * image model (rule 1, review finding 3). The mock's own stamp sits bottom
+ * right of the picture, which Full bleed covers with its scrim and Split and
+ * Card crop, so the renderer draws its own label in the ad's top right corner:
+ * over the picture in Full bleed and Split, and on the panel's margin in Card,
+ * clear of the logo in all three. An opaque pill, so its contrast doesn't
+ * depend on what is behind it.
+ */
+export const SIMULATED_LABEL_TEXT = "Simulated image";
+export const SIMULATED_LABEL_BOX = { top: 14, right: 14, width: 214, height: 40, size: 22, padX: 14 };
+export const SIMULATED_LABEL_COLOURS = { fill: "#161616", text: "#FFFFFF" };
+
 export type DrawProps = {
   spec: LayoutSpec;
   picture: string;
@@ -113,6 +126,8 @@ export type DrawProps = {
   body: { size: number; lines: string[]; style: TextStyle };
   cta: { size: number; text: string; width: number; style: TextStyle };
   legal: { size: number; paragraphs: string[][]; style: TextStyle };
+  /** Draws the "Simulated image" label (the picture came from the mock image model). */
+  simulated?: { style: TextStyle };
 };
 
 function Lines(props: { lines: string[]; size: number; lineHeight: number; style: TextStyle; color: string }) {
@@ -308,7 +323,41 @@ function Card(p: DrawProps): ReactElement {
 
 const DRAW: Record<LayoutId, (p: DrawProps) => ReactElement> = { "full-bleed": FullBleed, split: Split, card: Card };
 
-/** The layout as a React element for ImageResponse (Satori). */
+function SimulatedLabel({ style }: { style: TextStyle }) {
+  const b = SIMULATED_LABEL_BOX;
+  return (
+    <div
+      style={{
+        display: "flex",
+        position: "absolute",
+        top: b.top,
+        right: b.right,
+        width: b.width,
+        height: b.height,
+        alignItems: "center",
+        justifyContent: "center",
+        borderRadius: b.height / 2,
+        background: SIMULATED_LABEL_COLOURS.fill,
+        color: SIMULATED_LABEL_COLOURS.text,
+        fontFamily: style.family,
+        fontWeight: style.weight,
+        fontSize: b.size,
+        whiteSpace: "nowrap",
+      }}
+    >
+      {SIMULATED_LABEL_TEXT}
+    </div>
+  );
+}
+
+/** The layout as a React element for ImageResponse (Satori), with the "Simulated image" label on top when the picture is simulated. */
 export function drawLayout(props: DrawProps): ReactElement {
-  return DRAW[props.spec.id](props);
+  const ad = DRAW[props.spec.id](props);
+  if (!props.simulated) return ad;
+  return (
+    <div style={{ display: "flex", position: "relative", width: AD_SIZE, height: AD_SIZE }}>
+      {ad}
+      <SimulatedLabel style={props.simulated.style} />
+    </div>
+  );
 }

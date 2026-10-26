@@ -4,8 +4,8 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 import { beforeAll, describe, expect, it } from "vitest";
-import { AA_LARGE, AA_TEXT } from "@/lib/creative/render/colour";
-import { LAYOUT_IDS, LAYOUT_SPECS, type LayoutId } from "@/lib/creative/render/layouts";
+import { AA_LARGE, AA_TEXT, contrastRatio } from "@/lib/creative/render/colour";
+import { LAYOUT_IDS, LAYOUT_SPECS, SIMULATED_LABEL_BOX, SIMULATED_LABEL_COLOURS, type LayoutId } from "@/lib/creative/render/layouts";
 import { outlineSvgText } from "@/lib/creative/render/logo";
 import { renderAd, type RenderInput, type RenderResult } from "@/lib/creative/render/render";
 import { FERNHOLLOW, QUILLMOOR, type DemoBrief } from "@/lib/demo/briefs";
@@ -259,5 +259,47 @@ describe("outlineSvgText", () => {
     expect(out).toContain(`<rect width="10" height="10"/>`);
     expect(out).not.toContain("&amp;");
     expect(out).not.toMatch(/<text/);
+  });
+});
+
+describe("review finding 3 (rule 1): a simulated picture is labelled in every layout", () => {
+  // The label's box, from the layouts module, so the region checked is the one drawn.
+  const regionOf = async (png: Buffer) => {
+    const { top, right, width, height } = SIMULATED_LABEL_BOX;
+    return sharp(png).extract({ left: 1080 - right - width, top, width, height }).raw().toBuffer({ resolveWithObject: true });
+  };
+  const dark = (r: number, g: number, b: number) => r < 40 && g < 40 && b < 40;
+  const white = (r: number, g: number, b: number) => r > 235 && g > 235 && b > 235;
+
+  for (const layout of LAYOUT_IDS) {
+    it(`${LAYOUT_SPECS[layout].name}: the checks say so, and the corner holds a dark pill with white words`, async () => {
+      const plain = rendered(await renderAd(inputFor(QUILLMOOR, "quillmoor", layout)));
+      expect(plain.checks.simulatedLabel).toBe(false);
+      const sim = rendered(await renderAd({ ...inputFor(QUILLMOOR, "quillmoor", layout), simulated: true }));
+      expect(sim.checks.simulatedLabel).toBe(true);
+      // Everything else is laid out as before: the label takes nothing from the words.
+      expect(sim.checks.fit).toEqual(plain.checks.fit);
+
+      const { data, info } = await regionOf(sim.png);
+      let darkPixels = 0;
+      let whitePixels = 0;
+      for (let i = 0; i < data.length; i += info.channels) {
+        if (dark(data[i], data[i + 1], data[i + 2])) darkPixels++;
+        if (white(data[i], data[i + 1], data[i + 2])) whitePixels++;
+      }
+      const total = info.width * info.height;
+      expect(darkPixels / total).toBeGreaterThan(0.4); // the pill
+      expect(whitePixels / total).toBeGreaterThan(0.03); // its letters
+      // The same corner of the unlabelled ad has no such pill.
+      const before = await regionOf(plain.png);
+      let plainDark = 0;
+      for (let i = 0; i < before.data.length; i += before.info.channels) if (dark(before.data[i], before.data[i + 1], before.data[i + 2])) plainDark++;
+      expect(plainDark / total).toBeLessThan(0.2);
+      if (SAMPLES) writeFileSync(join(SAMPLE_DIR, `quillmoor-${layout}-simulated.png`), sim.png);
+    });
+  }
+
+  it("the label's colours pass AA for small text", () => {
+    expect(contrastRatio(SIMULATED_LABEL_COLOURS.text, SIMULATED_LABEL_COLOURS.fill)).toBeGreaterThanOrEqual(AA_TEXT);
   });
 });

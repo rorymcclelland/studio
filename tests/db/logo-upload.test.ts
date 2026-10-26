@@ -159,7 +159,7 @@ describe("F-10 logo upload", () => {
     const [l] = await asUser(a.userId, (tx) => tx`select bytes from public.assets where id = ${(res as { assetId: string }).assetId}`);
     const picture = await sharp({ create: { width: 1024, height: 1024, channels: 3, background: "#6B9080" } }).png().toBuffer();
     const rendered = await firstLayoutThatRenders({
-      picture: { png: picture, sha256: "x" },
+      picture: { png: picture, sha256: "x", simulated: false },
       copy: { headline: "See where your money goes", body: "Round up everyday spending into a pot.", cta: "Get the app" },
       legalLines: ["Capital at risk."],
       kit,

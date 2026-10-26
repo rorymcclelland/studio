@@ -15,7 +15,7 @@ import { renderAd, type RenderChecks, type RenderInput } from "./render/render";
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Bump when the renderer's output changes, so browsers fetch the new drawing (it is part of the ETag). */
-export const RENDER_VERSION = 1;
+export const RENDER_VERSION = 2; // 2: the "Simulated image" label (review finding 3)
 
 /** The channels whose copy is composed into ads; search, email and app push stay text (shown beside the gallery). */
 export const AD_CHANNELS = ["paid social", "display"] as const;
@@ -37,7 +37,8 @@ export type AdWords = { headline: string; body: string; cta: string };
 
 /** Everything renderAd needs for one variant, except the layout. */
 export type VariantParts = {
-  picture: { png: Buffer; sha256: string };
+  /** `simulated`: the mock image model drew it, so the ad is labelled "Simulated image" (rule 1). */
+  picture: { png: Buffer; sha256: string; simulated: boolean };
   copy: AdWords;
   legalLines: string[];
   kit: KitSnapshot;
@@ -91,6 +92,7 @@ export function renderInputFor(parts: VariantParts, layout: LayoutId): RenderInp
     fontPrimary: parts.kit.fontPrimary,
     fontSecondary: parts.kit.fontSecondary,
     brandName: parts.kit.brandName,
+    simulated: parts.picture.simulated,
   };
 }
 
@@ -127,9 +129,9 @@ export function kitHash(kit: KitSnapshot): string {
 }
 
 /** The ETag of a drawn ad: the renderer's version and its parts' hashes (assets and copy sets never change, so their ids and hashes are enough). */
-export function adEtag(p: { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot }): string {
+export function adEtag(p: { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot; simulated: boolean }): string {
   const h = createHash("sha256")
-    .update([RENDER_VERSION, p.imageSha256, p.copySetId, p.layout, kitHash(p.kit)].join("|"))
+    .update([RENDER_VERSION, p.imageSha256, p.copySetId, p.layout, kitHash(p.kit), p.simulated ? "simulated" : "real"].join("|"))
     .digest("hex")
     .slice(0, 40);
   return `"ad-${h}"`;
@@ -143,13 +145,13 @@ export async function loadParts(
   kit: KitSnapshot,
   override?: { words: AdWords; legalLines: string[] },
 ): Promise<VariantParts | null> {
-  const [img] = await tx`select bytes, sha256 from public.assets where id = ${imageAssetId} and kind = 'image'`;
+  const [img] = await tx`select bytes, sha256, simulated from public.assets where id = ${imageAssetId} and kind = 'image'`;
   const [cs] = await tx`select channel, set, legal_lines from public.copy_sets where id = ${copySetId}`;
   if (!img || !cs) return null;
   const words = override?.words ?? adWords(cs.channel as string, cs.set);
   if (!words) return null;
   return {
-    picture: { png: await pictureToPng(img.bytes as Buffer), sha256: img.sha256 as string },
+    picture: { png: await pictureToPng(img.bytes as Buffer), sha256: img.sha256 as string, simulated: img.simulated === true },
     copy: words,
     legalLines: override?.legalLines ?? (cs.legal_lines as string[]),
     kit,
@@ -269,8 +271,8 @@ export async function composeVariants(
       pictures.set(
         id,
         asUser(ctx.userId, async (tx) => {
-          const [img] = await tx`select bytes, sha256 from public.assets where id = ${id}`;
-          return img ? { png: await pictureToPng(img.bytes as Buffer), sha256: img.sha256 as string } : null;
+          const [img] = await tx`select bytes, sha256, simulated from public.assets where id = ${id}`;
+          return img ? { png: await pictureToPng(img.bytes as Buffer), sha256: img.sha256 as string, simulated: img.simulated === true } : null;
         }),
       );
     }
@@ -330,7 +332,7 @@ export type DrawableVariant = { id: string; layout: LayoutId; etag: string; imag
 export async function drawableVariant(userId: string, variantId: string): Promise<DrawableVariant | null> {
   if (!UUID.test(variantId)) return null;
   const [v] = await asUser(userId, (tx) => tx`
-    select v.id, v.layout, v.kit, v.image_asset_id, v.copy_set_id, a.sha256, a.discarded_at as image_discarded, s.discarded_at as words_discarded
+    select v.id, v.layout, v.kit, v.image_asset_id, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, s.discarded_at as words_discarded
     from public.ad_variants v
     join public.assets a on a.id = v.image_asset_id
     join public.copy_sets s on s.id = v.copy_set_id
@@ -343,7 +345,7 @@ export async function drawableVariant(userId: string, variantId: string): Promis
     imageAssetId: v.image_asset_id as string,
     copySetId: v.copy_set_id as string,
     kit,
-    etag: adEtag({ imageSha256: v.sha256 as string, copySetId: v.copy_set_id as string, layout: v.layout as string, kit }),
+    etag: adEtag({ imageSha256: v.sha256 as string, copySetId: v.copy_set_id as string, layout: v.layout as string, kit, simulated: v.simulated === true }),
   };
 }
 

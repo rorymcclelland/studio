@@ -6,7 +6,10 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { insertImage, toWebp } from "@/lib/assets/store";
 import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
+import { SIMULATED_LABEL_BOX } from "@/lib/creative/render/layouts";
+import { adEtag, drawableVariant, drawVariant, loadParts, type KitSnapshot } from "@/lib/creative/variants";
 import { drawMockImage } from "@/lib/models/mock-image";
+import sharp from "sharp";
 import { createMember, truncateAll } from "../helpers/db";
 
 type Member = { userId: string; workspaceId: string };
@@ -129,6 +132,24 @@ describe("ad_variants tenancy and rules", () => {
     await getSql()`delete from public.agent_runs where id = ${fa.run}`;
     const [row] = await asUser(a.userId, (tx) => tx`select run_id from public.ad_variants where id = ${v}`);
     expect(row.run_id).toBeNull();
+  });
+
+  it("review finding 3: a variant on a simulated picture is drawn with the label, and the flag is part of its ETag", async () => {
+    const parts = await asUser(a.userId, (tx) => loadParts(tx, fa.image, fa.set, kit as KitSnapshot));
+    expect(parts?.picture.simulated).toBe(true);
+    const drawable = await drawableVariant(a.userId, va);
+    expect(drawable).not.toBeNull();
+    const [img] = await getSql()`select sha256 from public.assets where id = ${fa.image}`;
+    const base = { imageSha256: img.sha256 as string, copySetId: fa.set, layout: drawable!.layout, kit: drawable!.kit };
+    expect(drawable!.etag).toBe(adEtag({ ...base, simulated: true }));
+    expect(drawable!.etag).not.toBe(adEtag({ ...base, simulated: false }));
+    const drawn = await drawVariant(a.userId, drawable!);
+    if ("refused" in drawn) throw new Error(drawn.refused);
+    const { top, right, width, height } = SIMULATED_LABEL_BOX;
+    const { data, info } = await sharp(drawn.png).extract({ left: 1080 - right - width, top, width, height }).raw().toBuffer({ resolveWithObject: true });
+    let pill = 0;
+    for (let i = 0; i < data.length; i += info.channels) if (data[i] < 40 && data[i + 1] < 40 && data[i + 2] < 40) pill++;
+    expect(pill / (width * height)).toBeGreaterThan(0.4);
   });
 
   it("the anonymous role sees nothing", async () => {
