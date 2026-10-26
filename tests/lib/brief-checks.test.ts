@@ -126,6 +126,9 @@ describe("review 2 and 18: market notes' names and figures", () => {
     expect(undeclaredNames("It fills a gap the UK-focused apps miss, paying 4.60% AER on an ISA.", [], input)).toEqual([]);
     expect(undeclaredNames("Acme Outdoor launched repair.", [], input)).toEqual(["Acme Outdoor"]);
     expect(undeclaredNames("Rates at Northbank Savings fell.", [], input)).toEqual(["Northbank Savings"]);
+    expect(undeclaredNames("More UK adults now run a budget, and Britons and Brits cut subscriptions.", [], input)).toEqual([]);
+    const { quantityInWords } = await import("@/lib/brief/checks");
+    expect(quantityInWords("Many budgeters have not yet moved to an app.")).toBeTruthy();
   });
   it("the brief sees market notes with their declared names replaced", async () => {
     const { withoutNames } = await import("@/lib/brief/gather");

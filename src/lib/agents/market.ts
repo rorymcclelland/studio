@@ -121,7 +121,7 @@ const COMMON = new Set(
     "uk u.k gb britain british great england english scotland scottish wales welsh ireland irish northern london europe european eu " +
     "north south east west midlands yorkshire humber highlands lake district peak dales cornwall devon cumbria snowdonia " +
     "vat gdp ons ai app apps i a an the this that these those it its our we they " +
-    "aer apr isa isas lisa sipp pension energy price cap autumn budget spring statement"
+    "aer apr isa isas lisa sipp pension energy price cap autumn budget spring statement britons brits brit"
   ).split(" "),
 );
 
@@ -130,7 +130,8 @@ const STARTERS = new Set(
   (
     "among according after before in on at for with by from since while as across unlike like despite during over under " +
     "some many both each every all one two few several other new its their his her this that these those the a an " +
-    "when where if although though but and or so yet meanwhile separately also still recently today last next only even"
+    "when where if although though but and or so yet meanwhile separately also still recently today last next only even " +
+    "more fewer most less nearly almost about around over"
   ).split(" "),
 );
 
@@ -188,6 +189,7 @@ export const marketAgent = defineAgent({
     "The brand is fictional: search about the category and its customers, never about the brand.",
     "You have three searches; make each one count.",
     "Write four to eight short notes (each text at most 400 characters), each one of: trend (what customers are doing or wanting), timing (when they buy), rival_move (what a named company in the category has done), gap (something customers want that the category does not offer well).",
+    "Write about events relative to the month given: something a page said was coming that is now past is described in the past tense, or left out.",
     "Every note cites one to three pages your searches returned, by URL, and rests only on what those pages say.",
     "Use a figure only if a page you cite states it, written as it is there: code reads each cited page and checks every figure and date is on it. Never estimate. Do not write quantities in words (\"most\", \"half of\").",
     "List in `names` every real company, brand, product or publication the note names, exactly as written in it. Any capitalised name that is not a place or a date must be listed.",

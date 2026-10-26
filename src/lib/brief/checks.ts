@@ -68,7 +68,7 @@ const NUMBER_WORD =
 // F-14: loose quantities used as claims ("most are", "the vast majority of
 // lapsed customers", "many will"). Superlatives ("our most bought jacket"),
 // time ("most of the season") and small amounts ("a few layers") are fine.
-const PEOPLE = "customers|people|buyers|users|members|walkers|shoppers|subscribers|households|parents|savers|adults|families|consumers|readers|visitors|clients|owners";
+const PEOPLE = "customers|people|buyers|users|members|budgeters|britons|brits|borrowers|investors|renters|homeowners|walkers|shoppers|subscribers|households|parents|savers|adults|families|consumers|readers|visitors|clients|owners";
 const VERBS = "are|were|have|had|will|would|want|wants|need|needs|buy|buys|bought|say|said|prefer|prefers|use|used|agree|agreed|come|came|return|returned|open|opened|own|live|lapse|lapsed";
 const TIME = "season|year|day|week|month|winter|summer|spring|autumn|time|evening|morning|weekend|walk|way";
 const QUANT = "most|many|the (?:vast |great |overwhelming )?majority|a (?:large |small |good |significant |growing )?(?:number|proportion|share|minority|majority)|the bulk|hardly any|(?:nearly|almost|virtually) (?:all|everyone|everybody|every customer)";
