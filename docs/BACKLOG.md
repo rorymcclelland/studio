@@ -114,7 +114,7 @@ Fixed during the production check (26 Oct, all deployed and tested): five search
 | S5-4 | Variant gallery: pick, discard, new picture, new words, edit words | M | Ready, Sprint 5 |
 | F-22 | Test pack for Rory's hand checks (Markdown and PDF) | S | Ready, Sprint 5 |
 
-Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads in about two minutes for under 20p. Needs Rory's Google key in Vercel first. Detail: `docs/refinement/sprint-5.md`.
+Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads in about two minutes for under 20p. Rory's Google key is in Vercel (Production, Sensitive). Detail: `docs/refinement/sprint-5.md`.
 
 ## Not yet in a sprint (ranked)
 

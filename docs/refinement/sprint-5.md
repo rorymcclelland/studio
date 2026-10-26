@@ -279,4 +279,4 @@ If it doesn't fit, F-18a can go first to the backlog (an invite can already be r
 | Q6 | Keep Sonnet for the Market agent | Revisit with F-16a |
 | Q7 | Bundled open fonts, nearest match shown | S5-3 as written |
 | Q8 | Testimonials refused | S5-2 checks refuse quotation marks around a customer's words |
-| Q9 | Rory adds `GOOGLE_GENERATIVE_AI_API_KEY` in Vercel (Production, Sensitive) with a Google Cloud budget alert, before the production check | Pending, Rory |
+| Q9 | Rory adds `GOOGLE_GENERATIVE_AI_API_KEY` in Vercel (Production, Sensitive) with a Google Cloud budget alert, before the production check | Done, 26 Oct 2026 (key in Vercel, Production, Sensitive) |
