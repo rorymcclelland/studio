@@ -93,18 +93,32 @@ Fixed during the production check (26 Oct, all deployed and tested): five search
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
 | F-16a | First real-model eval run in GitHub Actions, report committed; add today's production replies (the long note, the possessive names, the brand-name figure) as regression cases | F-16 split | Backlog, returned from Sprint 4 |
-| F-17 | The "After production deploy" Action has never run: Vercel does not appear to send GitHub deployment events. Check the repo's Deployments, then trigger on Vercel's event or a check after the CI run | F-15 split | Backlog, returned from Sprint 4 |
-| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Backlog, from Sprint 4 review |
+| F-17 | The "After production deploy" Action has never run: Vercel does not appear to send GitHub deployment events. Check the repo's Deployments, then trigger on Vercel's event or a check after the CI run | F-15 split | Ready, Sprint 5 |
+| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Split: F-18a (new sign-in link) Ready, Sprint 5; the email service stays Backlog |
 | F-19 | A withdrawn sign-off shows as "expired" in the history; give it its own state | Sprint 4 build | Backlog, from Sprint 4 review |
 | F-20 | The persona facts check compares segment keys only, not age or region | Sprint 4 build | Backlog, from Sprint 4 review |
-| F-21 | Two runs started together can both pass the cap check before either is charged; and a Market refresh costs 15 to 20p. Reserve the estimate when a call starts; consider Haiku for the Market agent | Sprint 4 review and production check | Backlog, from Sprint 4 review |
-| F-22 | A test pack (Markdown and PDF in `docs/testing/`) for each sprint's hand checks, per the sprint-close routine agreed 26 Oct; Sprint 4's checks were given in chat | Sprint 4 close | Folded into the Sprint 5 refinement |
+| F-21 | Two runs started together can both pass the cap check before either is charged; and a Market refresh costs 15 to 20p. Reserve the estimate when a call starts; consider Haiku for the Market agent | Sprint 4 review and production check | Ready, Sprint 5 (the reservation; the Market model stays Sonnet, Q6) |
+| F-22 | A test pack (Markdown and PDF in `docs/testing/`) for each sprint's hand checks, per the sprint-close routine agreed 26 Oct; Sprint 4's checks were given in chat | Sprint 4 close | Ready, Sprint 5 |
+
+## Sprint 5: Creative I, copy and imagery (refined and confirmed 26 October 2026)
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-21 | Reserve spend before each call, so concurrent calls can't pass the cap together | S | Ready, Sprint 5 |
+| F-17 | Sync Inngest after each deploy by polling the health endpoint for the new commit | S | Ready, Sprint 5 |
+| F-18a | New sign-in link for an invitee (split from F-18; the email service stays in the backlog) | S | Ready, Sprint 5 |
+| F-10 | Logo upload (SVG and PNG) and the sanitiser's false refusals | S/M | Ready, Sprint 5 |
+| S5-1 | Images through the provider layer (Nano Banana 2.1, 1K), assets in Postgres, Imagery agent (Haiku) with prompt and vision checks | L | Ready, Sprint 5 |
+| S5-2 | Copy agent (Sonnet): sets per audience and channel, channel limits and the brief's checks, no testimonials | M | Ready, Sprint 5 |
+| S5-3 | Ad templates composed in code: three 1:1 layouts, bundled open fonts, contrast and fit checked | L | Ready, Sprint 5 |
+| S5-4 | Variant gallery: pick, discard, new picture, new words, edit words | M | Ready, Sprint 5 |
+| F-22 | Test pack for Rory's hand checks (Markdown and PDF) | S | Ready, Sprint 5 |
+
+Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads in about two minutes for under 20p. Needs Rory's Google key in Vercel first. Detail: `docs/refinement/sprint-5.md`.
 
 ## Not yet in a sprint (ranked)
 
-Proposed for Sprint 5 (Creative I: copy and imagery), to refine and confirm: the Copy agent, the Imagery agent, code-drawn ad templates, the variant gallery, F-10 with logo upload, F-21 (images make the cap race expensive) and F-17 (Sprint 5 changes the run function, so the sync matters).
-
-1. F-18 Invitees signing back in, before more interviewers are invited (M)
+1. F-18 Email service so invitees can sign in without a new link (M; F-18a in Sprint 5 covers the need for now)
 2. F-16a First real-model eval report and regression cases (S)
 3. F-20 Persona facts check compares age and region (S)
 4. F-19 Withdrawn sign-offs get their own state (S)
@@ -122,3 +136,4 @@ Proposed for Sprint 5 (Creative I: copy and imagery), to refine and confirm: the
 | 26 Oct 2026 | Sprint 3 closed: Audience and Brief agents live on production; evidence checks in code (0009); Inngest resynced after the run-function change; Sprint 4 proposed |
 | 26 Oct 2026 | Sprint 4 refined: invites by link Rory sends himself (Supabase's own email only reaches team members); real rival names allowed in market notes only, rule 2 to be reworded; previews on a second free Supabase project; market on Sonnet, personas and test plan on Haiku; sign-offs open 14 days |
 | 26 Oct 2026 | Sprint 4 closed: demo gate 1 met on the public address; Market agent fixed in four production rounds (three searches, figures checked against the cited pages, notes that fail are left out); previews on their own Supabase project; Sprint 5 proposed |
+| 26 Oct 2026 | Sprint 5 refined: Nano Banana 2.1 at 1K; images kept in Postgres; Copy on Sonnet, Imagery and vision checks on Haiku; vision check for text now; SVG and PNG logos; bundled open fonts; no testimonials; Market stays on Sonnet |
