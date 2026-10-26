@@ -1,10 +1,10 @@
-import { generateText } from "ai";
-import { resolveAgentModel, type AgentKey } from "@/config/agents";
-import { asUser } from "@/lib/db/scoped";
+import { APICallError, generateImage as sdkGenerateImage, generateText, type ModelMessage } from "ai";
+import { resolveAgentModel, resolveImageModel, type AgentKey } from "@/config/agents";
+import { asUser, type Tx } from "@/lib/db/scoped";
 import { isOwnerEmail, ownerEmail, ownerReservePence, workspaceCapPence } from "@/lib/env";
 import { dailyCapPence } from "./cap";
-import { costPence, estimateTokens, searchCostPence } from "./cost";
-import { getLanguageModel, getWebSearchTool, MissingKeyError } from "./registry";
+import { costPence, estimateTokens, imageCostPence, searchCostPence } from "./cost";
+import { getImageModel, getLanguageModel, getWebSearchTool, MissingKeyError } from "./registry";
 
 export class CapExceededError extends Error {
   constructor(public spentPence: number, public capPence: number, public estimatePence: number, public scope: "app" | "workspace" = "app") {
@@ -20,9 +20,9 @@ export class CapExceededError extends Error {
 
 export type SpendPosition = {
   owner: boolean;
-  /** This workspace today. */
+  /** This workspace today: charged plus live reservations (F-21). */
   workspace: number;
-  /** The whole app today, and the owner's part of it. */
+  /** The whole app today, and the owner's part of it, reservations included. */
   total: number;
   ownerSpent: number;
   /** What this user's runs may still spend today, all limits considered. */
@@ -30,15 +30,11 @@ export type SpendPosition = {
   scope: "app" | "workspace";
 };
 
-/** Where a user stands against the caps (rule 5): the owner may use the whole daily cap; others get their workspace's limit, and never the owner's reserve. */
-export async function spendPosition(userId: string, workspaceId: string): Promise<SpendPosition> {
-  const r = await asUser(userId, async (tx) => {
-    const [x] = await tx`
-      select public.current_user_email() as email, public.workspace_spend_today_pence(${workspaceId}) as ws,
-        s.owner_pence, s.total_pence
-      from public.spend_split_today(${ownerEmail()}) s`;
-    return x;
-  });
+async function positionIn(tx: Tx, workspaceId: string): Promise<SpendPosition> {
+  const [r] = await tx`
+    select public.current_user_email() as email, public.workspace_spend_today_pence(${workspaceId}) as ws,
+      s.owner_pence, s.total_pence
+    from public.spend_split_today(${ownerEmail()}) s`;
   const owner = isOwnerEmail(r.email);
   const total = Number(r.total_pence);
   const ownerSpent = Number(r.owner_pence);
@@ -53,13 +49,77 @@ export async function spendPosition(userId: string, workspaceId: string): Promis
     : { owner, workspace, total, ownerSpent, limit: appRoom, scope: "app" };
 }
 
-async function checkCaps(userId: string, workspaceId: string, estimate: number): Promise<void> {
-  const p = await spendPosition(userId, workspaceId);
-  const spent = p.scope === "workspace" ? p.workspace : p.total;
-  if (spent + estimate > p.limit) throw new CapExceededError(spent, Math.max(0, p.limit), estimate, p.scope);
+/** Where a user stands against the caps (rule 5): the owner may use the whole daily cap; others get their workspace's limit, and never the owner's reserve. */
+export async function spendPosition(userId: string, workspaceId: string): Promise<SpendPosition> {
+  return asUser(userId, (tx) => positionIn(tx, workspaceId));
+}
+
+// F-21: every cap check takes the app-wide lock, then the workspace's, always in
+// that order (so two checks never deadlock). The app-wide lock is what keeps
+// the owner and guest split consistent, since a guest's room depends on what
+// every workspace has spent; the workspace lock keeps the per-workspace limit
+// serialised on its own if the app-wide one is ever relaxed.
+const APP_LOCK = "studio:spend:app";
+const RESERVATION_LIFETIME = "10 minutes";
+
+/**
+ * Checks the caps and reserves the call's estimate in one transaction, under
+ * the locks, so calls started together can't all pass a cap only some fit.
+ * Returns the reservation's id; the caller must release it.
+ */
+async function reserve(userId: string, workspaceId: string, estimate: number, ids: { runId?: string; stepId?: string }): Promise<string> {
+  return asUser(userId, async (tx) => {
+    await tx`select pg_advisory_xact_lock(hashtextextended(${APP_LOCK}, 0))`;
+    await tx`select pg_advisory_xact_lock(hashtextextended(${`studio:spend:${workspaceId}`}, 0))`;
+    // Reservations left by crashed calls stop counting after 10 minutes; tidy this workspace's.
+    await tx`delete from public.spend_reservations
+             where workspace_id = ${workspaceId} and created_at <= now() - ${RESERVATION_LIFETIME}::interval`;
+    const p = await positionIn(tx, workspaceId);
+    const spent = p.scope === "workspace" ? p.workspace : p.total;
+    if (spent + estimate > p.limit) throw new CapExceededError(spent, Math.max(0, p.limit), estimate, p.scope);
+    const [r] = await tx`
+      insert into public.spend_reservations (workspace_id, run_id, step_id, pence)
+      values (${workspaceId}, ${ids.runId ?? null}, ${ids.stepId ?? null}, ${estimate})
+      returning id`;
+    return r.id as string;
+  });
+}
+
+type LedgerRow = {
+  agent: string;
+  provider: string;
+  model: string;
+  inputTokens: number;
+  outputTokens: number;
+  searches?: number;
+  images?: number;
+  cost: number;
+};
+
+/** Charges the real cost (if any) and drops the reservation in one transaction, so the spend is never counted twice or not at all. */
+async function settle(
+  userId: string,
+  workspaceId: string,
+  reservationId: string,
+  ids: { runId?: string; stepId?: string },
+  row: LedgerRow | null,
+): Promise<void> {
+  await asUser(userId, async (tx) => {
+    if (row) {
+      await tx`
+        insert into public.usage_ledger
+          (workspace_id, run_id, step_id, agent, provider, model, input_tokens, output_tokens, search_requests, images, cost_pence)
+        values (${workspaceId}, ${ids.runId ?? null}, ${ids.stepId ?? null}, ${row.agent}, ${row.provider}, ${row.model},
+                ${row.inputTokens}, ${row.outputTokens}, ${row.searches ?? 0}, ${row.images ?? 0}, ${row.cost})`;
+    }
+    await tx`delete from public.spend_reservations where id = ${reservationId}`;
+  });
 }
 
 export class ProviderError extends Error {}
+
+/** A picture sent with a text call, for a vision check (S5-1). */
+export type ImageInput = { data: Uint8Array; mediaType: "image/webp" | "image/png" | "image/jpeg" };
 
 export type GenerateInput = {
   agent: AgentKey;
@@ -71,6 +131,8 @@ export type GenerateInput = {
   prompt: string;
   /** S4-3: let the model search the web, at most `maxUses` times (counted against the cap). */
   webSearch?: { maxUses: number };
+  /** S5-1: pictures for the model to look at, sent after the prompt's text. */
+  images?: ImageInput[];
 };
 
 /** A page the model's search returned or cited, with the passages it cited. */
@@ -92,11 +154,15 @@ export type GenerateResult = {
 const ATTEMPTS = 2; // one retry (S1-4 #5)
 const TIMEOUT_MS = 60_000;
 const SEARCH_TIMEOUT_MS = 180_000;
+const IMAGE_TIMEOUT_MS = 120_000;
+// A 1K picture is about 1,400 input tokens to Claude (width x height / 750); estimated generously.
+const TOKENS_PER_IMAGE_INPUT = 1_600;
 
 /**
- * The only way the app calls a model. Checks the cap first (rule 5), retries
- * once, and records every call that returned tokens in the usage ledger
- * (rule 4). API keys never enter the prompt: they live in the provider client.
+ * The only way the app calls a text model. Checks the cap and reserves the
+ * estimate first (rule 5, F-21), retries once, and records every call that
+ * returned tokens in the usage ledger (rule 4). API keys never enter the
+ * prompt: they live in the provider client.
  */
 export async function generate(input: GenerateInput): Promise<GenerateResult> {
   const cfg = resolveAgentModel(input.agent);
@@ -104,68 +170,192 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
   // Search results come back into the prompt and are re-read on each search, so
   // a search call is estimated generously (production: 5 searches read 140k tokens).
   const searchTokens = input.webSearch ? input.webSearch.maxUses * 30000 : 0;
+  const imageTokens = (input.images?.length ?? 0) * TOKENS_PER_IMAGE_INPUT;
   const estimate =
-    costPence(cfg.provider, cfg.model, estimateTokens(fullText) + searchTokens, cfg.maxOutputTokens) +
+    costPence(cfg.provider, cfg.model, estimateTokens(fullText) + searchTokens + imageTokens, cfg.maxOutputTokens) +
     (input.webSearch ? searchCostPence(cfg.provider, input.webSearch.maxUses) : 0);
-  await checkCaps(input.userId, input.workspaceId, estimate);
+  const ids = { runId: input.runId, stepId: input.stepId };
+  const reservation = await reserve(input.userId, input.workspaceId, estimate, ids);
+  let settled = false;
+  const release = async (row: LedgerRow | null) => {
+    settled = true;
+    await settle(input.userId, input.workspaceId, reservation, ids, row);
+  };
 
-  const model = getLanguageModel(cfg.provider, cfg.model);
-  const tools = input.webSearch ? { web_search: getWebSearchTool(cfg.provider, input.webSearch.maxUses) } : undefined;
-  let lastError: unknown;
-  // A search call is not retried here (the searches may already have been charged), and gets longer.
-  const attemptsAllowed = input.webSearch ? 1 : ATTEMPTS;
-  const timeout = input.webSearch ? SEARCH_TIMEOUT_MS : TIMEOUT_MS;
-  for (let attempt = 1; attempt <= attemptsAllowed; attempt++) {
-    const started = Date.now();
-    try {
-      const result = await generateText({
-        model,
-        instructions: input.instructions,
-        prompt: input.prompt,
-        maxOutputTokens: cfg.maxOutputTokens,
-        ...(tools ? { tools } : {}),
-        maxRetries: 0,
-        abortSignal: AbortSignal.timeout(timeout),
-      });
-      const inputTokens = result.usage.inputTokens ?? 0;
-      const outputTokens = result.usage.outputTokens ?? 0;
-      const { searches, sources } = input.webSearch ? readSearch(result, input.webSearch.maxUses) : { searches: 0, sources: [] };
-      const cost = costPence(cfg.provider, cfg.model, inputTokens, outputTokens) + searchCostPence(cfg.provider, searches);
-      if (inputTokens + outputTokens > 0 || searches > 0) {
-        await asUser(input.userId, (tx) => tx`
-          insert into public.usage_ledger
-            (workspace_id, run_id, step_id, agent, provider, model, input_tokens, output_tokens, search_requests, cost_pence)
-          values (${input.workspaceId}, ${input.runId ?? null}, ${input.stepId ?? null}, ${input.agent},
-                  ${cfg.provider}, ${cfg.model}, ${inputTokens}, ${outputTokens}, ${searches}, ${cost})`);
+  try {
+    const model = getLanguageModel(cfg.provider, cfg.model);
+    const tools = input.webSearch ? { web_search: getWebSearchTool(cfg.provider, input.webSearch.maxUses) } : undefined;
+    const messages: ModelMessage[] | null = input.images?.length
+      ? [{ role: "user", content: [{ type: "text", text: input.prompt }, ...input.images.map((i) => ({ type: "file" as const, data: i.data, mediaType: i.mediaType }))] }]
+      : null;
+    let lastError: unknown;
+    // A search call is not retried here (the searches may already have been charged), and gets longer.
+    const attemptsAllowed = input.webSearch ? 1 : ATTEMPTS;
+    const timeout = input.webSearch ? SEARCH_TIMEOUT_MS : TIMEOUT_MS;
+    for (let attempt = 1; attempt <= attemptsAllowed; attempt++) {
+      const started = Date.now();
+      try {
+        const result = await generateText({
+          model,
+          instructions: input.instructions,
+          ...(messages ? { messages } : { prompt: input.prompt }),
+          maxOutputTokens: cfg.maxOutputTokens,
+          ...(tools ? { tools } : {}),
+          maxRetries: 0,
+          abortSignal: AbortSignal.timeout(timeout),
+        });
+        const inputTokens = result.usage.inputTokens ?? 0;
+        const outputTokens = result.usage.outputTokens ?? 0;
+        const { searches, sources } = input.webSearch ? readSearch(result, input.webSearch.maxUses) : { searches: 0, sources: [] };
+        const cost = costPence(cfg.provider, cfg.model, inputTokens, outputTokens) + searchCostPence(cfg.provider, searches);
+        await release(
+          inputTokens + outputTokens > 0 || searches > 0
+            ? { agent: input.agent, provider: cfg.provider, model: cfg.model, inputTokens, outputTokens, searches, cost }
+            : null,
+        );
+        return {
+          text: result.text,
+          provider: cfg.provider,
+          model: cfg.model,
+          inputTokens,
+          outputTokens,
+          costPence: cost,
+          durationMs: Date.now() - started,
+          searches,
+          sources,
+        };
+      } catch (err) {
+        if (err instanceof MissingKeyError) throw err;
+        lastError = err;
+        if (input.webSearch) {
+          // The provider may have run and charged the searches before failing: record the full allowance, so the meter never under-counts.
+          const uses = input.webSearch.maxUses;
+          await release({ agent: input.agent, provider: cfg.provider, model: cfg.model, inputTokens: 0, outputTokens: 0, searches: uses, cost: searchCostPence(cfg.provider, uses) });
+        }
       }
-      return {
-        text: result.text,
+    }
+    const message = lastError instanceof Error ? lastError.message : String(lastError);
+    throw new ProviderError(`${cfg.provider} failed after ${attemptsAllowed} attempt${attemptsAllowed === 1 ? "" : "s"}: ${message}`);
+  } finally {
+    // Whatever happened, the call holds no reservation once it is over.
+    if (!settled) await settle(input.userId, input.workspaceId, reservation, ids, null);
+  }
+}
+
+export type GenerateImageInput = {
+  /** The agent the picture is for, as named in the ledger. */
+  agent: AgentKey;
+  userId: string;
+  workspaceId: string;
+  runId?: string;
+  stepId?: string;
+  prompt: string;
+  aspect: "1:1";
+  /** Varies a redraw. The mock uses it; providers that don't support it ignore it with a warning. */
+  seed?: number;
+  /** Hex colours for the mock image model to paint with (it has no imagination). Real models get the colours in words, in the prompt. */
+  palette?: string[];
+};
+
+export type GenerateImageResult = {
+  bytes: Uint8Array;
+  mediaType: string;
+  provider: string;
+  model: string;
+  size: "1K" | "2K";
+  inputTokens: number;
+  costPence: number;
+  durationMs: number;
+  /** True when the mock model drew it (rule 1: labelled wherever shown). */
+  simulated: boolean;
+};
+
+/**
+ * Whether a failed image call may have been billed. A 4xx answer (bad request,
+ * no key, rate limit, refused prompt) means Google turned the request away
+ * before drawing, so nothing was charged. Anything else (a timeout, a dropped
+ * connection, a 5xx, a reply without a picture) may have come after the
+ * picture was made and billed, so it is charged in full, as failed search calls
+ * are: the meter may over-count a failure, but never under-counts one.
+ */
+export function imageFailureMayBeBilled(err: unknown): boolean {
+  if (APICallError.isInstance(err) && typeof err.statusCode === "number" && err.statusCode >= 400 && err.statusCode < 500) return false;
+  return true;
+}
+
+/**
+ * The only way the app draws a picture (rule 5, S5-1). Checks the cap and
+ * reserves the price of one image first (F-21), makes one attempt with a
+ * timeout and no retry (a retry could pay for a second picture), and records
+ * the image in the usage ledger. The caller's step records it in the trail.
+ */
+export async function generateImage(input: GenerateImageInput): Promise<GenerateImageResult> {
+  const cfg = resolveImageModel();
+  const estimate = imageCostPence(cfg.provider, cfg.model, cfg.size, 1);
+  const ids = { runId: input.runId, stepId: input.stepId };
+  const reservation = await reserve(input.userId, input.workspaceId, estimate, ids);
+  let settled = false;
+  const started = Date.now();
+  try {
+    const model = getImageModel(cfg.provider, cfg.model);
+    try {
+      const result = await sdkGenerateImage({
+        model,
+        prompt: input.prompt,
+        n: 1,
+        aspectRatio: input.aspect,
+        ...(input.seed !== undefined ? { seed: input.seed } : {}),
+        providerOptions: {
+          google: { imageConfig: { imageSize: cfg.size } },
+          ...(cfg.provider === "mock" ? { mock: { palette: input.palette ?? [] } } : {}),
+        },
+        maxRetries: 0,
+        abortSignal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),
+      });
+      const image = result.images[0];
+      if (!image) throw new Error("The image model returned no picture.");
+      const inputTokens = result.usage.inputTokens ?? 0;
+      settled = true;
+      await settle(input.userId, input.workspaceId, reservation, ids, {
+        agent: input.agent,
         provider: cfg.provider,
         model: cfg.model,
         inputTokens,
-        outputTokens,
-        costPence: cost,
+        outputTokens: result.usage.outputTokens ?? 0,
+        images: 1,
+        cost: estimate,
+      });
+      return {
+        bytes: image.uint8Array,
+        mediaType: image.mediaType,
+        provider: cfg.provider,
+        model: cfg.model,
+        size: cfg.size,
+        inputTokens,
+        costPence: estimate,
         durationMs: Date.now() - started,
-        searches,
-        sources,
+        simulated: cfg.provider === "mock",
       };
     } catch (err) {
       if (err instanceof MissingKeyError) throw err;
-      lastError = err;
-      if (input.webSearch) {
-        // The provider may have run and charged the searches before failing: record the full allowance, so the meter never under-counts.
-        const uses = input.webSearch.maxUses;
-        const cost = searchCostPence(cfg.provider, uses);
-        await asUser(input.userId, (tx) => tx`
-          insert into public.usage_ledger
-            (workspace_id, run_id, step_id, agent, provider, model, input_tokens, output_tokens, search_requests, cost_pence)
-          values (${input.workspaceId}, ${input.runId ?? null}, ${input.stepId ?? null}, ${input.agent},
-                  ${cfg.provider}, ${cfg.model}, 0, 0, ${uses}, ${cost})`);
+      if (!settled && imageFailureMayBeBilled(err)) {
+        settled = true;
+        await settle(input.userId, input.workspaceId, reservation, ids, {
+          agent: input.agent,
+          provider: cfg.provider,
+          model: cfg.model,
+          inputTokens: 0,
+          outputTokens: 0,
+          images: 1,
+          cost: estimate,
+        });
       }
+      const message = err instanceof Error ? err.message : String(err);
+      throw new ProviderError(`${cfg.provider} image call failed (not retried): ${message}`);
     }
+  } finally {
+    if (!settled) await settle(input.userId, input.workspaceId, reservation, ids, null);
   }
-  const message = lastError instanceof Error ? lastError.message : String(lastError);
-  throw new ProviderError(`${cfg.provider} failed after ${attemptsAllowed} attempt${attemptsAllowed === 1 ? "" : "s"}: ${message}`);
 }
 
 type SearchResultShape = {
@@ -194,4 +384,3 @@ export function readSearch(result: SearchResultShape, maxUses: number): { search
   const searches = typeof reported === "number" ? reported : calls > 0 ? calls : byUrl.size > 0 ? maxUses : 0;
   return { searches: Math.min(searches, maxUses), sources: [...byUrl.values()] };
 }
-

@@ -1,6 +1,6 @@
 import type { z } from "zod";
 import type { AgentKey } from "@/config/agents";
-import type { WebSource } from "@/lib/models/generate";
+import type { ImageInput, WebSource } from "@/lib/models/generate";
 import type { PageReader } from "@/lib/web/page-text";
 
 /** What a check gets besides the input and output: the pages a search returned, and a reader for them. */
@@ -39,6 +39,8 @@ export type AgentDefinition<I, O> = {
   salvage?: (input: I, output: O, extra: CheckExtra) => Promise<{ output: O; leftOut: string[] } | null>;
   /** S4-3: the agent may search the web on its first attempt, at most this many times. */
   webSearch?: { maxUses: number };
+  /** S5-1: pictures the model looks at with the prompt, on every attempt (a vision check). They are not stored in the trail; the step's input holds the prompt. */
+  images?: (input: I) => ImageInput[];
   /** A short title for run lists, from the input alone. The caller may pass a better one (with the brand's name) to createRun. */
   label: (input: I) => string;
   /** Deterministic answer for the offline mock model, so demos run without keys. */

@@ -80,6 +80,7 @@ export async function runModelStep<I, O>(
   };
 
   try {
+    const images = agent.images?.(input);
     let currentPrompt = prompt;
     for (;;) {
       attempts += 1;
@@ -93,6 +94,7 @@ export async function runModelStep<I, O>(
         prompt: currentPrompt,
         // Search only on the first attempt; a repair works from the pages already found.
         ...(agent.webSearch && attempts === 1 ? { webSearch: agent.webSearch } : {}),
+        ...(images?.length ? { images } : {}),
       });
       for (const src of res.sources) {
         const had = sources.get(src.url);

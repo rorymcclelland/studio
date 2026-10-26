@@ -106,11 +106,16 @@ describe("model layer", () => {
   });
 
   it("S1-4 #6: a missing API key for a configured provider is named", () => {
+    // S5-1: the image model is Google's, so its key is needed too.
     expect(missingProviderKeys({ MODEL_PROVIDER_OVERRIDE: "" })).toEqual([
       { provider: "anthropic", envVar: "ANTHROPIC_API_KEY" },
+      { provider: "google", envVar: "GOOGLE_GENERATIVE_AI_API_KEY" },
     ]);
     expect(
       missingProviderKeys({ MODEL_PROVIDER_OVERRIDE: "", ANTHROPIC_API_KEY: "sk-ant-x" }),
+    ).toEqual([{ provider: "google", envVar: "GOOGLE_GENERATIVE_AI_API_KEY" }]);
+    expect(
+      missingProviderKeys({ MODEL_PROVIDER_OVERRIDE: "", ANTHROPIC_API_KEY: "sk-ant-x", GOOGLE_GENERATIVE_AI_API_KEY: "g-x" }),
     ).toEqual([]);
     expect(missingProviderKeys({ MODEL_PROVIDER_OVERRIDE: "mock" })).toEqual([]);
   });

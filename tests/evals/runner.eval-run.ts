@@ -18,13 +18,14 @@ const modules: EvalModule[] = await Promise.all(
   wanted.map(async (a) => ((await import(/* @vite-ignore */ `./${a}.eval.ts`)) as { default: EvalModule }).default),
 );
 
-/** A generous estimate: 8,000 tokens in and the full output allowance, twice (one repair) per case. */
+/** A generous estimate: 8,000 tokens in and the full output allowance, twice (one repair) per case, plus any pictures. */
 function estimatePence(mod: EvalModule): number {
   const cfg = AGENT_MODELS[mod.agent as AgentKey];
   const price = cfg && PRICES[`${cfg.provider}:${cfg.model}`];
-  if (!price) return 0;
+  const extra = (mod.extraPencePerCase ?? 0) * mod.cases.length;
+  if (!price) return extra;
   const usd = (2 * (8000 * price.inputPerMTok + cfg.maxOutputTokens * price.outputPerMTok)) / 1e6;
-  return usd * 100 * Number(process.env.USD_TO_GBP ?? 0.79) * mod.cases.length;
+  return usd * 100 * Number(process.env.USD_TO_GBP ?? 0.79) * mod.cases.length + extra;
 }
 
 describe("agent evals", () => {

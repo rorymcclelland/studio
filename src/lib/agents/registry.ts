@@ -3,6 +3,7 @@ import type { AgentDefinition } from "./contract";
 import { audienceAgent } from "./audience";
 import { briefAgent } from "./brief";
 import { copyAgent } from "./copy";
+import { imageCheckAgent, imageryAgent } from "./imagery";
 import { marketAgent } from "./market";
 import { personaAgent } from "./persona";
 import { testPlanAgent } from "./testplan";
@@ -17,7 +18,11 @@ export const AGENTS = {
   testPlan: testPlanAgent,
   market: marketAgent,
   copy: copyAgent,
+  imagery: imageryAgent,
 } as const;
+
+// Definitions that run inside another agent's workflow, never as runs of their own (S5-1: the picture check).
+const INNER_AGENTS = [imageCheckAgent] as unknown as AgentDefinition<unknown, unknown>[];
 
 export type RegisteredAgent = keyof typeof AGENTS;
 
@@ -31,7 +36,7 @@ declare global {
 }
 if (!globalThis.__csMockRegistered) {
   globalThis.__csMockRegistered = true;
-  for (const agent of Object.values(AGENTS)) {
+  for (const agent of [...Object.values(AGENTS), ...INNER_AGENTS]) {
     const answer = (agent as AgentDefinition<unknown, unknown>).mockAnswer;
     if (answer) mockBehaviour.respondWith((p) => answer(p) ?? "");
   }
