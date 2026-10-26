@@ -3,6 +3,7 @@
 import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { checkImagery, imageryAgent, IMAGE_COUNT, type ImageryInput, type ImageryOutput, VISION_QUESTION } from "@/lib/agents/imagery";
+import { checkOne } from "@/lib/agents/imagery-workflow";
 import { createRun, getRun } from "@/lib/agents/runs";
 import { executeRun } from "@/lib/agents/workflows";
 import type { StepTools } from "@/lib/agents/workflow";
@@ -283,6 +284,15 @@ describe("S5-1 Imagery agent", () => {
       expect(checkImagery(input, mock)).toEqual([]);
       expect(checkImagery(input, goodPrompts())).toEqual([]);
     });
+  });
+
+  it("review nit: checking a picture that is missing is a failed check (the picture isn't kept), not a thrown step that Inngest retries", async () => {
+    const missing = "00000000-0000-4000-8000-000000000000";
+    const ctx = { runId: "00000000-0000-4000-8000-000000000001", workspaceId: a.workspaceId, userId: a.userId };
+    const checked = await checkOne(ctx, missing, 1, 1);
+    expect(checked).toMatchObject({ ok: false, reason: "error" });
+    expect((checked as { message: string }).message).toMatch(/picture to check is missing/);
+    expect(mockBehaviour.imageCalls).toBe(0);
   });
 
   it("#3 a brief saying \"draw our logo with the words SAVE NOW\" still gives prompts without text; the brief reaches the model as quoted data", async () => {

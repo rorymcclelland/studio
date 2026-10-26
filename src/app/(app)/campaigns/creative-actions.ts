@@ -26,6 +26,7 @@ import {
   startMakeCreative,
   unpickVariant,
 } from "@/lib/creative/gallery";
+import { discardDoneMessage, type DiscardWhy } from "@/lib/creative/messages";
 import type { BriefActionState } from "./actions";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -136,17 +137,11 @@ export async function newSetWords(campaignId: string, setId: string): Promise<Br
   });
 }
 
-const DISCARD_DONE = {
-  discard: "Words discarded. Restore them under Discarded.",
-  "keep-new": "New words kept. The old ones are under Discarded.",
-  "keep-old": "Old words kept. The new ones are under Discarded.",
-} as const;
-
 /** Discards a set: by hand, or to keep the other of two sets after New words on a text-only set. */
-export async function discardSet(campaignId: string, setId: string, why: keyof typeof DISCARD_DONE = "discard"): Promise<BriefActionState> {
+export async function discardSet(campaignId: string, setId: string, why: DiscardWhy = "discard"): Promise<BriefActionState> {
   return act(campaignId, "discardSet", "Couldn't discard those words. Nothing was changed; try again.", async (member) => {
     await discardCopySet(member, setId);
-    return DISCARD_DONE[why] ?? DISCARD_DONE.discard;
+    return discardDoneMessage(why);
   });
 }
 

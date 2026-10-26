@@ -27,8 +27,9 @@ jobs:
       - name: Wait for production to serve this commit (up to 15 minutes)
         run: |
           want="${COMMIT:0:7}"
-          for i in $(seq 1 60); do
-            got=$(curl -s "$APP_URL/api/health" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).commit||"")}catch{console.log("")}})')
+          end=$((SECONDS + 900))
+          while [ "$SECONDS" -lt "$end" ]; do
+            got=$(curl -s --max-time 20 "$APP_URL/api/health" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{console.log(JSON.parse(s).commit||"")}catch{console.log("")}})')
             if [ "$got" = "$want" ]; then echo "Production is serving $want"; exit 0; fi
             echo "Waiting: production serves '${got:-unknown}', want $want"
             sleep 15
@@ -36,11 +37,11 @@ jobs:
           echo "Production did not serve $want within 15 minutes. Check the Vercel deployment."; exit 1
       - name: Ask the app to sync its functions with Inngest
         run: |
-          code=$(curl -s -o sync.json -w '%{http_code}' -X PUT "$APP_URL/api/inngest")
+          code=$(curl -s --max-time 20 -o sync.json -w '%{http_code}' -X PUT "$APP_URL/api/inngest")
           cat sync.json; echo
           test "$code" -ge 200 -a "$code" -lt 300 || { echo "Inngest sync failed with HTTP $code"; exit 1; }
       - name: Check the health endpoint lists the agent run function
         run: |
-          curl -sf "$APP_URL/api/health" -o health.json
+          curl -sf --max-time 20 "$APP_URL/api/health" -o health.json
           cat health.json; echo
           node -e 'const h=require("./health.json"); if(!h.ok||!(h.inngestFunctions||[]).some(f=>f.endsWith("agent-run"))){console.error("health check: agent-run not served");process.exit(1)}'

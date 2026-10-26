@@ -113,6 +113,21 @@ describe("F-10 logo upload checks", () => {
     expect(checkUploadedSvg(base('<defs><linearGradient id="g"/></defs><rect fill="url(#g)"/>'))).toContain('fill="url(#g)"');
   });
 
+  it("review nit: an attribute value that mentions xmlns doesn't stop the namespace being added", () => {
+    const ns = 'xmlns="http://www.w3.org/2000/svg"';
+    for (const attrs of ['aria-label="a xmlns=b" viewBox="0 0 1 1"', "aria-label='left > right xmlns=x' viewBox=\"0 0 1 1\"", 'viewBox="0 0 1 1" aria-label=" xmlns="']) {
+      const svg = `<svg ${attrs}><rect width="1" height="1"/></svg>`;
+      for (const out of [checkUploadedSvg(svg), sanitizeLogoSvg(svg)]) {
+        const open = out.slice(0, out.indexOf("><rect"));
+        expect(open, attrs).toContain(ns);
+        expect(open.split(ns)).toHaveLength(2);
+      }
+    }
+    // A namespace on the svg tag itself is not added twice, and one on a child doesn't count.
+    expect(checkUploadedSvg(`<svg ${ns} viewBox="0 0 1 1"><rect width="1" height="1"/></svg>`).split("xmlns=")).toHaveLength(2);
+    expect(sanitizeLogoSvg(`<svg viewBox="0 0 1 1"><g xmlns="http://www.w3.org/2000/svg"><rect width="1" height="1"/></g></svg>`)).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
+  });
+
   it("#3 an SVG without xmlns is stored with it", () => {
     expect(checkUploadedSvg('<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>')).toMatch(/^<svg xmlns="http:\/\/www\.w3\.org\/2000\/svg"/);
     expect(sanitizeLogoSvg('<svg viewBox="0 0 1 1"><rect width="1" height="1"/></svg>')).toContain('xmlns="http://www.w3.org/2000/svg"');

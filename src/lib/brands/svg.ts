@@ -61,7 +61,25 @@ export function sanitizeLogoSvg(input: string): string {
   if (!/^<svg[\s>]/.test(out.trim())) throw new LogoError("The logo must be an SVG image.");
   // F-10: without the namespace a logo shown through <img> doesn't display.
   const svg = out.trim();
-  return /^<svg[^>]*\sxmlns=/.test(svg) ? svg : svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+  return svgTagAttributeNames(svg).includes("xmlns") ? svg : svg.replace(/^<svg/, '<svg xmlns="http://www.w3.org/2000/svg"');
+}
+
+/**
+ * The names of the opening <svg> tag's own attributes, read attribute by
+ * attribute, so a value that mentions xmlns (aria-label="a xmlns=b") or holds
+ * a ">" isn't taken for the namespace (review nit).
+ */
+function svgTagAttributeNames(svg: string): string[] {
+  const names: string[] = [];
+  const attr = /\s*([^\s=/>"']+)(?:\s*=\s*(?:"[^"]*"|'[^']*'|[^\s>"']+))?/y;
+  attr.lastIndex = 4; // after "<svg"
+  while (attr.lastIndex < svg.length && !/^\s*\/?>/.test(svg.slice(attr.lastIndex))) {
+    const at = attr.lastIndex;
+    const m = attr.exec(svg);
+    if (!m || attr.lastIndex === at) break;
+    names.push(m[1]);
+  }
+  return names;
 }
 
 // What an uploaded logo may not contain. Stored logos are sanitised silently

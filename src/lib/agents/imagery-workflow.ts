@@ -177,12 +177,16 @@ export async function drawOne(
 
 /** The vision check on one stored picture; a picture with text, or one that couldn't be checked, is discarded. */
 export async function checkOne(ctx: StepContext, assetId: string, picture: number, attempt: number, at?: TrailSlot): Promise<Checked> {
+  // A read that fails (the database, say) throws and the step is retried, which is free: nothing is paid before
+  // the check. A picture that isn't there can't be checked, so it is a failed check, not a retry (review nit).
   const [a] = await asUser(ctx.userId, (tx) => tx`select bytes, mime from public.assets where id = ${assetId}`);
+  if (!a?.bytes) return { ok: false, reason: "error", message: `The picture to check is missing (asset ${assetId}).` };
+  const image = { data: new Uint8Array(a.bytes as Buffer), mediaType: a.mime as "image/webp" };
   try {
     const { output } = await runModelStep(
       ctx,
       imageCheckAgent,
-      { picture, attempt, image: { data: new Uint8Array(a.bytes as Buffer), mediaType: a.mime as "image/webp" } },
+      { picture, attempt, image },
       at?.seq ?? seqFor(picture, attempt, "check"),
       at?.name ?? (attempt === 1 ? `Check picture ${picture} for text` : `Check picture ${picture} again`),
     );
