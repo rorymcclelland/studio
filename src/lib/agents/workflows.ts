@@ -2,6 +2,7 @@ import { asUser } from "@/lib/db/scoped";
 import type { StepContext } from "./model-step";
 import { executeAudienceRun } from "./audience-workflow";
 import { executeBriefRun } from "./brief-workflow";
+import { executePersonaRun, executeTestPlanRun } from "./review-workflows";
 import { executeTaglineRun, type StepTools } from "./workflow";
 
 /**
@@ -14,6 +15,8 @@ export const WORKFLOWS: Record<string, Workflow> = {
   tagline: executeTaglineRun,
   audience: executeAudienceRun,
   brief: executeBriefRun,
+  persona: executePersonaRun,
+  testPlan: executeTestPlanRun,
 };
 
 /** Runs the workflow for an agent; an agent without one fails its run instead of leaving it queued. */
