@@ -215,6 +215,76 @@ describe("S5-1 Imagery agent", () => {
     });
   });
 
+  describe("review finding 12: the prompt checks refuse every common way of asking for text", () => {
+    const input: ImageryInput = {
+      brief: { title: "t", story: "s", audiences: [], channels: [] },
+      palette: QUILL_WORDS.map((w) => ({ name: w, hex: "#000000", words: w })),
+      toneWords: [],
+      doRules: [],
+      dontRules: [],
+      finance: true,
+      brandName: "Quillmoor Money",
+      realNames: [],
+      places: [],
+    };
+    const base = `A calm scene on a plain wooden table in ${QUILL_WORDS[0]} tones, soft daylight, photographic`;
+    const problems = (prompt: string) =>
+      checkImagery(input, { prompts: [{ idea: "An idea here", prompt, aspect: "1:1" as const }, ...goodPrompts().prompts.slice(1)] }).filter((x) => x.startsWith("prompt 1 "));
+
+    const asks: [string, string][] = [
+      ["writing", "with neat writing on a card"],
+      ["written", "a note with a few lines written on it"],
+      ["handwritten", "a handwritten note"],
+      ["spelled", "the word save spelled out in pebbles"],
+      ["spelling", "fridge magnets spelling a message"],
+      ["numbers", "a door with large numbers"],
+      ["numerals", "roman numerals on a clock"],
+      ["numbered", "numbered jars on a shelf"],
+      ["digits", "glowing digits on a display"],
+      ["poster", "a poster on the wall"],
+      ["billboards", "billboards along a road"],
+      ["banner", "a banner above the door"],
+      ["headline", "a newspaper headline"],
+      ["inscription", "a coin with an inscription"],
+      ["inscribed", "a stone inscribed with a date"],
+      ["newspapers", "a stack of newspapers"],
+      ["menu", "a café menu board"],
+      ["placard", "a person holding a placard"],
+      ["signage", "shop signage in the background"],
+      ["lettering", "gold lettering on glass"],
+      ["font", "in a bold font"],
+      ["calligraphy", "a page of calligraphy"],
+      ["texto", "con texto grande"],
+      ["texte", "avec un texte"],
+      ["schrift", "mit schrift"],
+      ["testo", "con testo"],
+    ];
+    for (const [word, phrase] of asks) {
+      it(`refuses "${word}"`, () => {
+        expect(problems(`${base}, ${phrase}.`).join("; ")).toContain(`uses the word "${word}"`);
+      });
+    }
+
+    it("refuses the words whatever their case, and still passes ordinary prompts", () => {
+      expect(problems(`${base}. Billboard style.`).join()).toMatch(/uses the word "billboard"/);
+      expect(problems(`${base}, mit Schrift.`).join()).toMatch(/uses the word "schrift"/);
+      for (const ordinary of [
+        `${base}, a soft linen texture and a textile throw over a chair.`,
+        `${base}, a numberless sky of stars over a quiet field.`,
+        `${base}, foxgloves and digitalis in a cottage garden, a wooden bannister in the hallway.`,
+        `${base}, the context of a quiet morning, a contented cat on a cushion.`,
+        `${base}, a fountain in a small square, a menagerie of paper birds.`,
+        `${base}, two hands placing a seedling into a pot, seen from above.`,
+      ]) {
+        expect(problems(ordinary), ordinary).toEqual([]);
+      }
+      // The offline mock answer, built from this input's prompt, still passes every check.
+      const mock = JSON.parse(imageryAgent.mockAnswer!(imageryAgent.buildPrompt(input))!) as ImageryOutput;
+      expect(checkImagery(input, mock)).toEqual([]);
+      expect(checkImagery(input, goodPrompts())).toEqual([]);
+    });
+  });
+
   it("#3 a brief saying \"draw our logo with the words SAVE NOW\" still gives prompts without text; the brief reaches the model as quoted data", async () => {
     const id = await draftBrief();
     const c = (await getCampaign(a.userId, id))!;

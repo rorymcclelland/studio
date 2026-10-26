@@ -53,9 +53,24 @@ export type ImageryOutput = z.infer<typeof imageryOutput>;
 
 const MARKER = "Task: write image prompts for a signed-off campaign brief.";
 
-// Words that ask the image model for text or marks (rule 8), with their stems.
-const TEXT_WORDS =
-  /\b(texts?|textual|words?|wording|letters?|lettering|lettered|logos?|logotypes?|signs?|signage|signboards?|signposts?|labels?|labell?ed|labell?ing|captions?|captioned|slogans?|typography|typographic(?:al)?|typefaces?|fonts?|watermarks?|watermarked|brands?|branded|branding)\b/gi;
+// Words that ask the image model for text or marks (rule 8), with their stems:
+// writing and spelling, numbers, the things that carry words (posters,
+// banners, menus, newspapers), and common non-English words for text (review
+// finding 12). "Number" alone is allowed ("a number of birds"); "numbers" isn't.
+const TEXT_WORDS = new RegExp(
+  "\\b(" +
+    [
+      "texts?|textual|words?|wording|letters?|lettering|lettered|logos?|logotypes?",
+      "signs?|signage|signboards?|signposts?|labels?|labell?ed|labell?ing|captions?|captioned|slogans?",
+      "typography|typographic(?:al)?|typefaces?|fonts?|watermarks?|watermarked|brands?|branded|branding",
+      "writing|writings|written|handwriting|handwritten|typewritten|spelled|spelling|calligraphy|calligraphic",
+      "numbers|numbered|numerals?|digits?",
+      "posters?|billboards?|banners?|headlines?|inscriptions?|inscribed|newspapers?|menus?|placards?",
+      "texto|textos|texte|textes|schrift|schriften|testo|testi",
+    ].join("|") +
+    ")\\b",
+  "gi",
+);
 
 // A close-up of a person, for finance brands (Q5): faces, portraits, headshots, or a close-up of someone.
 const FACE_WORDS = /\b(faces?|facial|portraits?|headshots?|selfies?)\b/i;
@@ -82,7 +97,7 @@ export function promptProblems(input: ImageryInput, p: ImageryOutput["prompts"][
   const q = quoted(both);
   if (q !== null) problems.push(`${where} has quoted words ("${q.slice(0, 40)}"); a picture must have no text, so quote nothing`);
   const asked = [...new Set([...p.prompt.matchAll(TEXT_WORDS)].map((m) => m[1].toLowerCase()))];
-  for (const w of asked) problems.push(`${where} uses the word "${w}"; never ask the image model for text, letters, logos, signs or brands`);
+  for (const w of asked) problems.push(`${where} uses the word "${w}"; never ask the image model for text, letters, numbers, logos, signs or brands, or for things that carry words`);
   for (const name of input.realNames) {
     if (name.trim().length >= 2 && containsTerm(both, name)) problems.push(`${where} names "${name}", a real company from the market notes`);
   }
@@ -131,7 +146,7 @@ export const imageryAgent = defineAgent({
     "Write four prompts, each a different idea that fits the brief's story, its audiences and the brand's tone: a scene, a still life or an abstract composition.",
     "Each prompt describes the subject, setting, light, mood and style, and leaves calm, plain space where words can be laid over later. Surfaces are plain and unmarked.",
     "Each prompt names at least one palette colour exactly as its words are given (for example \"deep navy blue\").",
-    "Never write quotation marks, or the words text, words, letters, logo, sign, label, caption, slogan, typography, watermark or brand. Name no people, companies, products or brands, real or invented. Use no capital letters except at the start of a sentence.",
+    "Never write quotation marks, or the words text, words, letters, lettering, writing, written, spelled, numbers, digits, logo, sign, signage, label, caption, slogan, typography, font, poster, billboard, banner, headline, inscription, newspaper, menu, placard, watermark or brand, in any language. Name no people, companies, products or brands, real or invented. Use no capital letters except at the start of a sentence.",
     "If the brand is a finance brand, show no faces and no portraits: people appear only from behind, at a distance, or as hands.",
     'Reply with JSON only: {"prompts": [{"idea": "a one-line idea", "prompt": "the full image prompt", "aspect": "1:1"}]}, with exactly four prompts.',
   ].join("\n"),
