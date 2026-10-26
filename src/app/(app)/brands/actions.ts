@@ -7,6 +7,7 @@ import type { BrandInput } from "@/lib/brands/schema";
 import { DemoAlreadyLoadedError, loadDemoBrands } from "@/lib/demo/load";
 import { createRun, StartRunError } from "@/lib/agents/runs";
 import { removeContextItem } from "@/lib/context/store";
+import { RecentlyRefreshedError, startMarketRun } from "@/lib/strategy/market";
 import { sendEvent } from "@/inngest/client";
 import type { FormState } from "../actions";
 
@@ -82,3 +83,19 @@ export async function removeSegment(brandId: string, itemId: string): Promise<Fo
   revalidatePath(`/brands/${brandId}`);
   return removed ? { done: "Segment removed. Running the Audience agent again would bring it back." } : { error: "That segment can't be removed." };
 }
+
+/** S4-3: refreshes the brand's market notes. Within a day of the last refresh it asks for confirmation (costs money). */
+export async function refreshMarketNotes(brandId: string, confirm = false): Promise<FormState & { runId?: string; needsConfirm?: boolean }> {
+  const member = await requireMember();
+  try {
+    const runId = await startMarketRun(member, brandId, sendEvent, { confirm });
+    revalidatePath(`/brands/${brandId}`);
+    return { done: "The Market agent is searching the web. This takes about a minute.", runId };
+  } catch (err) {
+    if (err instanceof RecentlyRefreshedError) return { error: err.message, needsConfirm: true };
+    if (err instanceof StartRunError) return { error: err.message };
+    console.error("[refreshMarketNotes]", err);
+    return { error: "Couldn't start the Market agent. Nothing was started; try again." };
+  }
+}
+

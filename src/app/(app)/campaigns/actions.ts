@@ -19,6 +19,8 @@ import {
 } from "@/lib/brief/repo";
 import { BRIEF_SECTIONS, type BriefCore, type BriefSection } from "@/lib/brief/schema";
 import { sendEvent } from "@/inngest/client";
+import { decideSignoff, requestSignoff, SignoffError, withdrawSignoff } from "@/lib/approvals/repo";
+import { runReviewsForSignoff, startPersonaReview, startTestPlan } from "@/lib/strategy/reviews";
 import type { FormState } from "../actions";
 
 /** A brief action's result: an error (with problems or field errors), or a done message for a toast. */
@@ -29,7 +31,7 @@ export type BriefActionState =
 
 function known(err: unknown): BriefActionState | null {
   if (err instanceof BriefEditError) return { error: "The brief wasn't saved. Fix the problems below.", problems: err.problems, fieldErrors: err.fieldErrors };
-  if (err instanceof StaleBriefError || err instanceof CampaignError || err instanceof StartRunError) return { error: err.message };
+  if (err instanceof StaleBriefError || err instanceof CampaignError || err instanceof StartRunError || err instanceof SignoffError) return { error: err.message };
   return null;
 }
 
@@ -145,3 +147,78 @@ export async function restoreBriefVersion(campaignId: string, version: number, b
     return { error: "Couldn't restore that version. Nothing was changed; try again." };
   }
 }
+
+/** S4-1: sends the current version for sign-off; the persona review and test plan start for it too (Q4). */
+export async function sendForSignoff(campaignId: string, baseVersion: number): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    await requestSignoff(member, campaignId, baseVersion, sendEvent, runReviewsForSignoff);
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    console.error("[sendForSignoff]", err);
+    return { error: "Couldn't send the brief for sign-off. Nothing was changed; try again." };
+  }
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/approvals");
+  return { done: "Sent for sign-off. The personas and the test plan are being prepared for it." };
+}
+
+export async function withdrawFromSignoff(campaignId: string): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    await withdrawSignoff(member, campaignId);
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    throw err;
+  }
+  revalidatePath(`/campaigns/${campaignId}`);
+  revalidatePath("/approvals");
+  return { done: "Sign-off request withdrawn. The brief is a draft again." };
+}
+
+/** S4-1: approve or reject (with a reason) a brief sign-off, from the inbox or the campaign page. */
+export async function decideBriefSignoff(approvalId: string, decision: "approved" | "rejected", reason?: string): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    const { campaignId, version } = await decideSignoff(member, approvalId, decision, reason);
+    revalidatePath(`/campaigns/${campaignId}`);
+    revalidatePath("/approvals");
+    return { done: decision === "approved" ? `Version ${version} signed off.` : "Not signed off. The brief is back in draft with your reason.", version };
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    console.error("[decideBriefSignoff]", err);
+    return { error: "Couldn't record the decision. Nothing was changed; try again." };
+  }
+}
+
+/** S4-2: asks the personas about the current version. */
+export async function askPersonas(campaignId: string): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    await startPersonaReview(member, campaignId, sendEvent);
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    throw err;
+  }
+  revalidatePath(`/campaigns/${campaignId}`);
+  return { done: "The Persona agent is reviewing the brief." };
+}
+
+/** S4-4: makes a test plan for the current version. */
+export async function makeTestPlan(campaignId: string): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    await startTestPlan(member, campaignId, sendEvent);
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    throw err;
+  }
+  revalidatePath(`/campaigns/${campaignId}`);
+  return { done: "Writing the test plan." };
+}
+
