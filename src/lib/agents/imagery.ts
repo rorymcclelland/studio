@@ -42,10 +42,14 @@ export const imageryOutput = z.object({
       z.object({
         idea: z.string().trim().min(5).max(140),
         prompt: z.string().trim().min(40).max(900),
-        aspect: z.literal("1:1"),
+        // Code draws every picture square; whatever the model writes here is ignored
+        // (production, 27 Oct: "1:1 square" failed a strict check for nothing).
+        aspect: z.unknown().optional().transform(() => "1:1" as const),
       }),
     )
-    .length(IMAGE_COUNT),
+    // Exactly four are asked for (checkImagery); after the repair, fewer may be kept (keepPassingPrompts).
+    .min(1)
+    .max(IMAGE_COUNT),
 });
 
 export type ImageryInput = z.infer<typeof imageryInput>;
@@ -76,6 +80,22 @@ const TEXT_WORDS = new RegExp(
 const FACE_WORDS = /\b(faces?|facial|portraits?|headshots?|selfies?)\b/i;
 const CLOSE_UP_PERSON =
   /\bclose[- ]?ups?\b[^.;]{0,50}\b(person|people|man|men|woman|women|child|children|kid|kids|girl|boy|customer|customers|couple|family|someone|grandparent|parent|student)s?\b|\b(person|people|man|woman|child|customer|couple|someone)'?s? (face|eyes|smile)\b/i;
+
+// "the face is not shown", "no faces", "faces turned away": a mention that rules a face out is fine
+// (production, 27 Oct: a figure walking away "with the face not shown" was refused).
+const NEGATED_BEFORE = /\b(no|without|never|not)\b[^.;,]{0,20}$/i;
+const NEGATED_AFTER = /^[^.;]{0,30}\b((is|are)\s+)?(not|never)\s+(shown|visible|seen|in view)|^[^.;]{0,30}\b(hidden|turned away|out of (frame|view|shot)|obscured|unseen|not visible)\b/i;
+
+/** The first face word in a prompt that isn't ruled out by the words around it. */
+function shownFace(prompt: string): RegExpExecArray | null {
+  const re = new RegExp(FACE_WORDS.source, "gi");
+  for (let m = re.exec(prompt); m; m = re.exec(prompt)) {
+    const before = prompt.slice(Math.max(0, m.index - 30), m.index);
+    const after = prompt.slice(m.index + m[0].length, m.index + m[0].length + 40);
+    if (!NEGATED_BEFORE.test(before) && !NEGATED_AFTER.test(after)) return m;
+  }
+  return null;
+}
 
 /** Brand categories that count as finance (Q5: no close-up faces). */
 export function isFinanceCategory(category: string): boolean {
@@ -110,7 +130,7 @@ export function promptProblems(input: ImageryInput, p: ImageryOutput["prompts"][
     problems.push(`${where} names "${name}"; write no names of people, companies, products or brands, and no capitalised words except at a sentence start`);
   }
   if (input.finance) {
-    const face = FACE_WORDS.exec(p.prompt) ?? CLOSE_UP_PERSON.exec(p.prompt);
+    const face = shownFace(p.prompt) ?? CLOSE_UP_PERSON.exec(p.prompt);
     if (face) problems.push(`${where} shows a face or a close-up of a person ("${face[0]}"); for a finance brand, show people only from behind, at a distance or as hands`);
   }
   const lower = p.prompt.toLowerCase();
@@ -122,6 +142,7 @@ export function promptProblems(input: ImageryInput, p: ImageryOutput["prompts"][
 
 export function checkImagery(input: ImageryInput, output: ImageryOutput): string[] {
   const problems = output.prompts.flatMap((p, i) => promptProblems(input, p, i + 1));
+  if (output.prompts.length !== IMAGE_COUNT) problems.push(`write exactly ${IMAGE_COUNT} prompts (there were ${output.prompts.length})`);
   const seen = new Set<string>();
   output.prompts.forEach((p, i) => {
     const k = p.prompt.toLowerCase().replace(/\s+/g, " ");
@@ -129,6 +150,29 @@ export function checkImagery(input: ImageryInput, output: ImageryOutput): string
     seen.add(k);
   });
   return problems;
+}
+
+/** The fewest pictures worth drawing when some prompts still fail after the repair. */
+export const MIN_KEPT_PROMPTS = 2;
+
+/**
+ * After the repair: keep the prompts that pass every check (at least two, and
+ * not repeats), and list the rest in the trail, rather than failing the whole
+ * run for one prompt (as the Market agent keeps its passing notes).
+ */
+export async function keepPassingPrompts(input: ImageryInput, output: ImageryOutput) {
+  const seen = new Set<string>();
+  const keep: ImageryOutput["prompts"] = [];
+  const leftOut: string[] = [];
+  output.prompts.slice(0, IMAGE_COUNT).forEach((p, i) => {
+    const k = p.prompt.toLowerCase().replace(/\s+/g, " ");
+    const problems = promptProblems(input, p, i + 1);
+    if (seen.has(k)) problems.push(`prompt ${i + 1} repeats an earlier prompt`);
+    seen.add(k);
+    if (problems.length === 0) keep.push(p);
+    else leftOut.push(`"${p.idea}" (${problems.join("; ")})`);
+  });
+  return keep.length >= MIN_KEPT_PROMPTS ? { output: { prompts: keep }, leftOut } : null;
 }
 
 export const imageryAgent = defineAgent({
@@ -164,6 +208,7 @@ export const imageryAgent = defineAgent({
   label: (input) => `${input.brief.title}: pictures`,
   summarise: (output) => output.prompts.map((p, i) => `${i + 1}. ${p.idea}`).join("\n"),
   check: checkImagery,
+  salvage: keepPassingPrompts,
   mockAnswer: (prompt) => {
     if (!prompt.includes(MARKER)) return null;
     const line = prompt.split("\n").find((l) => l.startsWith("Palette: "));

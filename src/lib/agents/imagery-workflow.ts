@@ -27,7 +27,7 @@ export type DrawTarget = { campaignId: string; version: number; brandId: string;
 /** Where a draw or check goes in the trail, when it isn't part of a full Imagery run. */
 export type TrailSlot = { seq: number; name: string };
 
-type Written = { ok: true; output: ImageryOutput } | { ok: false; reason: "cap" | "error"; message: string };
+type Written = { ok: true; output: ImageryOutput; leftOut: string[] } | { ok: false; reason: "cap" | "error"; message: string };
 
 export type Drawn = { ok: true; assetId: string } | { ok: false; reason: "cap" | "error"; message: string };
 export type Checked = { ok: true; hasText: boolean; reason: string } | { ok: false; reason: "cap" | "error"; message: string };
@@ -230,7 +230,8 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
 
   const written = await step.run("write-prompts", async (): Promise<Written> => {
     try {
-      return { ok: true, output: (await runModelStep(ctx, imageryAgent, prepared.input, 2, "Write the image prompts")).output };
+      const r = await runModelStep(ctx, imageryAgent, prepared.input, 2, "Write the image prompts");
+      return { ok: true, output: r.output, leftOut: r.leftOut };
     } catch (err) {
       return { ok: false, reason: reasonOf(err), message: errorText(err) };
     }
@@ -266,9 +267,13 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
     const droppedNote = dropped.length
       ? ` ${dropped.length === 1 ? `Picture ${dropped[0].picture} was` : `Pictures ${dropped.map((d) => d.picture).join(", ")} were`} dropped: the check found text twice.`
       : "";
+    const leftOutNote = written.leftOut.length
+      ? ` ${written.leftOut.length} ${written.leftOut.length === 1 ? "prompt" : "prompts"} failed the checks twice and ${written.leftOut.length === 1 ? "was" : "were"} left out (see the trail).`
+      : "";
     const output = {
-      summary: `${kept.length} of ${outcomes.length} pictures kept from version ${prepared.version} of the brief.${droppedNote}${simulated ? " Simulated images (mock model)." : ""}`,
+      summary: `${kept.length} of ${outcomes.length} pictures kept from version ${prepared.version} of the brief.${leftOutNote}${droppedNote}${simulated ? " Simulated images (mock model)." : ""}`,
       assets: kept.map((k) => k.assetId),
+      leftOut: written.leftOut,
       ...record,
       simulated,
       campaignId: prepared.campaignId,

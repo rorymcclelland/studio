@@ -2,7 +2,7 @@
 // failure and hostile cases: the Imagery agent from a signed-off brief to four checked pictures.
 import sharp from "sharp";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { checkImagery, imageryAgent, IMAGE_COUNT, type ImageryInput, type ImageryOutput, VISION_QUESTION } from "@/lib/agents/imagery";
+import { checkImagery, imageryAgent, imageryOutput, IMAGE_COUNT, promptProblems, type ImageryInput, type ImageryOutput, VISION_QUESTION } from "@/lib/agents/imagery";
 import { checkOne } from "@/lib/agents/imagery-workflow";
 import { createRun, getRun } from "@/lib/agents/runs";
 import { executeRun } from "@/lib/agents/workflows";
@@ -148,7 +148,7 @@ describe("S5-1 Imagery agent", () => {
     for (const p of (step.output as ImageryOutput).prompts) expect(QUILL_WORDS.some((w) => p.prompt.includes(w))).toBe(true);
   });
 
-  describe("#2 a prompt asking for text or naming a real company is repaired, then fails with the problem named", () => {
+  describe("#2 a prompt asking for text or naming a real company is repaired, then left out with the problem named", () => {
     const cases: [string, (o: ImageryOutput) => void, RegExp][] = [
       ["a quoted slogan", (o) => (o.prompts[0].prompt += ' A banner reads "Save more today".'), /prompt 1 has quoted words \("Save more today"\)/],
       ["the word logo", (o) => (o.prompts[1].prompt += " Put the logo in the corner."), /prompt 2 uses the word "logo"/],
@@ -171,18 +171,60 @@ describe("S5-1 Imagery agent", () => {
           mockBehaviour.next(reply(bad));
           mockBehaviour.next(reply(bad));
           const { status, run } = await runImagery(id);
-          expect(status).toBe("failed");
-          expect(run.error).toMatch(/failed its checks/);
-          expect(run.error).toMatch(problem);
+          // Production check, 27 Oct: the bad prompt is left out and the other three are drawn.
+          expect(status).toBe("completed");
+          const out = run.output as { leftOut: string[]; summary: string };
+          expect(out.leftOut).toHaveLength(1);
+          expect(out.leftOut[0]).toMatch(problem);
+          expect(out.summary).toMatch(/1 prompt failed the checks twice and was left out/);
           const step = run.steps.find((s) => s.name === "Write the image prompts")!;
           expect(step.attempts).toBe(2);
           expect(step.attempt_log[0].problems.join("; ")).toMatch(problem);
-          expect(mockBehaviour.imageCalls).toBe(0);
+          expect(step.attempt_log[1].problems.join("; ")).toMatch(/left out: /);
+          expect(mockBehaviour.imageCalls).toBe(3);
         } finally {
           await sql`delete from public.context_items where id = ${note.id}`;
         }
       });
     }
+
+    it("when fewer than two prompts pass after the repair, the run fails with the problems named", async () => {
+      const id = await draftBrief();
+      await signOff(id);
+      const bad = goodPrompts();
+      for (const i of [0, 1, 2]) bad.prompts[i].prompt += " Put the logo in the corner.";
+      mockBehaviour.next(reply(bad));
+      mockBehaviour.next(reply(bad));
+      const { status, run } = await runImagery(id);
+      expect(status).toBe("failed");
+      expect(run.error).toMatch(/uses the word "logo"/);
+      expect(mockBehaviour.imageCalls).toBe(0);
+    });
+
+    it("production check, 27 Oct: a face ruled out is fine, the picture shape is code's, and a portrait is still refused", () => {
+      const input: ImageryInput = {
+        brief: { title: "t", story: "s", audiences: [], channels: [] },
+        palette: QUILL_WORDS.map((w) => ({ name: w, hex: "#000000", words: w })),
+        toneWords: [],
+        doRules: [],
+        dontRules: [],
+        finance: true,
+        brandName: "Quillmoor Money",
+        realNames: [],
+        places: [],
+      };
+      const base = "A person walking away along a gravel path between low hedges in deep navy blue evening light, photographic";
+      const one = (prompt: string) => promptProblems(input, { idea: "Walking on", prompt, aspect: "1:1" }, 1);
+      expect(one(`${base}, the face is not shown.`)).toEqual([]);
+      expect(one(`${base}, seen from behind with no face visible.`)).toEqual([]);
+      expect(one(`${base}, their faces turned away from the camera.`)).toEqual([]);
+      expect(one(`${base}, smooth matte surfaces.`)).toEqual([]);
+      expect(one(`${base}, a smiling face in the foreground.`).join()).toMatch(/face or a close-up/);
+      expect(one(`${base}, a portrait of the walker.`).join()).toMatch(/\("portrait"\)/);
+      // Whatever the model writes as the aspect, code draws a square.
+      const parsed = imageryOutput.parse({ prompts: goodPrompts().prompts.map((p) => ({ ...p, aspect: "1:1 square" })) });
+      expect(parsed.prompts.every((p) => p.aspect === "1:1")).toBe(true);
+    });
 
     it("the checks also refuse a close-up face for a finance brand, the brand's name, other names and prompts without a palette colour", () => {
       const input: ImageryInput = {
@@ -425,10 +467,20 @@ describe("S5-1 Imagery agent", () => {
     const id = await draftBrief();
     await signOff(id);
     mockBehaviour.next({ text: "Here are some ideas!", inputTokens: 10, outputTokens: 10 });
-    mockBehaviour.next(reply({ prompts: goodPrompts().prompts.slice(0, 3) }));
+    mockBehaviour.next({ text: "Still no JSON, sorry.", inputTokens: 10, outputTokens: 10 });
     const { status, run } = await runImagery(id);
     expect(status).toBe("failed");
-    expect(run.error).toMatch(/did not match the expected format: prompts/);
+    expect(run.error).toMatch(/did not match the expected format: The reply was not valid JSON/);
+  });
+
+  it("a repair with three good prompts instead of four keeps the three", async () => {
+    const id = await draftBrief();
+    await signOff(id);
+    mockBehaviour.next({ text: "Here are some ideas!", inputTokens: 10, outputTokens: 10 });
+    mockBehaviour.next(reply({ prompts: goodPrompts().prompts.slice(0, 3) }));
+    const { status, runId } = await runImagery(id);
+    expect(status).toBe("completed");
+    expect(await listAssets(a.userId, { runId })).toHaveLength(3);
   });
 
   it("an image call that fails is charged in full and that picture is left out; the others are kept", async () => {
