@@ -73,6 +73,59 @@ Every database is built from the files in `db/migrations`, in file-name order. T
 - **Neon branches** (project `campaign-studio`, London): `production` (the app's data, from cutover); `ci`, an empty database that CI branches are made from (N-4), so every CI run builds from all the files; `preview`, made from `ci` with every file applied and no copied data, for Vercel previews (N-5). `ci` began as a copy of `production` before production held any rows, and was then emptied; never reset `ci` or `preview` from `production`, so no invitee's data reaches a copy.
 - **Comparing two schemas (N-1 test case 6):** `node scripts/schema-diff.mjs --a SUPABASE_DB_URL --b NEON_DB_URL`, with the two connection strings in those variables (never on the command line). It compares tables, columns, constraints, indexes, policies, functions (by a hash of their bodies), triggers, enums and the grants to `anon`, `authenticated` and `PUBLIC` in `public`, plus auth.users's id, email and created_at, `auth.uid()` and `auth.role()`, and ignores Supabase's other schemas, auth columns and roles. It prints each difference and exits 1, or says "No differences". `--a NAME --dump` prints one database's description.
 
+## Cutover: production data from Supabase to Neon (Sprint 6, N-6)
+
+Done once. Production's data moves from Supabase into the Neon `production` branch with every id unchanged, through the **Copy production data** Action (`.github/workflows/copy-production-data.yml`), so no connection string reaches chat or a laptop. The Action and its two scripts are removed in N-7.
+
+- `scripts/copy-data.mjs --from NAME --to NAME` copies `auth.users` (id, email and created_at only) and then every table in `public` except `schema_migrations`, in foreign-key order. It reads Supabase in one read-only snapshot and writes Neon in one transaction, as the table owner, with each table's own triggers (the guards) switched off during the copy and on again before it commits. If anything fails, nothing is kept. It refuses unless the target has every migration in `db/migrations` and holds no rows, and unless both sides have the same tables and columns. It prints row counts, never rows.
+- `scripts/check-copy.mjs --a NAME --b NAME` compares the two: row counts and a hash of every row for each table, the sha256 of every picture (stored and recomputed from its bytes), no broken foreign key on Neon, every trigger on and the usage ledger's next id above its highest. It prints "Copy matches", or each difference.
+- Everyone is signed out by the move (sessions are not copied). Rory signs in by email; invitees can too (N-3).
+- Two details of the schema the copy handles: `brands.logo_asset_id` and `assets.brand_id` point at each other, so a brand's logo link is copied empty and filled in once the pictures are in; and copy sets and ad variants can be based on an earlier one, so their rows are copied parents first.
+
+### 1. Set up the `cutover` environment (Rory, once)
+
+1. **Put the Action on `main`.** GitHub lists a manual Action only once its file is on the default branch. Until Sprint 6 is merged, Claude puts `.github/workflows/copy-production-data.yml` on `main` by itself (it changes nothing in the app), and you run it from the `sprint-6` branch (step 2.1), which has the scripts and `db/migrations`.
+2. **GitHub → the repo → Settings → Environments → New environment**, named `cutover`.
+   - **Deployment protection rules:** tick **Required reviewers** and add yourself, so every run waits for your approval before it can read either database.
+   - **Deployment branches and tags:** **Selected branches and tags**, then add `main` and `sprint-6`.
+3. In the same environment, under **Environment secrets → Add environment secret**, add two secrets. Paste each value straight from the provider's page:
+   - `SUPABASE_DB_URL`: Supabase → the production project → **Connect** → **Session pooler** (port 5432 on the `pooler.supabase.com` host), with `[YOUR-PASSWORD]` replaced by the database password. Not the direct connection (GitHub's runners have no IPv6, and Supabase's direct address is IPv6 only) and not the transaction pooler.
+   - `NEON_DB_URL`: Neon → `campaign-studio` → branch `production` → **Connect**, database `studio`, role `studio_owner`, **Connection pooling off** (the host has no `-pooler`).
+4. `NEON_API_KEY` is already a repository secret (N-4); the rehearsal uses it to make its branch.
+
+### 2. Rehearse first
+
+1. **GitHub → Actions → Copy production data (one-off, N-6) → Run workflow.** Use workflow from `sprint-6` (or `main` once Sprint 6 is merged), target `rehearsal`, and type `rehearsal` in the confirm box. Approve the run when GitHub asks.
+2. It makes a Neon branch `rehearsal-<run id>` from the empty `ci` branch, applies every migration, copies, checks, and then runs the database tests on a throwaway copy of that branch (they empty tables as they go, so the rehearsal itself is left as copied). The rehearsal branch is kept for two days and then deletes itself.
+3. **What to check:**
+   - The **Copy the data** step lists every table with its row count and ends "Copied … rows across … tables; every trigger is enabled again." Note how long the step took: the real copy takes about as long, and that is the pause.
+   - The **Check the copy against Supabase** step says "Copy matches".
+   - The test step is green (N-6 test case 1).
+   - In Neon's SQL editor on the rehearsal branch, a campaign from Supabase has its brief versions, personas, test plan, variants and pictures, and `select count(*) from public.assets` matches the count in the Copy step.
+   - Neon → the rehearsal branch → **Storage**: record the size against the free plan's 0.5 GB (N-6 test case 7).
+4. If anything fails, nothing needs undoing: Supabase is only read, and the rehearsal branch expires. Fix, then rehearse again (each run makes a new branch).
+
+### 3. The switch (pick a quiet time)
+
+Production keeps running on Supabase until step 5. Anything done in Studio between the copy (step 3) and the switch is not copied, so nobody uses Studio meanwhile.
+
+1. **Check nothing is in progress.** In Studio's runs list nothing is queued or running, and in the Inngest dashboard (through Vercel, see "Notes from the first set-up") **Runs** shows nothing running. A run waiting for an approval can stay waiting (its id is unchanged, so it carries on after the move), but nobody approves anything until the smoke test.
+2. **Keep the way back.** In Vercel → campaign-studio → Settings → Environment Variables, reveal Production `DATABASE_URL` (the Supabase transaction pooler string) and save it in your password manager. Note which deployment is current under **Deployments** (the last one on Supabase).
+3. **Copy.** Run the Action again with target `production` and `production` in the confirm box, and approve it. The Copy step must end with "every trigger is enabled again" and the Check step must say "Copy matches". If either fails, stop here: production is still on Supabase and unchanged, and Neon's transaction left it empty.
+4. **Point production at Neon.** Vercel → campaign-studio → Settings → Environment Variables → Production `DATABASE_URL` → **Edit**, and paste Neon's `production` string with **Connection pooling on** (database `studio`, role `studio_owner`; the host has `-pooler`). Check that Production also has `RESEND_API_KEY` and `EMAIL_FROM` (N-3).
+5. **Redeploy by pushing to `main`**: the merge of Sprint 6 (its sign-in needs the tables only Neon has). Not the Vercel API: a redeploy from an earlier deployment keeps that deployment's variables.
+6. **After-deploy sync.** The **After production deploy** Action waits for the new commit at `/api/health`, then resyncs Inngest. Check it is green.
+7. **Smoke test.** Sign in by email (everyone was signed out). Open a campaign from before the move and check its brief versions, personas, test plan, variants and pictures. The spend meter shows today's spend, including what was spent before the move. Make creative on a campaign: it completes and is charged against today's cap. An invitee's workspace is intact and they can sign in by email. Then record page timings (N-6 test case 6).
+
+### 4. The way back
+
+Supabase stays exactly as it was, untouched, for 14 days: don't pause it, change it or delete it until N-7. To go back:
+
+1. Vercel → **Deployments** → the last production deployment from before the switch (step 3.2) → **⋯ → Instant Rollback**. It runs that deployment's code with the variables it was built with, so the Sprint 5 code on Supabase, with Supabase's sign-in. (Setting `DATABASE_URL` back alone is not enough: Sprint 6's sign-in needs tables Supabase doesn't have.)
+2. Set Production `DATABASE_URL` back to the Supabase string you saved, so a later push doesn't reach Neon by surprise. Vercel doesn't promote new pushes after an Instant Rollback until you undo it, so nothing redeploys onto Neon meanwhile.
+3. Resync Inngest by hand (see "Notes from the first set-up").
+
+Anything done on Neon between the switch and the way back is lost. The 14 days are for finding problems, not for running both.
 
 ## Sprint 4: public address, invites and previews
 
