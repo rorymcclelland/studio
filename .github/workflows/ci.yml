@@ -87,9 +87,7 @@ jobs:
     name: Migrations and database tests on the real Supabase stack
     runs-on: ubuntu-latest
     needs: checks
-    # Not yet run outside CI (the build workspace cannot pull Supabase's
-    # containers), so it reports without blocking until its first green run.
-    continue-on-error: true
+    # Required since its first green run (27 Oct 2026): a failure here fails CI.
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
