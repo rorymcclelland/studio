@@ -1,11 +1,5 @@
 import { missingProviderKeys } from "@/lib/models/registry";
 
-export type AuthMode = "supabase" | "dev";
-
-export function authMode(): AuthMode {
-  return process.env.AUTH_MODE === "dev" ? "dev" : "supabase";
-}
-
 export function allowedEmails(): string[] {
   return (process.env.ALLOWED_EMAILS ?? "")
     .split(",")
@@ -50,17 +44,13 @@ export function configProblems(env: Record<string, string | undefined> = process
   const need = (name: string, why: string) => {
     if (!env[name]) problems.push(`${name} is not set: ${why}.`);
   };
-  need("DATABASE_URL", "the Postgres connection string (Supabase pooler on Vercel)");
+  need("DATABASE_URL", "the Postgres connection string");
   need("ALLOWED_EMAILS", "a comma-separated list of the emails allowed to sign in");
 
-  if (env.AUTH_MODE === "dev") {
-    if (env.VERCEL) problems.push("AUTH_MODE=dev is for local development only and is refused on Vercel.");
-    if (!env.SESSION_SECRET || env.SESSION_SECRET.length < 32) {
-      problems.push("SESSION_SECRET must be at least 32 characters in dev auth mode.");
-    }
-  } else {
-    need("NEXT_PUBLIC_SUPABASE_URL", "your Supabase project URL");
-    need("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY", "your Supabase publishable (anon) key");
+  // N-3: production sends sign-in links through Resend; everywhere else they go to the server log.
+  if (env.VERCEL_ENV === "production") {
+    need("RESEND_API_KEY", "the Resend API key that sends sign-in links (Vercel Production only, marked Sensitive)");
+    need("EMAIL_FROM", 'the sender of sign-in emails, on the verified mcclelland.info subdomain, e.g. "Studio <sign-in@studio.mcclelland.info>"');
   }
 
   if (env.VERCEL && !env.INNGEST_DEV) {

@@ -52,8 +52,6 @@ jobs:
           --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
     env:
       DATABASE_URL: postgres://postgres@localhost:54329/campaign_studio_dev
-      AUTH_MODE: dev
-      SESSION_SECRET: ci-only-session-secret-0123456789abcdef
       ALLOWED_EMAILS: dev@example.test
       MODEL_PROVIDER_OVERRIDE: mock
       INNGEST_DEV: "1"

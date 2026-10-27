@@ -51,3 +51,6 @@ next-env.d.ts
 
 # eval reports from the mock model (real-model reports are committed)
 /evals/reports/mock/
+
+# Playwright: the saved sign-in state (tests/e2e/sign-in.setup.ts)
+/playwright/.auth/

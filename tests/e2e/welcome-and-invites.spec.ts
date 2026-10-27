@@ -1,6 +1,5 @@
 // F-3 through the UI: the public welcome page for anyone signed out, and the
-// owner's one-time invite links (dev auth mode: the invite route signs the
-// person in with the local cookie instead of Supabase's admin API).
+// owner's one-time invite links (N-2: accepting one starts Studio's own session).
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { contrastViolations, expectNoHorizontalScroll, settle, signIn } from "./helpers";
 
@@ -18,7 +17,8 @@ test("F-3 #1: signed out, / is the welcome page with no app data, and app routes
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("A multi-agent campaign studio for marketing teams");
   await expect(page.getByText("Fictional brands", { exact: true })).toBeVisible();
   await expect(page.getByText("Simulated data", { exact: true })).toBeVisible();
-  await expect(page.getByText("Access is by invitation.")).toBeVisible();
+  await expect(page.getByText("Access is by invitation. Anyone with access can sign in with their email.")).toBeVisible();
+  await expect(page.getByText(/Ask Rory for a new sign-in link/)).toHaveCount(0);
   await expect(page.getByRole("link", { name: "Sign in" }).first()).toHaveAttribute("href", "/signin");
   // No app data: no brand, no nav, no spend, no account.
   const text = await page.locator("body").innerText();
@@ -93,12 +93,14 @@ test("F-3 #2 and #3: an invite signs someone in once, to their own workspace, un
   await again.goto(new URL(link).pathname);
   await again.getByRole("button", { name: "Continue to Studio" }).click();
   await expect(again).toHaveURL(/\/signin\?invite=expired$/);
-  await expect(again.locator("[data-invite-notice=expired]")).toHaveText("This link has expired or was already used. Ask Rory for a new sign-in link.");
+  await expect(again.locator("[data-invite-notice=expired]")).toHaveText(
+    "This invite link has expired or was already used. If you've signed in before, enter your email below for a sign-in link; if not, ask Rory for a new invite.",
+  );
   expect(await contrastViolations(again), "sign-in after an expired invite").toEqual([]);
   await again.goto("/brands");
   await expect(again).toHaveURL(/\/signin$/);
-  // F-18a: the sign-in page itself says how an invitee gets back in, not only the expired-link notice.
-  await expect(again.locator("[data-invite-help]")).toHaveText("Invited? Ask Rory for a new sign-in link.");
+  // N-3 (closing F-18): the sign-in page says invitees sign back in with their email.
+  await expect(again.locator("[data-invite-help]")).toHaveText("Anyone with access, invited people included, can sign in here with their email.");
 
   // Revoking signs that person out on their next page load.
   await page.reload();

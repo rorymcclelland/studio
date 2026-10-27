@@ -14,11 +14,13 @@ Needs Node 22 and a local Postgres 16 on port 54329 (trust auth for `postgres`).
 
 ```bash
 npm ci
-cp .env.example .env.local     # AUTH_MODE=dev and MODEL_PROVIDER_OVERRIDE=mock need no keys
+cp .env.example .env.local     # the console mailer and MODEL_PROVIDER_OVERRIDE=mock need no keys
 npm run db:reset               # rebuild the local database from db/migrations, with the dev seed
 npm run dev                    # app on http://localhost:3000
 npm run inngest                # workflow dev server on http://localhost:8288 (separate terminal)
 ```
+
+To sign in, enter an `ALLOWED_EMAILS` address on /signin. Locally no email is sent: the sign-in link is written to the `npm run dev` log (look for `[mail]`); open it and press Continue. It works once, for 15 minutes.
 
 With `MODEL_PROVIDER_OVERRIDE=mock` nothing is spent. To use real models, set `ANTHROPIC_API_KEY` (and `GOOGLE_GENERATIVE_AI_API_KEY` for Gemini) and remove the override.
 

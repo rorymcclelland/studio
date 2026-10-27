@@ -345,7 +345,12 @@ describe("N-1 baseline on a non-superuser owner (local stand-in for #5, Neon)", 
         grant execute on function auth.uid(), auth.role() to "${owner}", anon, authenticated;
       `);
     });
-    const r = migrateCli([], urlFor(db, owner));
+    // Supabase only ever held the files up to the end of Sprint 5. From Sprint 6 (N-2) the
+    // files create tables in Studio's own auth schema, which only exists off Supabase.
+    const supabaseEra = tempDir({});
+    for (const f of readdirSync(MIGRATIONS).filter((f) => f <= "20261028000005_sprint5_review_fixes.sql"))
+      copyFileSync(join(MIGRATIONS, f), join(supabaseEra, f));
+    const r = migrateCli(["--dir", supabaseEra], urlFor(db, owner));
     expect(r.code, r.err).toBe(0);
     await withDb(urlFor(db), async (su) => {
       const cols = await su`select column_name from information_schema.columns where table_schema = 'auth' and table_name = 'users' order by ordinal_position`;
