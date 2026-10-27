@@ -436,3 +436,28 @@ describe("N-1 #6 schema comparison", () => {
     expect(r.stderr).toContain("NOPE_A");
   });
 });
+
+describe("Neon connector statements (scripts/neon-statements.mjs)", () => {
+  it("applying every file as split statements builds the same schema as the runner", async () => {
+    const { split } = await import("../../scripts/neon-statements.mjs");
+    const { BOOTSTRAP_SQL } = await import("../../scripts/db-migrate.mjs");
+    const viaRunner = urlFor(await freshDb());
+    expect(migrateCli([], viaRunner).code).toBe(0);
+    const viaStatements = urlFor(await freshDb());
+    const { pending } = await listPending({ applied: [] });
+    await withDb(viaStatements, async (sql) => {
+      for (const s of split(BOOTSTRAP_SQL)) await sql.unsafe(s);
+      for (const f of pending) {
+        const stmts = [...split(readFileSync(f.path, "utf8")), f.recordSql.replace(/;\s*$/, "")];
+        await sql.begin(async (tx) => {
+          for (const s of stmts) await tx.unsafe(s);
+        });
+      }
+    });
+    const a = await withDb(viaRunner, describeSchema);
+    const b = await withDb(viaStatements, describeSchema);
+    expect(diffDescriptions(a, b)).toEqual([]);
+    const ledger = (url: string) => withDb(url, (sql) => sql`select file_name, sha256 from public.schema_migrations order by 1`);
+    expect(await ledger(viaStatements)).toEqual(await ledger(viaRunner));
+  });
+});
