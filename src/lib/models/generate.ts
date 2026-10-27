@@ -134,6 +134,22 @@ async function settle(
 
 export class ProviderError extends Error {}
 
+/** The provider refused for quota or billing (HTTP 429): nothing was drawn or charged, and trying again now won't help. */
+export class QuotaError extends ProviderError {}
+
+/**
+ * A plain message for a quota refusal (production, 27 Oct: Google's free tier
+ * has no image quota at all, and its raw message ran to a paragraph a picture).
+ */
+export function quotaMessage(provider: string, raw: string): string | null {
+  if (!/quota|rate.?limit|RESOURCE_EXHAUSTED|\b429\b/i.test(raw)) return null;
+  const who = provider === "google" ? "Google" : provider;
+  if (/free.?tier/i.test(raw)) {
+    return `${who} refused the picture: the API key's ${who} project is on the free tier, which has no image quota. Turn on billing for that project (in Google AI Studio, Get API key, then Set up billing), then try again. Nothing was charged.`;
+  }
+  return `${who} refused the picture: the API key's project is over its quota or rate limit. Try again in a few minutes, or check the project's limits. Nothing was charged.`;
+}
+
 /** A picture sent with a text call, for a vision check (S5-1). */
 export type ImageInput = { data: Uint8Array; mediaType: "image/webp" | "image/png" | "image/jpeg" };
 
@@ -371,9 +387,13 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
     }
     // A failure that may have been billed is charged in full. If that write
     // fails, the reservation stays and the write's error is thrown.
-    if (imageFailureMayBeBilled(err)) await settle(input.userId, input.workspaceId, reservation, ids, charge(0, 0));
-    else await dropReservation(input.userId, input.workspaceId, reservation, ids);
+    // A quota refusal (429 or RESOURCE_EXHAUSTED) drew nothing, so it is never charged.
     const message = err instanceof Error ? err.message : String(err);
+    const status = APICallError.isInstance(err) ? err.statusCode : undefined;
+    const quota = status === 429 || /RESOURCE_EXHAUSTED/.test(message) ? quotaMessage(cfg.provider, message) : null;
+    if (!quota && imageFailureMayBeBilled(err)) await settle(input.userId, input.workspaceId, reservation, ids, charge(0, 0));
+    else await dropReservation(input.userId, input.workspaceId, reservation, ids);
+    if (quota) throw new QuotaError(quota);
     throw new ProviderError(`${cfg.provider} image call failed (not retried): ${message}`);
   }
 

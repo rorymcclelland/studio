@@ -483,6 +483,20 @@ describe("S5-1 Imagery agent", () => {
     expect(await listAssets(a.userId, { runId })).toHaveLength(3);
   });
 
+  it("production check, 27 Oct: a quota refusal for every picture fails once, plainly, and charges nothing", async () => {
+    const id = await draftBrief();
+    await signOff(id);
+    mockBehaviour.failImage("429 RESOURCE_EXHAUSTED: Quota exceeded for metric generate_content_free_tier_requests, limit: 0", 4);
+    const { runId, status, run } = await runImagery(id);
+    expect(status).toBe("failed");
+    expect(run.error).toMatch(/^No picture was kept\. mock refused the picture: the API key's mock project is on the free tier/);
+    expect(run.error!.match(/refused the picture/g)).toHaveLength(1);
+    const sql = getSql();
+    const [{ images }] = await sql`select coalesce(sum(images), 0)::int as images from public.usage_ledger where run_id = ${runId}`;
+    expect(images).toBe(0);
+    expect(await listAssets(a.userId, { runId })).toHaveLength(0);
+  });
+
   it("an image call that fails is charged in full and that picture is left out; the others are kept", async () => {
     const id = await draftBrief();
     await signOff(id);

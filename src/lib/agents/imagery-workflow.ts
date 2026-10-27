@@ -289,8 +289,14 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
       return "stopped_cap";
     }
     if (kept.length === 0) {
-      const why = stopped.length ? stopped.map((s) => `picture ${s.picture}: ${s.message}`).join("; ") : "every picture still had text after a redraw";
-      await setRun(ctx, "failed", { output, error: `No picture was kept (${why}).` });
+      // The same refusal for every picture (a quota, say) is said once.
+      const messages = [...new Set(stopped.map((s) => s.message))];
+      const why = !stopped.length
+        ? "every picture still had text after a redraw"
+        : messages.length === 1
+          ? messages[0]
+          : stopped.map((s) => `picture ${s.picture}: ${s.message}`).join("; ");
+      await setRun(ctx, "failed", { output, error: messages.length === 1 && stopped.length ? `No picture was kept. ${why}` : `No picture was kept (${why}).` });
       return "failed";
     }
     await setRun(ctx, "completed", { output });

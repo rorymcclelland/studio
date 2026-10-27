@@ -142,3 +142,15 @@ describe("production check, 27 Oct: the Imagery reply has room for four full pro
     expect(AGENT_MODELS.imagery.maxOutputTokens).toBeGreaterThanOrEqual(Math.ceil(largest / 3) * 2);
   });
 });
+
+describe("production check, 27 Oct: a quota refusal is said plainly", () => {
+  it("names the free tier and how to fix it, or a plain over-quota message; other errors are left alone", async () => {
+    const { quotaMessage } = await import("@/lib/models/generate");
+    const free = quotaMessage("google", "You exceeded your current quota ... generate_content_free_tier_requests, limit: 0, model: gemini-nano-banana-2.1");
+    expect(free).toMatch(/^Google refused the picture: the API key's Google project is on the free tier/);
+    expect(free).toMatch(/Turn on billing/);
+    expect(free).toMatch(/Nothing was charged\.$/);
+    expect(quotaMessage("google", "429 RESOURCE_EXHAUSTED: requests per minute")).toMatch(/over its quota or rate limit/);
+    expect(quotaMessage("google", "Internal error")).toBeNull();
+  });
+});
