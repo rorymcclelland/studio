@@ -1,6 +1,6 @@
 # Sprint 5 refinement: Creative I, copy and imagery
 
-Refined 26 October 2026. Status: **all items Ready, Sprint 5** (Rory's answers at the end; all as recommended). Not started until Rory says go.
+Refined 26 October 2026. Status: **closed 27 October 2026**, all nine items done; see the review evidence and production check notes at the end, and `docs/BACKLOG.md` for the follow-ups (F-24 to F-27).
 
 ## Sprint goal
 
@@ -280,3 +280,33 @@ If it doesn't fit, F-18a can go first to the backlog (an invite can already be r
 | Q7 | Bundled open fonts, nearest match shown | S5-3 as written |
 | Q8 | Testimonials refused | S5-2 checks refuse quotation marks around a customer's words |
 | Q9 | Rory adds `GOOGLE_GENERATIVE_AI_API_KEY` in Vercel (Production, Sensitive) with a Google Cloud budget alert, before the production check | Done, 26 Oct 2026 (key in Vercel, Production, Sensitive) |
+
+## Review evidence (closed 27 October 2026)
+
+- **Tests:** 418 unit, database and agent tests and 51 end-to-end specs passing; mock evals for all eight agents (audience 4, brief 6, copy 6, imagery 6, market 2, persona 4, tagline 3, test plan 3). The real-Supabase CI job passed for the first time and is now required.
+- **Fresh-eyes review:** 12 findings and 5 nits, all fixed before deploy (decisions 0011 to 0014 record the choices). Two container restarts interrupted the fixing; no committed work was lost.
+- **Deploy:** five migrations applied by the Supabase connector to preview, then production (none needed the SQL editor); security advisor clean apart from the long-standing leaked-password notice (sign-in uses magic links); the after-deploy Action waited for the new commit and synced Inngest on its first run (F-17).
+- **Rory's test pack** (`docs/testing/sprint-5-test-pack.md`), 27 Oct: all ten cases pass. TC-2 first failed (clicking an ad did nothing: the gallery couldn't open an ad full size) and passed after the fix below.
+
+| Case | Story | Result |
+| --- | --- | --- |
+| TC-1 Make creative | S5-1 to S5-4 | Pass, after three production fixes (below): 12 ads in 37 s; four real pictures, all passing the text check first time; 10.7p for the pictures plus the 4.0p copy kept from the first attempt |
+| TC-2 No text in the pictures | S5-1, rule 8 | Pass after the full-size fix; Claude also looked at picture 3: a person from behind, no face, no text, in the brand's palette |
+| TC-3 New picture | S5-4 #2 | Pass |
+| TC-4 Edit words refused, then saved | S5-2, S5-4 #3 | Pass |
+| TC-5 Pick, discard, undo | S5-4 #4 | Pass |
+| TC-6 Layout switch | S5-3 | Pass |
+| TC-7 Unsigned brief | S5-4 #5 | Pass |
+| TC-8 Logo upload | F-10 | Pass |
+| TC-9 New sign-in link | F-18a | Pass |
+| TC-10 After-deploy sync | F-17 | Pass |
+
+## Production check notes (27 October 2026)
+
+- **First Make creative: failed, 0.15p.** The Imagery agent's four detailed prompts ran past its 1,500-token reply limit on both attempts, so the JSON was cut off. Fixed: 4,000 tokens, prompts asked for under 600 characters, and a test that the allowance fits four prompts at their largest. The Copy agent's words (4.0p) were kept and reused.
+- **Second: failed, 0.16p.** One prompt described a walker "with the face not shown" and the finance face check refused it; the first attempt failed over the wording of the aspect field. Fixed: a face that is ruled out is fine (portraits and smiling faces are still refused); code sets the aspect; prompts that still fail after the repair are left out when at least two pass, as the Market agent leaves out notes.
+- **Third: refused by Google, nothing charged.** The API key's Google project was on the free tier, where image models have no quota. Rory turned on billing. Fixed: a quota refusal is one plain sentence saying how to fix it, said once for all four pictures, and never charged.
+- **Fourth: completed** (TC-1 above).
+- **Also fixed:** the costed buttons' label and estimate wrapped awkwardly (now each part stays on one line); clicking an ad opens it full size (1080 × 1080) in a new tab; the after-deploy sync tries three times, after one cold start failed and its rerun passed.
+- **Measured against the refinement:** about two minutes and under 20p was the target. A full Make creative took 37 s and about 14.7p (pictures 10.7p, copy 4.0p). The worst case the button now shows is 31p, if every picture is redrawn and every call repaired once (F-25).
+- **Storage:** real pictures are about 40 KB each as WebP (the refinement assumed 150 KB); production's database is 22 MB in all.

@@ -93,44 +93,69 @@ Fixed during the production check (26 Oct, all deployed and tested): five search
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
 | F-16a | First real-model eval run in GitHub Actions, report committed; add today's production replies (the long note, the possessive names, the brand-name figure) as regression cases | F-16 split | Backlog, returned from Sprint 4 |
-| F-17 | The "After production deploy" Action has never run: Vercel does not appear to send GitHub deployment events. Check the repo's Deployments, then trigger on Vercel's event or a check after the CI run | F-15 split | Ready, Sprint 5 |
-| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Split: F-18a (new sign-in link) Ready, Sprint 5; the email service stays Backlog |
+| F-17 | The "After production deploy" Action has never run: Vercel does not appear to send GitHub deployment events. Check the repo's Deployments, then trigger on Vercel's event or a check after the CI run | F-15 split | Done, Sprint 5 |
+| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Split: F-18a (new sign-in link) Done, Sprint 5; the email service is N-3, Ready, Sprint 6 |
 | F-19 | A withdrawn sign-off shows as "expired" in the history; give it its own state | Sprint 4 build | Backlog, from Sprint 4 review |
 | F-20 | The persona facts check compares segment keys only, not age or region | Sprint 4 build | Backlog, from Sprint 4 review |
-| F-21 | Two runs started together can both pass the cap check before either is charged; and a Market refresh costs 15 to 20p. Reserve the estimate when a call starts; consider Haiku for the Market agent | Sprint 4 review and production check | Ready, Sprint 5 (the reservation; the Market model stays Sonnet, Q6) |
-| F-22 | A test pack (Markdown and PDF in `docs/testing/`) for each sprint's hand checks, per the sprint-close routine agreed 26 Oct; Sprint 4's checks were given in chat | Sprint 4 close | Ready, Sprint 5 |
+| F-21 | Two runs started together can both pass the cap check before either is charged; and a Market refresh costs 15 to 20p. Reserve the estimate when a call starts; consider Haiku for the Market agent | Sprint 4 review and production check | Done, Sprint 5 (the reservation; the Market model stays Sonnet, Q6) |
+| F-22 | A test pack (Markdown and PDF in `docs/testing/`) for each sprint's hand checks, per the sprint-close routine agreed 26 Oct; Sprint 4's checks were given in chat | Sprint 4 close | Done, Sprint 5 |
 
-## Sprint 5: Creative I, copy and imagery (refined and confirmed 26 October 2026)
+## Sprint 5: Creative I, copy and imagery (closed 27 October 2026)
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| F-21 | Reserve spend before each call, so concurrent calls can't pass the cap together | S | Ready, Sprint 5 |
-| F-17 | Sync Inngest after each deploy by polling the health endpoint for the new commit | S | Ready, Sprint 5 |
-| F-18a | New sign-in link for an invitee (split from F-18; the email service stays in the backlog) | S | Ready, Sprint 5 |
-| F-10 | Logo upload (SVG and PNG) and the sanitiser's false refusals | S/M | Ready, Sprint 5 |
-| S5-1 | Images through the provider layer (Nano Banana 2.1, 1K), assets in Postgres, Imagery agent (Haiku) with prompt and vision checks | L | Ready, Sprint 5 |
-| S5-2 | Copy agent (Sonnet): sets per audience and channel, channel limits and the brief's checks, no testimonials | M | Ready, Sprint 5 |
-| S5-3 | Ad templates composed in code: three 1:1 layouts, bundled open fonts, contrast and fit checked | L | Ready, Sprint 5 |
-| S5-4 | Variant gallery: pick, discard, new picture, new words, edit words | M | Ready, Sprint 5 |
-| F-22 | Test pack for Rory's hand checks (Markdown and PDF) | S | Ready, Sprint 5 |
+| F-21 | Reserve spend before each call, so concurrent calls can't pass the cap together | S | Done, Sprint 5 (reservations under an app-wide then workspace lock; a failed charge write keeps the reservation; two tabs can't both start the same paid run) |
+| F-17 | Sync Inngest after each deploy by polling the health endpoint for the new commit | S | Done, Sprint 5 (first production run green in 73 s; three tries for the sync after one cold start failed) |
+| F-18a | New sign-in link for an invitee (split from F-18) | S | Done, Sprint 5 (TC-9: same user, same workspace) |
+| F-10 | Logo upload (SVG and PNG) and the sanitiser's false refusals | S/M | Done, Sprint 5 (TC-8). Residual: a cleaned SVG must fit the existing 50,000-character column, so a very detailed SVG is refused with a suggestion to upload a PNG |
+| S5-1 | Images through the provider layer (Nano Banana 2.1, 1K), assets in Postgres, Imagery agent (Haiku) with prompt and vision checks | L | Done, Sprint 5, after three production fixes (reply limit, ruled-out faces and prompts left out, Google's free-tier quota). Production: four pictures in about 15 s each, 2.65p each, all passing the text check first time, about 40 KB each. Residual: the vision check looks for text only; faces for finance brands are kept out by the prompt check (F-24) |
+| S5-2 | Copy agent (Sonnet): sets per audience and channel, channel limits and the brief's checks, no testimonials | M | Done, Sprint 5 (production: 4.0p with one repair, for a repeated legal line and a Title Case "Your Quillmoor") |
+| S5-3 | Ad templates composed in code: three 1:1 layouts, bundled open fonts, contrast and fit checked | L | Done, Sprint 5 (TC-6; simulated pictures carry their own label in every layout) |
+| S5-4 | Variant gallery: pick, discard, new picture, new words, edit words | M | Done, Sprint 5 (TC-1 to TC-7: 12 ads in 37 s for about 14.7p; full-size view added after TC-2). Residual: the worst case shown on the button is 31p against the refined 20p (F-25) |
+| F-22 | Test pack for Rory's hand checks (Markdown and PDF) | S | Done, Sprint 5 (`docs/testing/sprint-5-test-pack.md` and `.pdf`; all ten cases pass) |
 
-Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads in about two minutes for under 20p. Rory's Google key is in Vercel (Production, Sensitive). Detail: `docs/refinement/sprint-5.md`.
+Evidence: 418 unit, database and agent tests and 51 end-to-end specs passing; mock evals for all eight agents; the real-Supabase CI job green and now required; fresh-eyes review with 12 findings and 5 nits, all fixed before deploy (decisions 0011 to 0014); five migrations applied by the connector to preview then production; Rory's test pack, all ten cases passing. Nothing returned to the backlog. Detail: `docs/refinement/sprint-5.md`, "Review evidence" and "Production check notes".
 
-## Raised during Sprint 5
+## Where the Sprint 5 review items now live
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
 | F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Backlog |
+| F-24 | The picture check looks for text only. For finance brands, ask it about faces too (a close-up face is refused in the prompt today, but a picture could still show one) | Sprint 5 production check (picture 3: correct, but only the prompt kept the face out) | Backlog, from Sprint 5 review |
+| F-25 | Make creative's worst case is 31p (every picture redrawn, every call repaired at full length) against the refined 20p; a typical run measured 14.7p. Options: one redraw across the four pictures, or a lower output allowance for repairs | Sprint 5 review, finding 9 | Backlog, from Sprint 5 review |
+| F-26 | Redraw existing ads with the current kit, at no AI cost, after a logo, palette or font change (today ads keep the kit they were made with, and a change means new pictures) | Sprint 5 build (decision 0014) | Backlog, from Sprint 5 review |
+| F-27 | Several audiences: the gallery shows the first audience's ads, and New words isn't offered on other audiences' words | Sprint 5 build | Backlog, from Sprint 5 review |
+| F-16a | Folded: add today's Imagery production replies (the cut-off reply, the ruled-out face, the aspect wording) to the real-model eval regression cases | Sprint 5 production check | Folded into F-16a |
+
+## Sprint 6: move from Supabase to Neon (refined and confirmed 27 October 2026; starts after Sprint 5 closes)
+
+Supabase's free plan allows two active projects and Studio uses both, so no other demo app can run. Creative II moves to Sprint 7. Checked against Sprint 5 as delivered at its close (no story changed; see the refinement's last section). Detail: `docs/refinement/sprint-6.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| N-1 | Neon project in London; the shim becomes a real baseline migration (`auth.users`, `auth.uid()`, roles); `db:migrate` with a record of applied files; migrations applied by Claude through the Neon connector | M | Ready, Sprint 6 |
+| N-2 | Studio's own sign-in: hashed session tokens in an httpOnly cookie; invites start a session directly; Supabase packages removed | M | Ready, Sprint 6 |
+| N-3 | Sign in by email through Resend from a mcclelland.info subdomain, rate limited (closes F-18) | M | Ready, Sprint 6 |
+| N-4 | CI's required real-stack job runs on a throwaway Neon branch | S | Ready, Sprint 6 |
+| N-5 | Previews on a long-lived Neon `preview` branch with demo data (replaces F-8's second Supabase project) | S | Ready, Sprint 6 |
+| N-6 | Production cutover: data copied by a one-off Action, row counts and asset hashes checked, rehearsed first; Supabase kept 14 days as the way back | M | Ready, Sprint 6 |
+| N-7 | Clean-up: keep-awake cron, Supabase variables and code removed; hosting docs, CLAUDE.md, decision 0015, a new-demo-app guide | S | Ready, Sprint 6 |
+| N-8 | Test pack for Rory's hand checks | S | Ready, Sprint 6 |
 
 ## Not yet in a sprint (ranked)
 
-1. F-18 Email service so invitees can sign in without a new link (M; F-18a in Sprint 5 covers the need for now)
-2. F-16a First real-model eval report and regression cases (S)
-3. F-20 Persona facts check compares age and region (S)
-4. F-19 Withdrawn sign-offs get their own state (S)
-5. F-23 Gate production deploys on the checks, before real users arrive (S)
-6. F-9 Dark theme, once the light design system has settled
-7. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+Re-ranked at the Sprint 5 close. Sprint 6 (the Neon move) is already refined and confirmed; Sprint 7 is Creative II (adaptation and assembly), refined at Sprint 6's close.
+
+1. F-16a First real-model eval report and regression cases, with Sprint 5's Imagery replies (S): the agents are now all live, and every production fix this week was something a real-model eval would have caught
+2. F-24 Ask the picture check about faces for finance brands (S): small, and makes rule 8's companion check visible in the trail; good with Sprint 7's compliance work
+3. F-23 Gate production deploys on the checks, before real users arrive (S): touches CI, which N-4 changes; can join Sprint 6 if Rory wants
+4. F-27 Several audiences in the gallery (M): needed before a multi-audience brief is demoed; Sprint 7's adaptation touches the same code
+5. F-26 Redraw ads with the current kit (S): pairs with Sprint 7's sizes, which redraw every ad anyway
+6. F-20 Persona facts check compares age and region (S)
+7. F-19 Withdrawn sign-offs get their own state (S)
+8. F-25 A cheaper worst case for Make creative (S): typical cost is on target; low until volume grows
+9. F-9 Dark theme, once the light design system has settled
+10. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -144,3 +169,5 @@ Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads
 | 26 Oct 2026 | Sprint 4 refined: invites by link Rory sends himself (Supabase's own email only reaches team members); real rival names allowed in market notes only, rule 2 to be reworded; previews on a second free Supabase project; market on Sonnet, personas and test plan on Haiku; sign-offs open 14 days |
 | 26 Oct 2026 | Sprint 4 closed: demo gate 1 met on the public address; Market agent fixed in four production rounds (three searches, figures checked against the cited pages, notes that fail are left out); previews on their own Supabase project; Sprint 5 proposed |
 | 26 Oct 2026 | Sprint 5 refined: Nano Banana 2.1 at 1K; images kept in Postgres; Copy on Sonnet, Imagery and vision checks on Haiku; vision check for text now; SVG and PNG logos; bundled open fonts; no testimonials; Market stays on Sonnet |
+| 27 Oct 2026 | Sprint 6 refined: move to Neon (London), Studio's own sign-in, migrations recorded and applied by Claude through the Neon connector, Resend for sign-in links (folds in F-18), previews and CI on Neon branches, Supabase kept 14 days; starts after Sprint 5 closes |
+| 27 Oct 2026 | Sprint 5 closed: all nine items done; a signed-off brief becomes 12 checked ads in 37 s for about 14.7p; three Imagery fixes and a full-size view from the production check; the real-Supabase CI job is required; Sprint 6 (Neon) confirmed to start next |
