@@ -15,7 +15,7 @@ Needs Node 22 and a local Postgres 16 on port 54329 (trust auth for `postgres`).
 ```bash
 npm ci
 cp .env.example .env.local     # AUTH_MODE=dev and MODEL_PROVIDER_OVERRIDE=mock need no keys
-npm run db:reset               # shim, migrations and dev seed
+npm run db:reset               # rebuild the local database from db/migrations, with the dev seed
 npm run dev                    # app on http://localhost:3000
 npm run inngest                # workflow dev server on http://localhost:8288 (separate terminal)
 ```
@@ -30,6 +30,7 @@ With `MODEL_PROVIDER_OVERRIDE=mock` nothing is spent. To use real models, set `A
 | `npm test` | Unit, database (tenancy and RLS) and agent-workflow tests |
 | `npm run test:e2e` | Playwright against a running app and Inngest dev server |
 | `npm run check:secrets` | Blocks anything key-shaped from being committed |
+| `npm run db:migrate` | Applies pending files in `db/migrations` to `DATABASE_URL` and records them in `schema_migrations`; `-- --dry-run` lists them and changes nothing |
 
 CI runs all of these on every push. A git pre-commit hook and Claude Code hooks run the same checks locally.
 

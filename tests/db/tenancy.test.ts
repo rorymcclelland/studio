@@ -95,7 +95,7 @@ describe("tenancy and row-level security", () => {
   });
 
   it("S1-3 #7: migrations create no users (seed data lives only in seed.sql)", () => {
-    const dir = join(process.cwd(), "supabase/migrations");
+    const dir = join(process.cwd(), "db/migrations");
     for (const file of readdirSync(dir)) {
       const text = readFileSync(join(dir, file), "utf8").toLowerCase();
       expect(text, file).not.toMatch(/insert\s+into\s+auth\.users/);

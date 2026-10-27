@@ -31,7 +31,7 @@ jobs:
         run: node scripts/check-secrets.mjs --all
       - run: npm run typecheck
       - run: npm run lint
-      - name: Unit and database tests (plain Postgres with the Supabase shim)
+      - name: Unit and database tests (plain Postgres, built from db/migrations)
         run: npm test
       - name: Agent evals against the mock model (checks the runner and graders, costs nothing)
         run: npm run eval -- --mock
@@ -98,16 +98,22 @@ jobs:
       - uses: supabase/setup-cli@v1
         with:
           version: latest
-      - name: Start Supabase and apply migrations
+      # Until N-4 moves this job to a Neon branch: the stack starts empty (the
+      # migrations now live in db/migrations, which the Supabase CLI doesn't read)
+      # and the runner applies them, leaving Supabase's own auth objects alone.
+      - name: Start Supabase and apply migrations with the runner
+        env:
+          SUPABASE_STACK_URL: postgres://postgres:postgres@localhost:54322/postgres
         run: |
           [ -f supabase/config.toml ] || supabase init
           supabase start -x studio,imgproxy,inbucket,edge-runtime,logflare,vector,supavisor
-          supabase db reset
+          node scripts/db-migrate.mjs --url SUPABASE_STACK_URL
       - name: Database tests against the real stack
         env:
           SKIP_DB_RESET: "1"
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:54322/postgres
         # The eval-runner test builds its own throwaway database on the local
         # Postgres the other jobs use (port 54329), which this job doesn't have;
-        # it runs in the first job instead.
-        run: npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts
+        # it runs in the first job instead. So does the migration runner's test,
+        # which makes and drops its own databases and roles on that Postgres.
+        run: npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts --exclude tests/db/migrate.test.ts

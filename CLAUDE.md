@@ -20,7 +20,7 @@ A multi-agent campaign studio for marketing teams. Three squads of AI agents (St
 ## Architecture
 
 - **Next.js 16** (App Router, Cache Components on, Turbopack). Read the version-matched docs in `node_modules/next/dist/docs/` before using an API you have not used in this repo. Pages that read the session render inside `<Suspense>`.
-- **Postgres** via `postgres` (porsager). Supabase in production (transaction pooler); plain Postgres plus `db/shim/supabase-shim.sql` locally and in CI.
+- **Postgres** via `postgres` (porsager). Supabase in production (transaction pooler); plain Postgres locally and in CI, built from `db/migrations` (the first file, `20261024000000_auth_schema.sql`, provides the `auth` schema and the `anon` and `authenticated` roles).
 - **Auth:** Supabase magic link for `ALLOWED_EMAILS`; everyone else comes in through a one-time invite link the owner (`OWNER_EMAIL`) makes on /invites and sends himself (decision 0010). Signed-out visitors see /welcome. `AUTH_MODE=dev` is a signed-cookie sign-in for local work only, refused on Vercel.
 - **Spend:** the owner may use the whole daily cap; other workspaces get `WORKSPACE_DAILY_CAP_PENCE` each and never the owner's reserve (`OWNER_RESERVE_PENCE`). Web searches are priced in `src/config/prices.ts` and counted in the cap and ledger.
 - **Agents:** each agent is a definition (`src/lib/agents/contract.ts`): typed input and output (Zod), instructions, prompt builder, summary, optional offline mock answer. `runModelStep()` does the call, validation, one repair attempt and the trail.
@@ -31,7 +31,8 @@ A multi-agent campaign studio for marketing teams. Three squads of AI agents (St
 
 | Path | What |
 | --- | --- |
-| `supabase/migrations/` | Schema, RLS policies, functions. Add new files; never edit an applied one. |
+| `db/migrations/` | Schema, RLS policies, functions, applied in name order by `npm run db:migrate` and recorded in `schema_migrations`. Add new files; never edit an applied one (the runner refuses). |
+| `db/seed.sql` | Local dev seed (`npm run db:reset`) |
 | `src/lib/agents/` | Agent contract, registry, model step, workflows, run queries |
 | `src/lib/models/` | `generate()`, cap, cost, provider registry, mock model |
 | `src/app/(app)/` | Signed-in app: home, runs, run detail |
@@ -46,7 +47,8 @@ A multi-agent campaign studio for marketing teams. Three squads of AI agents (St
 | --- | --- |
 | `npm run dev` | App on :3000 |
 | `npm run inngest` | Inngest dev server on :8288 (needed for agent runs) |
-| `npm run db:reset` | Rebuild the local dev database with shim, migrations and seed |
+| `npm run db:reset` | Rebuild the local dev database from the migrations, with the seed |
+| `npm run db:migrate` | Apply pending migrations to `DATABASE_URL` (`-- --dry-run` lists them; `-- --list-pending --json` for the Neon connector) |
 | `npm test` | Unit, database and agent tests (rebuilds the test database) |
 | `npm run test:e2e` | Playwright against a running app and Inngest dev server |
 | `npm run typecheck` / `npm run lint` | Types and lint, zero warnings |
