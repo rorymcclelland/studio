@@ -50,7 +50,7 @@ export function configProblems(env: Record<string, string | undefined> = process
   // N-3: production sends sign-in links through Resend; everywhere else they go to the server log.
   if (env.VERCEL_ENV === "production") {
     need("RESEND_API_KEY", "the Resend API key that sends sign-in links (Vercel Production only, marked Sensitive)");
-    need("EMAIL_FROM", 'the sender of sign-in emails, on the verified mcclelland.info subdomain, e.g. "Studio <sign-in@studio.mcclelland.info>"');
+    need("EMAIL_FROM", 'the sender of sign-in emails, on the verified mcclelland.info subdomain, e.g. "Studio <sign-in@mail.mcclelland.info>"');
   }
 
   if (env.VERCEL && !env.INNGEST_DEV) {
