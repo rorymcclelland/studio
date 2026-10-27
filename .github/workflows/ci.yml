@@ -109,4 +109,7 @@ jobs:
         env:
           SKIP_DB_RESET: "1"
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:54322/postgres
-        run: npx vitest run tests/db tests/agents tests/models
+        # The eval-runner test builds its own throwaway database on the local
+        # Postgres the other jobs use (port 54329), which this job doesn't have;
+        # it runs in the first job instead.
+        run: npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts
