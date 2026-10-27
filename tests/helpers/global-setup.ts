@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 
-// Rebuilds the test database from the shim and migrations once per run.
+// Rebuilds the test database from db/migrations once per run.
 export default function setup() {
   // The real-stack CI job runs against `supabase start`, which applies migrations itself.
   if (process.env.SKIP_DB_RESET) return;

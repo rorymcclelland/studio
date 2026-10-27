@@ -5,7 +5,7 @@ How Studio is hosted: Supabase (database and sign-in), Vercel (the app), Inngest
 ## 1. Supabase
 
 1. Create a project on the free plan: name `campaign-studio`, region London (eu-west-2). Generate the database password and save it in a password manager.
-2. **SQL Editor → New query.** Paste the whole of `supabase/migrations/20261024000001_foundations.sql` and run it. Expect "Success. No rows returned". Each later migration is applied the same way, in order (until a deploy workflow does it).
+2. **SQL Editor → New query.** Paste the whole of `db/migrations/20261024000001_foundations.sql` (then in `supabase/migrations/`) and run it. Expect "Success. No rows returned". Each later migration was applied the same way, in order. Supabase provides what `20261024000000_auth_schema.sql` makes, so that file was never applied there. From Sprint 6, see "Migrations" below.
 3. **Authentication → Users → Add user → Create new user.** Enter the email you will sign in with, any long random password (it is never used), and tick **Auto confirm user**. Sign-in sends magic links only to existing users, so this step is what gives you access.
 4. **Authentication → Sign In / Providers.** Turn off **Allow new users to sign up**. Keep the Email provider on.
 5. **Connect** (top of the dashboard). Note the **Project URL** and the **publishable key** (`sb_publishable_…`). Under **Transaction pooler**, copy the URI (port 6543) and replace `[YOUR-PASSWORD]` with the database password. That string is `DATABASE_URL`.
@@ -58,6 +58,18 @@ Open the production URL, sign in with the email from 1.3, follow the link in the
 - Functions run in London (`lhr1`) beside the database.
 - **After a deploy that adds, renames or removes an Inngest function, resync Inngest.** Open the project in Vercel, then **Integrations → Inngest → Open in Inngest** (this signs in to the linked account; signing in at app.inngest.com directly makes a separate, empty one), choose **Production → Apps → campaign-studio → Resync**, and check **Functions** lists what the code serves (from Sprint 3: **Agent run**). Until then, new runs stay queued. Sprint 3 needed this once (backlog F-15); from Sprint 5 the after-deploy Action does it (step 6 below), so this is the fallback.
 - **Migrations that change data or remove a permission** may be refused by the Supabase connector's approval step. Run those in the Supabase SQL editor and note it in the sprint's refinement.
+
+## Migrations (from Sprint 6, N-1)
+
+Every database is built from the files in `db/migrations`, in file-name order. The first, `20261024000000_auth_schema.sql`, makes the `auth` schema, `auth.users` (id, email, created_at), `auth.uid()`, `auth.role()` and the `anon` and `authenticated` roles, and grants both roles to the connecting role by name. It needs no superuser, so it runs as Neon's owner role. Each applied file is recorded in `public.schema_migrations` (file name, sha256 of the file, applied time), which the runner creates if it is missing; the app's roles can't read it.
+
+- **Locally and in CI:** `npm run db:migrate` applies whatever is pending to `DATABASE_URL` (`node scripts/db-migrate.mjs --url NAME` reads the connection string from the variable `NAME`). Each file runs in its own transaction with its record. It stops before applying anything if an applied file has changed or gone, naming it; a failing file rolls back alone and stops the run, naming it. `-- --dry-run` lists the pending files and changes nothing. `npm run db:reset` and `npm test` rebuild their databases through it.
+- **On Neon (Rory's answer to Q4): Claude applies migrations through the Neon connector.** No connection string leaves Vercel or GitHub.
+  1. Through the connector, run `select file_name, sha256 from public.schema_migrations order by file_name` (on a new project, run the `bootstrapSql` from step 2 first) and save the rows as JSON.
+  2. `node scripts/db-migrate.mjs --list-pending --json --applied rows.json --with-sql` prints `bootstrapSql`, and for each pending file its `name`, `sha256`, `path`, `recordSql` (the `schema_migrations` insert) and `applySql` (begin, the file, its record, commit). It refuses, naming the file, if a row's sha256 differs from the file on disk.
+  3. Apply each file's `applySql` in order through the connector's migration tools, which try it on a temporary branch first. If the connector refuses a statement (as Supabase's did with `REVOKE`; the bootstrap and most migrations contain one), Rory runs that `applySql` in Neon's SQL Editor and it is noted in the sprint's refinement.
+  4. Repeat step 1: the rows should now list every file.
+- **Comparing two schemas (N-1 test case 6):** `node scripts/schema-diff.mjs --a SUPABASE_DB_URL --b NEON_DB_URL`, with the two connection strings in those variables (never on the command line). It compares tables, columns, constraints, indexes, policies, functions (by a hash of their bodies), triggers, enums and the grants to `anon`, `authenticated` and `PUBLIC` in `public`, plus auth.users's id, email and created_at, `auth.uid()` and `auth.role()`, and ignores Supabase's other schemas, auth columns and roles. It prints each difference and exits 1, or says "No differences". `--a NAME --dump` prints one database's description.
 
 
 ## Sprint 4: public address, invites and previews

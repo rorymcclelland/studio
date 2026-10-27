@@ -12,6 +12,7 @@
     "test": "vitest run",
     "test:e2e": "playwright test",
     "db:reset": "node --env-file-if-exists=.env.local scripts/db-reset.mjs --seed",
+    "db:migrate": "node --env-file-if-exists=.env.local scripts/db-migrate.mjs",
     "check:secrets": "node scripts/check-secrets.mjs",
     "prepare": "git config core.hooksPath .githooks || true",
     "eval": "node --env-file-if-exists=.env.local scripts/eval.mjs"
