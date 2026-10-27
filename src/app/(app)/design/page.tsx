@@ -230,7 +230,7 @@ export default function DesignPage() {
       <Section id="config" title="Configuration page">
         <ConfigProblems
           headingLevel={3}
-          problems={["Sample: SESSION_SECRET is missing. Set it to 32 or more random characters."]}
+          problems={["Sample: RESEND_API_KEY is not set: the Resend API key that sends sign-in links."]}
         />
       </Section>
     </div>

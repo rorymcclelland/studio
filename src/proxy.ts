@@ -1,4 +1,3 @@
-import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 // F-12: a record page whose id can't be an id is a real 404. The page itself
@@ -18,14 +17,17 @@ export function malformedRecordPath(pathname: string): boolean {
   }
 }
 
-/** A session cookie of either kind is present (whether it is valid is checked by the page). */
+// N-2: Studio's own session cookie (src/lib/auth/session-store.ts). Proxy
+// runs apart from the app's modules, so the name is repeated here.
+const SESSION_COOKIE = "cs_session";
+const SESSION_SECONDS = 30 * 24 * 60 * 60;
+
+/** A session cookie is present (whether it is valid is checked by the page). */
 export function hasSessionCookie(request: NextRequest): boolean {
-  return request.cookies.getAll().some((c) => c.name === "cs_dev_session" || (c.name.startsWith("sb-") && c.name.includes("auth-token")));
+  return request.cookies.has(SESSION_COOKIE);
 }
 
-// Refreshes the Supabase session cookie once per navigation, so server
-// components always see a valid session. Skipped in local dev auth mode.
-export async function proxy(request: NextRequest) {
+export function proxy(request: NextRequest) {
   if (request.method === "GET" && malformedRecordPath(request.nextUrl.pathname)) {
     return NextResponse.rewrite(new URL("/_record-not-found", request.url));
   }
@@ -33,26 +35,21 @@ export async function proxy(request: NextRequest) {
   if (request.method === "GET" && request.nextUrl.pathname === "/" && !hasSessionCookie(request)) {
     return NextResponse.rewrite(new URL("/welcome", request.url));
   }
-  if (process.env.AUTH_MODE === "dev" || !process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    return NextResponse.next();
+  const response = NextResponse.next();
+  // The database extends a session used after a day (public.lookup_session);
+  // this keeps the cookie alive alongside it. GET only, so it never races the
+  // sign-out action's own Set-Cookie. A cookie the database no longer knows
+  // stays useless: the page still treats it as signed out.
+  const session = request.cookies.get(SESSION_COOKIE)?.value;
+  if (request.method === "GET" && session && /^[A-Za-z0-9_-]{43}$/.test(session)) {
+    response.cookies.set(SESSION_COOKIE, session, {
+      httpOnly: true,
+      secure: request.nextUrl.protocol === "https:",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_SECONDS,
+    });
   }
-  let response = NextResponse.next({ request });
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY!,
-    {
-      cookies: {
-        getAll: () => request.cookies.getAll(),
-        setAll: (toSet, headers) => {
-          for (const { name, value } of toSet) request.cookies.set(name, value);
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of toSet) response.cookies.set(name, value, options);
-          for (const [k, v] of Object.entries(headers ?? {})) response.headers.set(k, v);
-        },
-      },
-    },
-  );
-  await supabase.auth.getClaims();
   return response;
 }
 

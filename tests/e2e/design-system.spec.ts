@@ -30,6 +30,9 @@ const SCREENS: Screen[] = [
   { name: "sign-in", path: () => "/signin", signedIn: false },
   { name: "public welcome page", path: () => "/", signedIn: false },
   { name: "sign-in after an expired invite", path: () => "/signin?invite=expired", signedIn: false },
+  { name: "sign-in after an expired link", path: () => "/signin?link=expired", signedIn: false },
+  // Opening a link only shows Continue, so any token-shaped path shows the page.
+  { name: "sign-in link (Continue)", path: () => `/signin/link/${"A".repeat(43)}`, signedIn: false },
   { name: "home", path: () => "/", signedIn: true },
   { name: "runs", path: () => "/runs", signedIn: true },
   { name: "run detail with approval form", path: () => awaitingRun, signedIn: true },

@@ -1,41 +1,20 @@
 import "server-only";
-import { cookies } from "next/headers";
-import { connection } from "next/server";
+import { cache } from "react";
+import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { asUser } from "@/lib/db/scoped";
-import { authMode, isEmailAllowed } from "@/lib/env";
-import { decodeDevSession, DEV_COOKIE } from "./dev-session";
-import { supabaseServer } from "./supabase";
+import { endSessionToken, SESSION_COOKIE, SESSION_SECONDS, userForSessionToken, type CurrentUser } from "./session-store";
 
-export type CurrentUser = { id: string; email: string };
+export type { CurrentUser };
 export type CurrentMember = CurrentUser & { userId: string; workspaceId: string };
 
-/** The signed-in, allow-listed user, or null. The only session read in the app. */
-export async function getCurrentUser(): Promise<CurrentUser | null> {
-  if (authMode() === "dev") {
-    const s = decodeDevSession((await cookies()).get(DEV_COOKIE)?.value);
-    if (!s || !(await allowed(s.userId, s.email))) return null;
-    return { id: s.userId, email: s.email };
-  }
-  // The Supabase client reads the clock (Date.now) while checking the session.
-  // Under Cache Components that must happen at request time, not while
-  // prerendering, so mark this as request-time work first.
-  await connection();
-  const supabase = await supabaseServer();
-  const { data } = await supabase.auth.getClaims();
-  const claims = data?.claims;
-  const email = typeof claims?.email === "string" ? claims.email : null;
-  if (!claims?.sub || !email || !(await allowed(claims.sub, email))) return null;
-  return { id: claims.sub, email };
-}
+// One lookup per request and token, however many components ask.
+const userForToken = cache(userForSessionToken);
 
-/** On the allow-list (ALLOWED_EMAILS), or invited and not revoked (F-3). */
-async function allowed(userId: string, email: string): Promise<boolean> {
-  if (isEmailAllowed(email)) return true;
-  return asUser(userId, async (tx) => {
-    const [r] = await tx`select public.is_invited(${email}) as ok`;
-    return r.ok === true;
-  });
+/** The signed-in user with access (allow-listed or invited), or null. The only session read in the app. */
+export async function getCurrentUser(): Promise<CurrentUser | null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  return userForToken(token ?? null);
 }
 
 /** The signed-in member and their workspace; redirects to sign-in otherwise. */
@@ -47,4 +26,31 @@ export async function requireMember(): Promise<CurrentMember> {
     return r.id as string;
   });
   return { ...user, userId: user.id, workspaceId };
+}
+
+/**
+ * Secure everywhere except plain local http (next dev or next start on
+ * localhost), where a Secure cookie would never be sent back.
+ */
+async function secureCookie(): Promise<boolean> {
+  if (process.env.VERCEL) return true;
+  return (await headers()).get("x-forwarded-proto") === "https";
+}
+
+/** Sets the session cookie (server actions only): httpOnly, SameSite=Lax, path /, 30 days. */
+export async function setSessionCookie(token: string): Promise<void> {
+  (await cookies()).set(SESSION_COOKIE, token, {
+    httpOnly: true,
+    secure: await secureCookie(),
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_SECONDS,
+  });
+}
+
+/** Sign-out (server actions only): ends the session in the database and clears the cookie. */
+export async function endCurrentSession(): Promise<void> {
+  const store = await cookies();
+  await endSessionToken(store.get(SESSION_COOKIE)?.value);
+  store.delete(SESSION_COOKIE);
 }

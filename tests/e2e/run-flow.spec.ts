@@ -1,13 +1,7 @@
 // S1-5 #1 and #7 end to end: the real app, the real Inngest dev server, the
-// offline mock model. Requires AUTH_MODE=dev and dev@example.test allow-listed.
-import { expect, test, type Page } from "@playwright/test";
-
-async function signIn(page: Page) {
-  await page.goto("/signin");
-  await page.getByLabel("Email").fill("dev@example.test");
-  await page.getByRole("button", { name: "Sign in" }).click();
-  await expect(page.getByRole("heading", { name: "Try the tagline agent" })).toBeVisible();
-}
+// offline mock model. Requires dev@example.test allow-listed (signed in by email, see helpers.ts).
+import { expect, test } from "@playwright/test";
+import { signIn } from "./helpers";
 
 test("start a run, approve a tagline, see the completed trail", async ({ page }) => {
   await signIn(page);
