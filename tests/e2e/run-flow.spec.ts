@@ -27,7 +27,8 @@ test("start a run, approve a tagline, see the completed trail", async ({ page })
   await expect(page.getByText("mock · mock-model")).toBeVisible();
   // Review finding 4 (rule 1): the mock model's costs are marked simulated, with the reason.
   await expect(page.getByText(/total cost .+ \(simulated\)/)).toBeVisible();
-  await expect(page.locator("[data-simulated-cost-note]")).toBeVisible();
+  // The run panel and the recent-runs list each carry the note.
+  await expect(page.locator("[data-simulated-cost-note]").first()).toBeVisible();
   await expect(page.locator("[data-simulated-spend]")).toHaveText("Simulated");
 });
 
