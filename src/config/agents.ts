@@ -20,7 +20,9 @@ export const AGENT_MODELS = {
   // about 3p a run. Up to 27 sets (three audiences, four channels) fit in 4,000 tokens.
   copy: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 4000 },
   // S5-1 (Q3): image prompts and the picture check on Haiku.
-  imagery: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 1500 },
+  // 4,000 (was 1,500): four detailed prompts ran past 1,500 tokens on the first
+  // production run and the reply was cut off mid-JSON (27 Oct 2026).
+  imagery: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 4000 },
   imageCheck: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 200 },
 } satisfies Record<string, AgentModelConfig>;
 

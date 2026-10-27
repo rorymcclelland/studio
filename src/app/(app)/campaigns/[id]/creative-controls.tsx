@@ -34,10 +34,11 @@ export type FieldSpec = { path: string; label: string; limit: number; multiline:
 /** A costed button's label: what it does, then roughly what it costs. */
 function Costed({ label, estimate }: { label: string; estimate: string }) {
   return (
-    <>
-      {label}
-      <span className="font-medium opacity-90">({estimate})</span>
-    </>
+    // Each part stays on one line; on a narrow screen the estimate moves below the label as a whole.
+    <span className="inline-flex flex-wrap items-baseline justify-center gap-x-1.5 gap-y-0 text-center">
+      <span className="whitespace-nowrap">{label}</span>
+      <span className="font-medium whitespace-nowrap opacity-90">({estimate})</span>
+    </span>
   );
 }
 

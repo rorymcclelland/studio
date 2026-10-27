@@ -132,3 +132,13 @@ describe("S5-1 palette colours in words", () => {
     for (const hex of ["#123456", "#abcdef", "#00ff7f", "#ff00ff"]) expect(colourWords(hex)).not.toMatch(/#|\d/);
   });
 });
+
+describe("production check, 27 Oct: the Imagery reply has room for four full prompts", () => {
+  it("allows at least twice the largest valid reply, in tokens (about 3 characters a token)", async () => {
+    const { AGENT_MODELS } = await import("@/config/agents");
+    const { imageryOutput } = await import("@/lib/agents/imagery");
+    const shape = imageryOutput.shape.prompts.element.shape;
+    const largest = 4 * (Number(shape.prompt.maxLength) + Number(shape.idea.maxLength) + 60) + 40;
+    expect(AGENT_MODELS.imagery.maxOutputTokens).toBeGreaterThanOrEqual(Math.ceil(largest / 3) * 2);
+  });
+});
