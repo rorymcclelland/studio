@@ -94,7 +94,7 @@ Fixed during the production check (26 Oct, all deployed and tested): five search
 | --- | --- | --- | --- |
 | F-16a | First real-model eval run in GitHub Actions, report committed; add today's production replies (the long note, the possessive names, the brand-name figure) as regression cases | F-16 split | Backlog, returned from Sprint 4 |
 | F-17 | The "After production deploy" Action has never run: Vercel does not appear to send GitHub deployment events. Check the repo's Deployments, then trigger on Vercel's event or a check after the CI run | F-15 split | Ready, Sprint 5 |
-| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Split: F-18a (new sign-in link) Ready, Sprint 5; the email service stays Backlog |
+| F-18 | Invitees can't sign back in by email: Supabase's built-in email only reaches team members. A fresh invite to the same address is untested. Add an email service (with Rory's domain) or test and document the re-invite | Sprint 4 production check | Split: F-18a (new sign-in link) Ready, Sprint 5; the email service is N-3, Ready, Sprint 6 |
 | F-19 | A withdrawn sign-off shows as "expired" in the history; give it its own state | Sprint 4 build | Backlog, from Sprint 4 review |
 | F-20 | The persona facts check compares segment keys only, not age or region | Sprint 4 build | Backlog, from Sprint 4 review |
 | F-21 | Two runs started together can both pass the cap check before either is charged; and a Market refresh costs 15 to 20p. Reserve the estimate when a call starts; consider Haiku for the Market agent | Sprint 4 review and production check | Ready, Sprint 5 (the reservation; the Market model stays Sonnet, Q6) |
@@ -122,15 +122,29 @@ Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads
 | --- | --- | --- | --- |
 | F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Backlog |
 
+## Sprint 6: move from Supabase to Neon (refined and confirmed 27 October 2026; starts after Sprint 5 closes)
+
+Supabase's free plan allows two active projects and Studio uses both, so no other demo app can run. Creative II moves to Sprint 7. Detail: `docs/refinement/sprint-6.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| N-1 | Neon project in London; the shim becomes a real baseline migration (`auth.users`, `auth.uid()`, roles); `db:migrate` with a record of applied files; migrations applied by Claude through the Neon connector | M | Ready, Sprint 6 |
+| N-2 | Studio's own sign-in: hashed session tokens in an httpOnly cookie; invites start a session directly; Supabase packages removed | M | Ready, Sprint 6 |
+| N-3 | Sign in by email through Resend from a mcclelland.info subdomain, rate limited (closes F-18) | M | Ready, Sprint 6 |
+| N-4 | CI's required real-stack job runs on a throwaway Neon branch | S | Ready, Sprint 6 |
+| N-5 | Previews on a long-lived Neon `preview` branch with demo data (replaces F-8's second Supabase project) | S | Ready, Sprint 6 |
+| N-6 | Production cutover: data copied by a one-off Action, row counts and asset hashes checked, rehearsed first; Supabase kept 14 days as the way back | M | Ready, Sprint 6 |
+| N-7 | Clean-up: keep-awake cron, Supabase variables and code removed; hosting docs, CLAUDE.md, decision 0015, a new-demo-app guide | S | Ready, Sprint 6 |
+| N-8 | Test pack for Rory's hand checks | S | Ready, Sprint 6 |
+
 ## Not yet in a sprint (ranked)
 
-1. F-18 Email service so invitees can sign in without a new link (M; F-18a in Sprint 5 covers the need for now)
-2. F-16a First real-model eval report and regression cases (S)
-3. F-20 Persona facts check compares age and region (S)
-4. F-19 Withdrawn sign-offs get their own state (S)
-5. F-23 Gate production deploys on the checks, before real users arrive (S)
-6. F-9 Dark theme, once the light design system has settled
-7. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+1. F-16a First real-model eval report and regression cases (S)
+2. F-20 Persona facts check compares age and region (S)
+3. F-19 Withdrawn sign-offs get their own state (S)
+4. F-23 Gate production deploys on the checks, before real users arrive (S)
+5. F-9 Dark theme, once the light design system has settled
+6. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -144,3 +158,4 @@ Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads
 | 26 Oct 2026 | Sprint 4 refined: invites by link Rory sends himself (Supabase's own email only reaches team members); real rival names allowed in market notes only, rule 2 to be reworded; previews on a second free Supabase project; market on Sonnet, personas and test plan on Haiku; sign-offs open 14 days |
 | 26 Oct 2026 | Sprint 4 closed: demo gate 1 met on the public address; Market agent fixed in four production rounds (three searches, figures checked against the cited pages, notes that fail are left out); previews on their own Supabase project; Sprint 5 proposed |
 | 26 Oct 2026 | Sprint 5 refined: Nano Banana 2.1 at 1K; images kept in Postgres; Copy on Sonnet, Imagery and vision checks on Haiku; vision check for text now; SVG and PNG logos; bundled open fonts; no testimonials; Market stays on Sonnet |
+| 27 Oct 2026 | Sprint 6 refined: move to Neon (London), Studio's own sign-in, migrations recorded and applied by Claude through the Neon connector, Resend for sign-in links (folds in F-18), previews and CI on Neon branches, Supabase kept 14 days; starts after Sprint 5 closes |
