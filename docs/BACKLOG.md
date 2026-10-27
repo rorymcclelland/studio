@@ -116,14 +116,21 @@ Fixed during the production check (26 Oct, all deployed and tested): five search
 
 Demo: a signed-off brief becomes about a dozen finished, checked paid-social ads in about two minutes for under 20p. Rory's Google key is in Vercel (Production, Sensitive). Detail: `docs/refinement/sprint-5.md`.
 
+## Raised during Sprint 5
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Backlog |
+
 ## Not yet in a sprint (ranked)
 
 1. F-18 Email service so invitees can sign in without a new link (M; F-18a in Sprint 5 covers the need for now)
 2. F-16a First real-model eval report and regression cases (S)
 3. F-20 Persona facts check compares age and region (S)
 4. F-19 Withdrawn sign-offs get their own state (S)
-5. F-9 Dark theme, once the light design system has settled
-6. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+5. F-23 Gate production deploys on the checks, before real users arrive (S)
+6. F-9 Dark theme, once the light design system has settled
+7. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
