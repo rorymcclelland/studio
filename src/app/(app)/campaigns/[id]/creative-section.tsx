@@ -206,15 +206,28 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
       className={cx("flex min-w-0 flex-col gap-3 rounded-card border-2 bg-surface p-3 sm:p-4", v.picked ? "border-primary" : "border-transparent")}
     >
       {/* The ad is drawn by the /ads route; the layout is in the address so a switch shows the new drawing. */}
-      {/* eslint-disable-next-line @next/next/no-img-element -- a drawn PNG behind the session, not a static asset */}
-      <img
-        src={`${v.src}?layout=${v.layout}`}
-        width={1080}
-        height={1080}
-        loading="lazy"
-        alt={`Ad ${number}, ${v.layoutName} layout. Headline: ${v.words.headline}. ${v.words.body} Button: ${v.words.cta}.`}
-        className="block aspect-square h-auto w-full rounded-field bg-surface-2"
-      />
+      {/* Clicking the ad opens it full size (1080 × 1080) in a new tab (Rory's test, 27 Oct). */}
+      <a
+        href={`${v.src}?layout=${v.layout}`}
+        target="_blank"
+        rel="noopener"
+        data-ad-full=""
+        title="Open full size"
+        className="group relative block rounded-field focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element -- a drawn PNG behind the session, not a static asset */}
+        <img
+          src={`${v.src}?layout=${v.layout}`}
+          width={1080}
+          height={1080}
+          loading="lazy"
+          alt={`Ad ${number}, ${v.layoutName} layout, opens full size in a new tab. Headline: ${v.words.headline}. ${v.words.body} Button: ${v.words.cta}.`}
+          className="block aspect-square h-auto w-full cursor-zoom-in rounded-field bg-surface-2"
+        />
+        <span className="pointer-events-none absolute right-2 bottom-2 rounded-full bg-ink/80 px-2.5 py-1 text-xs font-medium text-surface opacity-0 transition-opacity group-hover:opacity-100 group-focus-visible:opacity-100">
+          Full size
+        </span>
+      </a>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
         <h3 id={titleId} className="font-strong">
           Ad {number}

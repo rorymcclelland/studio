@@ -88,6 +88,15 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
     await expect(card.locator("[data-badge=legal]")).toBeVisible();
     await expect(card.locator("[data-badge=simulated]")).toHaveText("Simulated image");
   }
+  // Rory's test, 27 Oct: clicking an ad opens it full size (the 1080 × 1080 PNG) in a new tab.
+  const full = ads(page).first().locator("a[data-ad-full]");
+  await expect(full).toHaveAttribute("target", "_blank");
+  const [tab] = await Promise.all([page.context().waitForEvent("page"), full.click()]);
+  await tab.waitForLoadState();
+  expect(tab.url()).toMatch(/\/ads\/[0-9a-f-]{36}/);
+  const size = await tab.evaluate(() => { const i = document.querySelector("img"); return i ? [i.naturalWidth, i.naturalHeight] : null; });
+  expect(size).toEqual([1080, 1080]);
+  await tab.close();
   // Once there are ads, Make creative is disabled and says why.
   await expect(creative(page).getByRole("button", { name: /Make creative/ })).toBeDisabled();
   await expect(page.locator("[data-make-creative-reason]")).not.toBeEmpty();
