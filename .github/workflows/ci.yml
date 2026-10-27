@@ -123,17 +123,35 @@ jobs:
           database: studio
           role: studio_owner
           expires_at: ${{ steps.expiry.outputs.at }}
-      - name: Apply every migration with the runner
+      # The branch action doesn't mask its connection-string outputs, and a step's env is
+      # printed in the log, so the string is fetched here and masked before anything prints.
+      - name: Get the branch's connection string (masked)
         env:
-          NEON_CI_URL: ${{ steps.branch.outputs.db_url }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          BRANCH_ID: ${{ steps.branch.outputs.branch_id }}
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 30 -H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json" \
+            "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=studio&role_name=studio_owner&pooled=false" \
+            > "$RUNNER_TEMP/uri.json"
+          node -e '
+            const fs = require("node:fs");
+            const u = new URL(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).uri);
+            u.searchParams.delete("channel_binding");
+            console.log(`::add-mask::${u.toString()}`);
+            console.log(`::add-mask::${u.password}`);
+            console.log(`::add-mask::${decodeURIComponent(u.password)}`);
+            fs.appendFileSync(process.env.GITHUB_ENV, `NEON_CI_URL=${u.toString()}\n`);
+          ' "$RUNNER_TEMP/uri.json"
+          rm -f "$RUNNER_TEMP/uri.json"
+      - name: Apply every migration with the runner
         run: node scripts/db-migrate.mjs --url NEON_CI_URL
       - name: Database, agent and model tests on Neon (Postgres 17)
         env:
           SKIP_DB_RESET: "1"
-          TEST_DATABASE_URL: ${{ steps.branch.outputs.db_url }}
-        # The eval-runner, migration-runner and data-copy tests make and drop their own
-        # databases and roles on the plain Postgres of the first job, so they run there instead.
-        run: npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts
+        # The eval-runner, migration-runner and copy tests make and drop their own databases
+        # and roles on the plain Postgres of the first job, so they run there instead.
+        run: TEST_DATABASE_URL="$NEON_CI_URL" npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts
       - name: Delete the throwaway branch (also after a failure)
         if: always() && steps.branch.outputs.branch_id != ''
         uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
