@@ -36,10 +36,16 @@ jobs:
           done
           echo "Production did not serve $want within 15 minutes. Check the Vercel deployment."; exit 1
       - name: Ask the app to sync its functions with Inngest
+        # Three tries, 60 s each: the first call can reach a function still starting
+        # cold (27 Oct: one failed and its rerun passed).
         run: |
-          code=$(curl -s --max-time 20 -o sync.json -w '%{http_code}' -X PUT "$APP_URL/api/inngest")
-          cat sync.json; echo
-          test "$code" -ge 200 -a "$code" -lt 300 || { echo "Inngest sync failed with HTTP $code"; exit 1; }
+          for try in 1 2 3; do
+            code=$(curl -s --max-time 60 -o sync.json -w '%{http_code}' -X PUT "$APP_URL/api/inngest")
+            cat sync.json; echo
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then exit 0; fi
+            echo "Try $try: Inngest sync answered HTTP $code"; sleep 15
+          done
+          echo "Inngest sync failed three times. Resync by hand (docs/hosting.md)."; exit 1
       - name: Check the health endpoint lists the agent run function
         run: |
           curl -sf --max-time 20 "$APP_URL/api/health" -o health.json
