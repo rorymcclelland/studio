@@ -146,12 +146,19 @@ jobs:
           rm -f "$RUNNER_TEMP/uri.json"
       - name: Apply every migration with the runner
         run: node scripts/db-migrate.mjs --url NEON_CI_URL
-      - name: Database, agent and model tests on Neon (Postgres 17)
+      - name: Database and model tests on Neon (Postgres 17, as the non-superuser owner)
         env:
           SKIP_DB_RESET: "1"
-        # The eval-runner, migration-runner and copy tests make and drop their own databases
-        # and roles on the plain Postgres of the first job, so they run there instead.
-        run: TEST_DATABASE_URL="$NEON_CI_URL" npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts
+        # The runner is in the US and the branch in London, so every query crosses the
+        # Atlantic. The database and model tests check what differs on Neon (Postgres 17,
+        # row-level security, grants and triggers as the owner role) and pass in about the
+        # time allowed. The agent tests make hundreds of queries each and test the same
+        # SQL; they run on plain Postgres in the first job (first Neon run, 28 Oct: every
+        # database and model test passed, two agent files timed out). The migration-runner,
+        # eval-runner and copy tests make their own databases and roles, so they also run
+        # in the first job.
+        timeout-minutes: 45
+        run: TEST_DATABASE_URL="$NEON_CI_URL" npx vitest run tests/db tests/models --testTimeout=60000 --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts
       - name: Delete the throwaway branch (also after a failure)
         if: always() && steps.branch.outputs.branch_id != ''
         uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
