@@ -60,12 +60,19 @@ describe("F-21 reserve spend before a call", () => {
 
   it("#2b while a call is in flight its reservation counts as spent, then gives way to the real charge", async () => {
     const m = await createMember();
-    mockBehaviour.delayMs = 300;
+    // Long enough to observe the reservation even against a distant database (CI on Neon),
+    // and the call is always awaited, so nothing is left running into the next test.
+    mockBehaviour.delayMs = 3000;
     const call = generate({ agent: "tagline", userId: m.userId, workspaceId: m.workspaceId, prompt: BIG });
-    await new Promise((r) => setTimeout(r, 150));
-    const during = await spendPosition(m.userId, m.workspaceId);
-    expect(during.workspace).toBeGreaterThan(2.5);
-    expect((await reservations(m)).length).toBe(1);
+    try {
+      const deadline = Date.now() + 2500;
+      while ((await reservations(m)).length === 0 && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+      const during = await spendPosition(m.userId, m.workspaceId);
+      expect(during.workspace).toBeGreaterThan(2.5);
+      expect((await reservations(m)).length).toBe(1);
+    } finally {
+      await call.catch(() => {});
+    }
     const res = await call;
     const after = await spendPosition(m.userId, m.workspaceId);
     expect(after.workspace).toBeCloseTo(res.costPence, 4);
