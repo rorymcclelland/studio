@@ -4,8 +4,9 @@ import { functions } from "@/inngest/functions";
 import { deployedCommit } from "@/lib/deploy/commit";
 
 // Health check (S1-1 #6): the database answers, which Inngest functions this
-// deployment serves, its commit and its database host. The after-deploy Action
-// polls it; nothing needs to keep the database awake (Neon resumes on its own).
+// deployment serves, its commit and (except in production) its database host.
+// The after-deploy Action polls it; nothing needs to keep the database awake
+// (Neon resumes on its own).
 export async function GET() {
   await connection();
   const started = Date.now();
@@ -17,8 +18,11 @@ export async function GET() {
     const inngestFunctions = functions.map((f) => f.id());
     // F-17: `commit` lets the after-deploy Action wait for this deployment.
     // F-8: which database this deployment uses (host only), so a preview can be seen to use its own.
-    const databaseHost = safeHost(process.env.DATABASE_URL);
-    return Response.json({ ok: true, database: "ok", ms, inngestFunctions, databaseHost, environment: process.env.VERCEL_ENV ?? "local", commit: deployedCommit() });
+    // Never in production, whose health check is public (Sprint 6 review): the after-deploy Action
+    // reads only `commit` and `inngestFunctions`.
+    const environment = process.env.VERCEL_ENV ?? "local";
+    const databaseHost = environment === "production" ? undefined : safeHost(process.env.DATABASE_URL);
+    return Response.json({ ok: true, database: "ok", ms, inngestFunctions, ...(databaseHost === undefined ? {} : { databaseHost }), environment, commit: deployedCommit() });
   } catch (err) {
     console.error("[health] database check failed", { target: describeDatabaseUrl(process.env.DATABASE_URL) }, err);
     return Response.json({ ok: false, database: "unreachable" }, { status: 503 });

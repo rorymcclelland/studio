@@ -54,6 +54,33 @@ describe("N-3 mailer", () => {
     expect(never).not.toHaveBeenCalled();
   });
 
+  it("Resend failure (review): the error names neither the recipient nor any address in the provider's body, and keeps status and a short reason", async () => {
+    const body = JSON.stringify({
+      statusCode: 422,
+      name: "validation_error",
+      message: "Invalid `to` field: Private.Person+tag@example.test is not allowed. Contact support@resend.example.",
+    });
+    const fetchImpl = vi.fn(async () => new Response(body, { status: 422 }));
+    const m = resendMailer("re_secret_key", "a@b.c", fetchImpl as unknown as typeof fetch);
+    const err = await m.send(signInEmail("private.person+tag@example.test", LINK, 15)).catch((e) => e);
+    expect(err).toBeInstanceOf(MailError);
+    expect(err.message).toBe("Resend refused the email (HTTP 422). Invalid `to` field: [address] is not allowed. Contact [address].");
+    expect(err.message.toLowerCase()).not.toContain("private.person");
+    expect(err.message).not.toContain("@");
+
+    // A long, non-JSON body is cut short and scrubbed too.
+    const long = vi.fn(async () => new Response(`bad gateway for someone@example.test ${"x".repeat(500)}`, { status: 502 }));
+    const e2 = await resendMailer("re_x", "a@b.c", long as unknown as typeof fetch).send(signInEmail("someone@example.test", LINK, 15)).catch((e) => e);
+    expect(e2.message).toMatch(/^Resend refused the email \(HTTP 502\)\. bad gateway for \[address\] x+$/);
+    expect(e2.message.length).toBeLessThan(260);
+    expect(e2.message).not.toContain("@");
+
+    // An empty body: status only.
+    const empty = vi.fn(async () => new Response("", { status: 500 }));
+    const e3 = await resendMailer("re_x", "a@b.c", empty as unknown as typeof fetch).send(signInEmail("someone@example.test", LINK, 15)).catch((e) => e);
+    expect(e3.message).toBe("Resend refused the email (HTTP 500).");
+  });
+
   it("console: writes the link to the server log and keeps it in memory for tests", async () => {
     const log = vi.spyOn(console, "log").mockImplementation(() => {});
     await consoleMailer().send(signInEmail("dev@example.test", LINK, 15));

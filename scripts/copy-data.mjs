@@ -26,8 +26,10 @@
 // numbers their digits.
 //
 // It refuses to run unless the target's schema_migrations ledger matches
-// db/migrations exactly, every copied table on the target is empty, and both
-// sides have the same tables and columns. It prints table names and row
+// db/migrations exactly, every copied table on the target is empty, both
+// sides have the same tables and columns, and every source auth.users email
+// is already lower-case and trimmed (sign-in finds users by lower-cased
+// address, so a mixed-case row would split an invitee from their workspace). It prints table names and row
 // counts, never row contents. Exit code 0 when copied, 1 when refused or failed.
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -326,6 +328,22 @@ export function castParam(n, column) {
   return column.bytea ? `$${n}::bytea` : `$${n}::text::${column.type}`;
 }
 
+/**
+ * How many auth.users emails are not lower(btrim(email)). Sign-in looks users
+ * up by lower-cased address, so such a row would no longer match its person.
+ * A count only: the addresses themselves are never printed.
+ * @param {import("postgres").Sql} sql
+ */
+export async function unnormalisedEmails(sql) {
+  const [{ n }] = await sql`select count(*)::int as n from auth.users where email is not null and email::text <> lower(btrim(email::text))`;
+  return n;
+}
+
+export const unnormalisedMessage = (n) =>
+  `${n} auth.users email(s) are not lower-case and trimmed. Sign-in looks people up by lower-cased address, ` +
+  "so they would be split from their workspace. Fix them on the source first " +
+  "(update auth.users set email = lower(btrim(email)), after checking no two collide).";
+
 /** Fails if the target's ledger is not exactly db/migrations. */
 async function checkLedger(target) {
   const [{ t }] = await target`select to_regclass('public.schema_migrations') as t`;
@@ -357,6 +375,9 @@ export async function copyData(source, target, { batch = 500, log = console.log 
   if (problems.length) throw new CopyError(`Refusing to copy: the two sides differ:\n  ${problems.join("\n  ")}`);
   for (const t of [...tgtCat.values(), ...srcCat.values()])
     if (!t.pk.length) throw new CopyError(`Refusing to copy: ${t.full} has no primary key`);
+
+  const mixed = await unnormalisedEmails(source);
+  if (mixed) throw new CopyError(`Refusing to copy: ${unnormalisedMessage(mixed)}`);
 
   const { order, deferred } = copyOrder(tgtCat);
   const srcByName = new Map([...srcCat.values()].map((t) => [t.full, t]));

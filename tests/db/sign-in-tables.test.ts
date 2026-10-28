@@ -33,7 +33,7 @@ describe("N-2 and N-3 tables and grants", () => {
     });
   }
 
-  it("execute grants: anon may look up, end and use sign-ins; only the app's own connection may start a session", async () => {
+  it("execute grants: anon may look up, end and use sign-ins; only the app's own connection may start a session or record a sign-in link", async () => {
     const rows = await getSql()`
       select p.proname as fn, r.rolname as role, has_function_privilege(r.oid, p.oid, 'execute') as ok
       from pg_proc p join pg_namespace ns on ns.oid = p.pronamespace
@@ -51,11 +51,18 @@ describe("N-2 and N-3 tables and grants", () => {
       lookup_session: ["anon", "authenticated"],
       end_session: ["anon", "authenticated"],
       end_sessions_for_email: ["authenticated"],
-      request_sign_in: ["anon"],
+      request_sign_in: [],
       use_sign_in: ["anon"],
     });
     await expect(asAnon((tx) => tx`select public.start_session(${userId}, ${"d".repeat(64)}, now() + interval '1 day')`)).rejects.toThrow(/permission denied/);
     await expect(asUser(userId, (tx) => tx`select public.start_session(${userId}, ${"d".repeat(64)}, now() + interval '1 day')`)).rejects.toThrow(/permission denied/);
+    // Sprint 6 review: request_sign_in trusts its allow-list flag, so no app role may pass one.
+    for (const run of [(fn: Parameters<typeof asAnon>[0]) => asAnon(fn), (fn: Parameters<typeof asAnon>[0]) => asUser(userId, fn)]) {
+      await expect(run((tx) => tx`select public.request_sign_in('outsider@example.test', ${"d".repeat(64)}, true)`)).rejects.toThrow(/permission denied/);
+    }
+    const [{ granted }] = await getSql()`
+      select has_function_privilege('public', 'public.request_sign_in(text, text, boolean)', 'execute') as granted`;
+    expect(granted).toBe(false);
   });
 
   it("every function is security definer with an empty search_path", async () => {

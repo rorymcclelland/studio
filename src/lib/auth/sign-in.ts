@@ -1,5 +1,6 @@
 import "server-only";
 import { z } from "zod";
+import { getSql } from "@/lib/db/client";
 import { asAnon } from "@/lib/db/scoped";
 import { isEmailAllowed } from "@/lib/env";
 import { getMailer, type Mailer } from "@/lib/email/mailer";
@@ -50,13 +51,17 @@ export function linkOrigin(h: { get(name: string): string | null }, env: Record<
 
 /**
  * Records and sends a sign-in link when the address has access and the
- * limits allow (3 per address per hour, 30 an hour in all). Returns whether
- * a link was sent; the caller shows SIGN_IN_REPLY either way.
+ * limits allow (per address: 3 an hour and 10 a day; in all: 30 an hour and
+ * 80 a day, inside Resend's free 100 a day). Returns whether a link was sent;
+ * the caller shows SIGN_IN_REPLY either way.
  */
 export async function requestSignInLink(email: string, origin: string, mailer: Mailer = getMailer()): Promise<boolean> {
   const token = newToken();
-  const [r] = await asAnon((tx) => tx`
-    select public.request_sign_in(${email}, ${hashToken(token)}, ${isEmailAllowed(email)}) as ok`);
+  // request_sign_in trusts its allow-list flag, so it is granted to no app
+  // role (anon included) and runs on the app's own connection, as
+  // start_session does (Sprint 6 review).
+  const [r] = await getSql()`
+    select public.request_sign_in(${email}, ${hashToken(token)}, ${isEmailAllowed(email)}) as ok`;
   if (r?.ok !== true) return false;
   await mailer.send(signInEmail(email, `${origin}/signin/link/${token}`, SIGN_IN_MINUTES));
   return true;
