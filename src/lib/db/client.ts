@@ -1,7 +1,7 @@
 import postgres from "postgres";
 
-// One pool per server instance. On Vercel, DATABASE_URL is Supabase's
-// transaction-mode pooler, so prepared statements are switched off.
+// One pool per server instance. On Vercel, DATABASE_URL is Neon's pooled
+// connection (PgBouncer in transaction mode), so prepared statements are switched off.
 declare global {
   var __csSql: postgres.Sql | undefined;
 }

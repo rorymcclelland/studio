@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-// Compares the schema of two databases (N-1 test case 6: production Supabase
-// against Neon), from catalog queries, so it needs no pg_dump.
+// Compares the schema of two databases (N-1 test case 6 compared the old
+// production database with Neon), from catalog queries, so it needs no pg_dump.
 //
-//   node scripts/schema-diff.mjs --a SUPABASE_DB_URL --b NEON_DB_URL
+//   node scripts/schema-diff.mjs --a OLD_DB_URL --b NEON_DB_URL
 //   node scripts/schema-diff.mjs --a NAME --dump      print one database's description
 //
 // --a and --b name environment variables holding the connection strings, so no
@@ -16,8 +16,8 @@
 // grants on tables, columns and functions to anon, authenticated and PUBLIC.
 // In `auth`, only what Studio's baseline defines: auth.users's id, email and
 // created_at (with their constraints and indexes), auth.uid() and auth.role().
-// Ignored: every other schema, Supabase's other auth objects and columns, its
-// roles, owners, extension objects, and the runner's own schema_migrations.
+// Ignored: every other schema, a hosted provider's other auth objects and
+// columns, its roles, owners, extension objects, and the runner's own schema_migrations.
 import { createHash } from "node:crypto";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";

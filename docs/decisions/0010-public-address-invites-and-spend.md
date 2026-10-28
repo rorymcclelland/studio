@@ -1,5 +1,7 @@
 # 0010 Public address: invite links, per-workspace caps, and real names in market notes
 
+**Superseded in part, 28 October 2026:** invites now start Studio's own session instead of using Supabase's admin API, invitees can sign back in by email, and previews use the Neon `preview` branch instead of a second Supabase project (decision 0015). The invite links, allow-list, spend limits, rule 2 wording and after-deploy sync stand.
+
 **Date:** 26 October 2026. **Status:** accepted (built in Sprint 4: F-3, F-8, F-15, S4-3).
 
 **Context.** Demo gate 1 puts the app on an address interviewers can open. Supabase's built-in email only delivers to members of the project's team (2 an hour), so magic links can't reach interviewers, and Rory chose not to set up an email service. Each interviewer must not be able to run up the AI bill or use Rory's share of it. And the Market agent's notes are only useful if they can say which real company did what, which rule 2 forbade.
