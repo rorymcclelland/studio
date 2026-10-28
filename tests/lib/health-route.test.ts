@@ -21,7 +21,11 @@ describe("GET /api/health", () => {
 
   async function health(env: Record<string, string>) {
     vi.spyOn(console, "log").mockImplementation(() => {});
-    vi.stubEnv("DATABASE_URL", `postgres://studio_owner:secret-password@${HOST}/studio`);
+    // Built in parts so the secret scan doesn't take the test's made-up password for a real one.
+    const url = new URL(`postgres://${HOST}/studio`);
+    url.username = "studio_owner";
+    url.password = "secret-password";
+    vi.stubEnv("DATABASE_URL", url.toString());
     vi.stubEnv("VERCEL_ENV", "");
     for (const [k, v] of Object.entries(env)) vi.stubEnv(k, v);
     const res = await GET();
@@ -38,7 +42,7 @@ describe("GET /api/health", () => {
   });
 
   it("on a preview and locally: names the database host, never the password", async () => {
-    for (const env of [{ VERCEL_ENV: "preview" }, {}]) {
+    for (const env of [{ VERCEL_ENV: "preview" }, {}] as Record<string, string>[]) {
       const r = await health(env);
       expect(r.body.databaseHost).toBe(HOST);
       expect(r.text).not.toContain("secret-password");

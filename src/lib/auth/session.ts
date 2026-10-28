@@ -17,10 +17,27 @@ export async function getCurrentUser(): Promise<CurrentUser | null> {
   return userForToken(token ?? null);
 }
 
-/** The signed-in member and their workspace; redirects to sign-in otherwise. */
+// Sprint 6 review: a cs_session cookie that no session matches (signed out
+// elsewhere, expired or revoked) is cleared, not kept alive. A page can't set
+// cookies, so it sends the visitor to this route, which clears it. The proxy
+// tells us which page was asked for (src/proxy.ts repeats both names).
+const SESSION_ENDED_PATH = "/signin/ended";
+const PATH_HEADER = "x-studio-path";
+
+/**
+ * The signed-in member and their workspace. Otherwise redirects as if there
+ * were no cookie: to sign-in, or, from /, to the welcome page; a cookie that
+ * no longer signs anyone in is cleared on the way.
+ */
 export async function requireMember(): Promise<CurrentMember> {
   const user = await getCurrentUser();
-  if (!user) redirect("/signin");
+  if (!user) {
+    if ((await cookies()).has(SESSION_COOKIE)) {
+      const from = (await headers()).get(PATH_HEADER);
+      redirect(from === "/" ? `${SESSION_ENDED_PATH}?to=welcome` : SESSION_ENDED_PATH);
+    }
+    redirect("/signin");
+  }
   const workspaceId = await asUser(user.id, async (tx) => {
     const [r] = await tx`select public.ensure_workspace() as id`;
     return r.id as string;

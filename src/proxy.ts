@@ -21,6 +21,11 @@ export function malformedRecordPath(pathname: string): boolean {
 // runs apart from the app's modules, so the name is repeated here.
 const SESSION_COOKIE = "cs_session";
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
+// Sprint 6 review: where a cookie the database no longer knows is cleared
+// (src/app/signin/ended/route.ts), and the request header that tells
+// requireMember() which page was asked for (also in src/lib/auth/session.ts).
+export const SESSION_ENDED_PATH = "/signin/ended";
+export const PATH_HEADER = "x-studio-path";
 
 /** A session cookie is present (whether it is valid is checked by the page). */
 export function hasSessionCookie(request: NextRequest): boolean {
@@ -35,13 +40,19 @@ export function proxy(request: NextRequest) {
   if (request.method === "GET" && request.nextUrl.pathname === "/" && !hasSessionCookie(request)) {
     return NextResponse.rewrite(new URL("/welcome", request.url));
   }
-  const response = NextResponse.next();
+  // The page asked for, so requireMember() can send someone whose cookie has
+  // died on as if they had none. Set here, so a client can't choose it.
+  const forwarded = new Headers(request.headers);
+  forwarded.set(PATH_HEADER, request.nextUrl.pathname);
+  const response = NextResponse.next({ request: { headers: forwarded } });
   // The database extends a session used after a day (public.lookup_session);
   // this keeps the cookie alive alongside it. GET only, so it never races the
-  // sign-out action's own Set-Cookie. A cookie the database no longer knows
-  // stays useless: the page still treats it as signed out.
+  // sign-out action's own Set-Cookie. Proxy can't tell a live session from a
+  // dead one (that needs the database), so a dead cookie is renewed here too;
+  // the first signed-in page that finds no session sends the visitor to
+  // SESSION_ENDED_PATH, which clears it, and that path is never renewed.
   const session = request.cookies.get(SESSION_COOKIE)?.value;
-  if (request.method === "GET" && session && /^[A-Za-z0-9_-]{43}$/.test(session)) {
+  if (request.method === "GET" && request.nextUrl.pathname !== SESSION_ENDED_PATH && session && /^[A-Za-z0-9_-]{43}$/.test(session)) {
     response.cookies.set(SESSION_COOKIE, session, {
       httpOnly: true,
       secure: request.nextUrl.protocol === "https:",
