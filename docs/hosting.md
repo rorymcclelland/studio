@@ -96,7 +96,7 @@ Done once. Production's data moves from Supabase into the Neon `production` bran
 ### 2. Rehearse first
 
 1. **GitHub → Actions → Copy production data (one-off, N-6) → Run workflow.** Use workflow from `sprint-6` (or `main` once Sprint 6 is merged), target `rehearsal`, and type `rehearsal` in the confirm box. Approve the run when GitHub asks.
-2. It makes a Neon branch `rehearsal-<run id>` from the empty `ci` branch, applies every migration, copies, checks, and then runs the database tests on a throwaway copy of that branch (they empty tables as they go, so the rehearsal itself is left as copied). The rehearsal branch is kept for two days and then deletes itself.
+2. It makes a Neon branch `rehearsal-<run id>` from the empty `ci` branch, applies every migration, copies, checks, and then makes a second, throwaway branch the same way (migrated, copied, checked) for the database and model tests, which empty tables as they go; the rehearsal branch is left as copied. (Neon can't branch from a branch that has an expiry date, so the suite can't use a copy of the rehearsal branch.) The rehearsal branch is kept for two days and then deletes itself.
 3. **What to check:**
    - The **Copy the data** step lists every table with its row count and ends "Copied … rows across … tables; every trigger is enabled again." Note how long the step took: the real copy takes about as long, and that is the pause.
    - The **Check the copy against Supabase** step says "Copy matches".

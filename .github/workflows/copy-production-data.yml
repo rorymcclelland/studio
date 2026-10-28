@@ -5,8 +5,10 @@
 #   target: rehearsal   copies into a fresh Neon branch, rehearsal-<run id>, made
 #                       from the empty `ci` branch and migrated here. The branch is
 #                       kept for inspection and deletes itself after about two days.
-#                       The full database test suite then runs on a throwaway child
-#                       of it, so the rehearsal itself is left as copied.
+#                       The database and model tests then run on a second, throwaway
+#                       branch, copied and checked the same way (Neon can't branch
+#                       from a branch with an expiry date), so the rehearsal itself
+#                       is left as copied.
 #   target: production  copies into the Neon production branch (NEON_DB_URL), which
 #                       must be fully migrated and empty, or the copy refuses.
 #
@@ -43,7 +45,7 @@ jobs:
     name: Copy into ${{ inputs.target }}
     runs-on: ubuntu-latest
     environment: cutover
-    timeout-minutes: 45
+    timeout-minutes: 75
     env:
       NEON_PROJECT_ID: misty-moon-16212068
       TARGET: ${{ inputs.target }}
@@ -147,44 +149,61 @@ jobs:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/check-copy.mjs --a SUPABASE_DB_URL --b TARGET_DB_URL
 
-      # Rehearsal only (N-6 test case 1): the database tests on a copy of the copy.
-      # They empty tables as they go, so they run on a throwaway child branch.
-      - name: Make a throwaway copy of the rehearsal branch for the test suite
+      # Rehearsal only (N-6 test case 1): the database tests on data copied from production.
+      # They empty tables as they go, so they get their own copy: Neon can't branch from a
+      # branch that has an expiry date (the rehearsal's), so a second branch is made from the
+      # empty ci branch, migrated, copied into and checked the same way, tested and deleted.
+      - name: Make a throwaway branch for the test suite
         if: inputs.target == 'rehearsal'
         id: suite
         uses: neondatabase/create-branch-action@72ed4f69a12b6be9c16aebfad893f6a21e9aba8b # v6.4.0
         with:
           api_key: ${{ secrets.NEON_API_KEY }}
           project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: rehearsal-${{ github.run_id }}
+          parent_branch: ci
           branch_name: rehearsal-${{ github.run_id }}-suite
           database: studio
           role: studio_owner
           expires_at: ${{ steps.expiry.outputs.suite_at }}
-      - name: Database, agent and model tests on the copy of the copy
+      - name: Get the suite branch's connection string (masked)
         if: inputs.target == 'rehearsal'
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           BRANCH_ID: ${{ steps.suite.outputs.branch_id }}
-          SKIP_DB_RESET: "1"
         run: |
           set -euo pipefail
           curl -fsS --max-time 30 -H "Authorization: Bearer $NEON_API_KEY" -H "Accept: application/json" \
             "https://console.neon.tech/api/v2/projects/$NEON_PROJECT_ID/connection_uri?branch_id=$BRANCH_ID&database_name=studio&role_name=studio_owner&pooled=false" \
             > "$RUNNER_TEMP/uri.json"
-          TEST_DATABASE_URL="$(node -e '
+          node -e '
             const fs = require("node:fs");
             const u = new URL(JSON.parse(fs.readFileSync(process.argv[1], "utf8")).uri);
             u.searchParams.delete("channel_binding");
-            process.stdout.write(u.toString());
-          ' "$RUNNER_TEMP/uri.json")"
+            console.log(`::add-mask::${u.toString()}`);
+            console.log(`::add-mask::${u.password}`);
+            console.log(`::add-mask::${decodeURIComponent(u.password)}`);
+            fs.appendFileSync(process.env.GITHUB_ENV, `SUITE_DB_URL=${u.toString()}\n`);
+          ' "$RUNNER_TEMP/uri.json"
           rm -f "$RUNNER_TEMP/uri.json"
-          echo "::add-mask::$TEST_DATABASE_URL"
-          export TEST_DATABASE_URL
-          # As in CI's real-stack job: the tests that make their own databases and roles run on plain Postgres only.
-          npx vitest run tests/db tests/agents tests/models --exclude tests/agents/eval-runner.test.ts \
+      - name: Prepare the suite's branch
+        if: inputs.target == 'rehearsal'
+        env:
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          node scripts/db-migrate.mjs --url SUITE_DB_URL
+          node scripts/copy-data.mjs --from SUPABASE_DB_URL --to SUITE_DB_URL
+          node scripts/check-copy.mjs --a SUPABASE_DB_URL --b SUITE_DB_URL
+      # Same scope as CI's Neon job: the runner is in the US and the branch in London, so
+      # the agent tests (hundreds of queries each) time out; they run on plain Postgres in CI.
+      - name: Database and model tests on the copied data
+        if: inputs.target == 'rehearsal'
+        timeout-minutes: 45
+        env:
+          SKIP_DB_RESET: "1"
+        run: |
+          TEST_DATABASE_URL="$SUITE_DB_URL" npx vitest run tests/db tests/models --testTimeout=60000 \
             --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts
-      - name: Delete the throwaway copy (the rehearsal branch stays)
+      - name: Delete the suite's branch (the rehearsal branch stays)
         if: always() && steps.suite.outputs.branch_id != ''
         uses: neondatabase/delete-branch-action@4468d825d5a88ef4012f1705a82f02ec3072f776 # v3.2.1
         with:
