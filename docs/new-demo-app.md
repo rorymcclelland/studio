@@ -54,6 +54,6 @@ Email links and invite links, with sessions Studio keeps itself. No passwords, n
 ## 4. Integration choices, and why
 
 - **Neon's Vercel integration: not used.** It makes a branch per preview copied from production, which would put real people's emails in previews and runs into the 10-branch limit. Instead the `production` and `preview` pooled strings are pasted into Vercel's Production and Preview `DATABASE_URL` by hand, once.
-- **Neon's GitHub integration: not needed.** CI only needs the repository secret `NEON_API_KEY` and the project id in the workflow; the job makes, migrates and deletes its own branch. A project-scoped API key, if offered, limits what a leaked key could reach.
+- **Neon's GitHub integration: used, for the key only.** Connecting the Neon project to the repository (Neon's **GitHub integration**, installed for that one repository only) creates the Neon API key and saves it as the repository secret `NEON_API_KEY`, so nobody handles the key. It also adds a `NEON_PROJECT_ID` variable, which the workflows don't need (the id is written in them). Skip the sample Actions it offers: they make a branch per pull request, copied from production.
 - **Vercel and GitHub:** Vercel deploys on push; Vercel Authentication protects previews only, so the production address stays public for the after-deploy Action, which waits for the new commit at `/api/health` and then resyncs Inngest.
 - **Resend:** a sending subdomain per owner domain (Studio uses `mail.mcclelland.info`), with its SPF and DKIM records verified before the first production send.

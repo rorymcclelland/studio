@@ -71,7 +71,7 @@ Only production sends email. Local work, CI and previews use the console mailer:
 
 **Settings → Secrets and variables → Actions → Repository secrets:**
 
-- `NEON_API_KEY`: a Neon API key (Neon's **API keys** settings; scoped to the project if offered). CI's required job uses it to make and delete its throwaway branch; without it the job fails, naming the secret. CI takes the project id from `.github/workflows/ci.yml` and fetches the branch's connection string itself, masking it before anything prints.
+- `NEON_API_KEY`: added by Neon's **GitHub integration** when the Neon project was connected to this repository (installed for this repository only; its sample Actions are not used). A key made by hand in Neon's **API keys** settings works the same. CI's required job uses it to make and delete its throwaway branch; without it the job fails, naming the secret. CI takes the project id from `.github/workflows/ci.yml` and fetches the branch's connection string itself, masking it before anything prints.
 - `ANTHROPIC_API_KEY` (optional): a key with its own spending limit, for the manual **Real-model evals** Action (F-16).
 
 ## 7. Check it works
