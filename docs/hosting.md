@@ -1,65 +1,94 @@
 # Hosting set-up runbook
 
-How Studio is hosted: Supabase (database and sign-in), Vercel (the app), Inngest (agent workflows), Anthropic (models). First set up 25 October 2026. Never paste the database password, the pooler connection string or any API key into chat, an issue or the repo: they go only into Vercel's environment variables.
+How Studio is hosted: Neon (Postgres), Resend (sign-in emails), Vercel (the app), Inngest (agent workflows), Anthropic and Google (models), GitHub (code, CI and the after-deploy Action). First set up on 25 October 2026; the database moved to Neon in Sprint 6 (decision 0015; the Cutover section under History is the record). Never paste a connection string, a database password or any API key into chat, an issue or the repo: they go only into Vercel's environment variables or GitHub's secrets.
 
-## 1. Supabase
+The sections below describe the set-up as it stands. The Cutover section and the dated Sprint 4 and Sprint 5 notes at the end are history, kept as they were done.
 
-1. Create a project on the free plan: name `campaign-studio`, region London (eu-west-2). Generate the database password and save it in a password manager.
-2. **SQL Editor → New query.** Paste the whole of `db/migrations/20261024000001_foundations.sql` (then in `supabase/migrations/`) and run it. Expect "Success. No rows returned". Each later migration was applied the same way, in order. Supabase provides what `20261024000000_auth_schema.sql` makes, so that file was never applied there. From Sprint 6, see "Migrations" below.
-3. **Authentication → Users → Add user → Create new user.** Enter the email you will sign in with, any long random password (it is never used), and tick **Auto confirm user**. Sign-in sends magic links only to existing users, so this step is what gives you access.
-4. **Authentication → Sign In / Providers.** Turn off **Allow new users to sign up**. Keep the Email provider on.
-5. **Connect** (top of the dashboard). Note the **Project URL** and the **publishable key** (`sb_publishable_…`). Under **Transaction pooler**, copy the URI (port 6543) and replace `[YOUR-PASSWORD]` with the database password. That string is `DATABASE_URL`.
+## 1. Neon (the database)
 
-## 2. Anthropic key
+1. Create the project on the free plan: name `campaign-studio`, region **AWS Europe (London)** (`aws-eu-west-2`, beside the functions in `lhr1`), Postgres 17. Studio's project id is `misty-moon-16212068` (CI uses it). Leave **Neon Auth** and the **Data API** off: Studio has its own sign-in, and its `anon` role must only ever be reached by the app's own server.
+2. Database `studio`, owned by the role `studio_owner`. The owner is not a superuser; the baseline migration needs none.
+3. Three permanent branches:
 
-1. In the Anthropic Console, under **Limits**, set a monthly spend limit (suggested $20) as a backstop to the app's own £1-a-day cap.
-2. **API keys → Create key**, named `campaign-studio-vercel`. Copy it straight into Vercel (step 3); it is shown once.
+   | Branch | Holds | Used by |
+   | --- | --- | --- |
+   | `production` | the app's data | Vercel Production |
+   | `ci` | nothing: an empty database, so every CI run builds from all the files | the parent of CI's throwaway branch per run |
+   | `preview` | made from `ci`, every migration applied, demo data only | Vercel Preview |
 
-The Google key is not needed until Sprint 5 (imagery).
+   Never reset `ci` or `preview` from `production`, so no invitee's data reaches a copy. The free plan allows 10 branches per project; CI deletes its branch at the end of each run.
+4. Apply the migrations through the Neon connector (see "Migrations" below): a new file on a fresh branch first, then `production`, then `preview`. `ci` stays empty.
+5. **Connection strings.** On the branch's **Connect** page choose database `studio` and role `studio_owner`.
+   - **Pooled** (Connection pooling on; the host has `-pooler`): the app's `DATABASE_URL` on Vercel. The pooler runs in transaction mode, so the app switches prepared statements off (`src/lib/db/client.ts`).
+   - **Direct** (Connection pooling off): for the migration runner and one-off scripts only, and never needed on a laptop for production.
+6. Nothing keeps the database awake. Compute suspends after 5 minutes idle and resumes on the next connection in a few hundred milliseconds; Neon doesn't pause projects.
 
-## 3. Vercel
+## 2. Resend (sign-in emails)
 
-1. Sign in with GitHub. **Add New → Project**, give Vercel access to `rorymcclelland/campaign-studio`, and import it. The framework is detected as Next.js; leave the build settings alone.
-2. Before deploying, open **Environment Variables** and add:
+1. Create a Resend account on the free plan (100 emails a day; Studio limits sign-in links to 3 per address and 30 in all per hour).
+2. **Domains → Add domain:** the sending subdomain `mail.mcclelland.info`. Add the DNS records Resend lists (SPF and DKIM) at the DNS provider, then **Verify**. Sign-in emails go to spam or are refused until it says Verified.
+3. **API keys → Create API key** with **Sending access** for that domain only. Copy it straight into Vercel as `RESEND_API_KEY` (step 4); it is shown once.
+4. `EMAIL_FROM` is the sender, on the verified subdomain, for example `Studio <sign-in@mail.mcclelland.info>`.
+
+Only production sends email. Local work, CI and previews use the console mailer: the email, link included, is written to the server log (look for `[mail]`).
+
+## 3. Model keys
+
+1. **Anthropic.** In the Anthropic Console, under **Limits**, set a monthly spend limit (suggested $20) as a backstop to the app's own £1-a-day cap. **API keys → Create key**, named `campaign-studio-vercel`, and copy it straight into Vercel.
+2. **Google (pictures).** In Google AI Studio, **Get API key**. The key's Google project must have **billing on**: on Google's free tier the image models have no quota, and Make creative fails with "the API key's Google project is on the free tier" (Sprint 5 production check). Choose **Set up billing** on that project and put the budget alert on the same project.
+
+## 4. Vercel
+
+1. Sign in with GitHub. **Add New → Project**, give Vercel access to `rorymcclelland/campaign-studio`, and import it. The framework is detected as Next.js; leave the build settings alone. Functions run in London (`vercel.json`).
+2. **Settings → Environment Variables:**
 
 | Name | Value | Environments |
 | --- | --- | --- |
-| `DATABASE_URL` | the transaction pooler URI from 1.5 | Production, Preview |
-| `ALLOWED_EMAILS` | the email from 1.3 | Production, Preview |
-| `NEXT_PUBLIC_SUPABASE_URL` | the Project URL | Production, Preview |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | the publishable key | Production, Preview |
-| `ANTHROPIC_API_KEY` | the key from 2.2 | Production |
+| `DATABASE_URL` | Neon `production` branch, pooled string | Production |
+| `DATABASE_URL` | Neon `preview` branch, pooled string | Preview |
+| `ALLOWED_EMAILS` | the emails that may sign in, comma-separated | Production, Preview |
+| `OWNER_EMAIL` | your sign-in email (may invite people; defaults to the first allowed email) | Production |
+| `RESEND_API_KEY` | the key from 2.3, marked **Sensitive** | Production only |
+| `EMAIL_FROM` | the sender from 2.4 | Production only |
+| `ANTHROPIC_API_KEY` | the key from 3.1 | Production |
+| `GOOGLE_GENERATIVE_AI_API_KEY` | the key from 3.2 | Production |
 | `MODEL_PROVIDER_OVERRIDE` | `mock` | Preview only (previews spend nothing) |
 | `DAILY_CAP_PENCE` | `100` | Production, Preview |
+| `WORKSPACE_DAILY_CAP_PENCE`, `OWNER_RESERVE_PENCE` | optional; both default to `50` | Production |
+| `APP_URL` | optional; where sign-in links point (defaults to the production domain, or the preview's own address) | Production |
 
-3. **Deploy.** The first deployment shows a configuration page asking for `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY`. That is expected until step 4. Note the production URL (`https://….vercel.app`).
+   Without a required variable, every page shows a configuration page naming it (for example a missing `RESEND_API_KEY` or `EMAIL_FROM` in production).
+3. **Settings → Deployment Protection → Vercel Authentication:** **Preview deployments only**. The production address stays public (the after-deploy Action needs it); the app still requires sign-in, and signed-out visitors see the welcome page.
+4. **Deploy by pushing to `main`.** After changing a variable, redeploy by pushing, or with Vercel's own **Redeploy** button. A redeploy made through the Vercel API from an earlier deployment reuses that deployment's variables, so a changed `DATABASE_URL` is not picked up.
 
-## 4. Inngest
+## 5. Inngest
 
-1. In Vercel, **Integrations → Browse Marketplace → Inngest → Install**, and connect it to the `campaign-studio` project. It creates the Inngest account, adds `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` to the project, and registers the app at `/api/inngest`.
-2. **Deployments → the latest → ⋯ → Redeploy**, so the new variables take effect.
-3. In the Inngest dashboard, **Apps** should list `campaign-studio` with one function, the tagline run.
+1. In Vercel, **Integrations → Browse Marketplace → Inngest → Install**, and connect it to the `campaign-studio` project. It creates the Inngest account, adds `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` to the project, and registers the app at `/api/inngest`. Redeploy so the new variables take effect.
+2. In the Inngest dashboard, **Apps** lists `campaign-studio`, and **Functions** lists **Agent run**.
+3. On every push to `main`, the **After production deploy** GitHub Action waits until `/api/health` reports the new commit (up to 15 minutes), then resyncs Inngest and checks `agent-run` is served. If it fails, resync by hand (see "Notes").
 
-## 5. Sign-in links
+## 6. GitHub
 
-In Supabase, **Authentication → URL Configuration**:
+**Settings → Secrets and variables → Actions → Repository secrets:**
 
-- **Site URL:** the production URL.
-- **Redirect URLs:** add `<production URL>/auth/callback`, and a wildcard for previews in the form `https://*-<your-team-slug>.vercel.app/**` (copy the ending from any preview URL).
+- `NEON_API_KEY`: added by Neon's **GitHub integration** when the Neon project was connected to this repository (installed for this repository only; its sample Actions are not used). A key made by hand in Neon's **API keys** settings works the same. CI's required job uses it to make and delete its throwaway branch; without it the job fails, naming the secret. CI takes the project id from `.github/workflows/ci.yml` and fetches the branch's connection string itself, masking it before anything prints.
+- `ANTHROPIC_API_KEY` (optional): a key with its own spending limit, for the manual **Real-model evals** Action (F-16).
 
-## 6. Check it works
+## 7. Check it works
 
-Open the production URL, sign in with the email from 1.3, follow the link in the email, and start a tagline run. It should propose three taglines, wait for your approval and complete, with its cost shown in the spend meter. Then Claude checks the rest: preview links per branch, the production deploy from `main`, and the daily keep-awake cron (Vercel → Settings → Cron Jobs lists `/api/health`).
+1. `https://<production address>/api/health` answers `ok: true` with `databaseHost` on Neon's pooler host, `environment: production` and the latest commit.
+2. Sign in: enter your email on /signin, open the link in the email (from `EMAIL_FROM`; check it isn't in spam), press **Continue**.
+3. Start a run on a campaign: it proposes, waits for your approval and completes, with its cost in the spend meter.
+4. Open a preview: its `/api/health` names the `preview` branch's host, and a run there uses the mock model. To sign in on a preview, request a link and copy it from the preview's runtime logs (`[mail]`).
 
-## Notes from the first set-up (25 October 2026)
+## Notes
 
-- **Redeploy by pushing to GitHub, or with Vercel's own Redeploy button after changing a variable.** A redeploy made through the Vercel API from an earlier deployment reuses that deployment's environment variables, so a changed `DATABASE_URL` is not picked up.
 - If the database check fails, `/api/health` logs the user, host and port it tried (never the password) in Vercel's runtime logs.
-- Functions run in London (`lhr1`) beside the database.
-- **After a deploy that adds, renames or removes an Inngest function, resync Inngest.** Open the project in Vercel, then **Integrations → Inngest → Open in Inngest** (this signs in to the linked account; signing in at app.inngest.com directly makes a separate, empty one), choose **Production → Apps → campaign-studio → Resync**, and check **Functions** lists what the code serves (from Sprint 3: **Agent run**). Until then, new runs stay queued. Sprint 3 needed this once (backlog F-15); from Sprint 5 the after-deploy Action does it (step 6 below), so this is the fallback.
-- **Migrations that change data or remove a permission** may be refused by the Supabase connector's approval step. Run those in the Supabase SQL editor and note it in the sprint's refinement.
+- **Resync Inngest by hand** when the after-deploy Action fails: open the project in Vercel, then **Integrations → Inngest → Open in Inngest** (this signs in to the linked account; signing in at app.inngest.com directly makes a separate, empty one), choose **Production → Apps → campaign-studio → Resync**, and check **Functions** lists what the code serves (**Agent run**). Until then, new runs stay queued.
+- **Inviting someone:** sign in, open the account menu → **Invites**, enter their email, copy the link and send it in your own message. It works once, for 7 days. After that they sign in by email themselves. Revoke an invite to stop the link, or to remove someone who has used it (their sessions end too).
+- **Neon's free plan:** 0.5 GB storage per project, 10 branches, 100 CU-hours of compute a month. Check **Storage** on the `production` branch now and then.
 
-## Migrations (from Sprint 6, N-1)
+## Migrations
 
 Every database is built from the files in `db/migrations`, in file-name order. The first, `20261024000000_auth_schema.sql`, makes the `auth` schema, `auth.users` (id, email, created_at), `auth.uid()`, `auth.role()` and the `anon` and `authenticated` roles, and grants both roles to the connecting role by name. It needs no superuser, so it runs as Neon's owner role. Each applied file is recorded in `public.schema_migrations` (file name, sha256 of the file, applied time), which the runner creates if it is missing; the app's roles can't read it.
 
@@ -70,12 +99,16 @@ Every database is built from the files in `db/migrations`, in file-name order. T
   3. `node scripts/neon-statements.mjs pending.json OUTDIR` writes each pending file as a list of statements, with its `schema_migrations` insert last. Apply each list with the connector's `run_sql_transaction`, one file per call, so a file and its record commit together or not at all. (The connector's migration tool can't be used: it splits on every `;` and breaks on function bodies.) Try a new file on the `ci` branch's copy or a fresh branch first, then production, then `preview`.
   4. Repeat step 1: the rows should now list every file.
   5. Check the schema: run `scripts/schema-fingerprint.sql` on the Neon branch (through the connector) and on a local database built with `db:migrate`; every row should match. It hashes each kind of object (columns, constraints, indexes, policies, function bodies, triggers, row-level security, grants) and the ledger. Postgres 17's `MAINTAIN` privilege is left out, since local Postgres is 16.
-- **Neon branches** (project `campaign-studio`, London): `production` (the app's data, from cutover); `ci`, an empty database that CI branches are made from (N-4), so every CI run builds from all the files; `preview`, made from `ci` with every file applied and no copied data, for Vercel previews (N-5). `ci` began as a copy of `production` before production held any rows, and was then emptied; never reset `ci` or `preview` from `production`, so no invitee's data reaches a copy.
-- **Comparing two schemas (N-1 test case 6):** `node scripts/schema-diff.mjs --a SUPABASE_DB_URL --b NEON_DB_URL`, with the two connection strings in those variables (never on the command line). It compares tables, columns, constraints, indexes, policies, functions (by a hash of their bodies), triggers, enums and the grants to `anon`, `authenticated` and `PUBLIC` in `public`, plus auth.users's id, email and created_at, `auth.uid()` and `auth.role()`, and ignores Supabase's other schemas, auth columns and roles. It prints each difference and exits 1, or says "No differences". `--a NAME --dump` prints one database's description.
+- **Neon branches:** see section 1. `ci` began as a copy of `production` before production held any rows, and was then emptied.
+- **Comparing two live schemas:** `node scripts/schema-diff.mjs --a A_DB_URL --b B_DB_URL`, with the two connection strings in those variables (never on the command line). It compares tables, columns, constraints, indexes, policies, functions (by a hash of their bodies), triggers, enums and the grants to `anon`, `authenticated` and `PUBLIC` in `public`, plus auth.users's id, email and created_at, `auth.uid()` and `auth.role()`, and ignores every other schema, other auth columns and roles. It prints each difference and exits 1, or says "No differences". `--a NAME --dump` prints one database's description. N-1 test case 6 used it to compare the old production database with Neon.
+
+## History
+
+Everything from here down is a record of what was done, kept for reference. It is not the current set-up.
 
 ## Cutover: production data from Supabase to Neon (Sprint 6, N-6)
 
-Done once. Production's data moves from Supabase into the Neon `production` branch with every id unchanged, through the **Copy production data** Action (`.github/workflows/copy-production-data.yml`), so no connection string reaches chat or a laptop. The Action and its two scripts are removed in N-7.
+Done once. Production's data moves from Supabase into the Neon `production` branch with every id unchanged, through the **Copy production data** Action (`.github/workflows/copy-production-data.yml`), so no connection string reaches chat or a laptop. The Action, its two scripts and their test are removed once the cutover is checked, and the `cutover` environment with its two secrets is deleted then.
 
 - `scripts/copy-data.mjs --from NAME --to NAME` copies `auth.users` (id, email and created_at only) and then every table in `public` except `schema_migrations`, in foreign-key order. It reads Supabase in one read-only snapshot and writes Neon in one transaction, as the table owner, with each table's own triggers (the guards) switched off during the copy and on again before it commits. If anything fails, nothing is kept. It refuses unless the target has every migration in `db/migrations` and holds no rows, and unless both sides have the same tables and columns. It prints row counts, never rows.
 - `scripts/check-copy.mjs --a NAME --b NAME` compares the two: row counts and a hash of every row for each table, the sha256 of every picture (stored and recomputed from its bytes), no broken foreign key on Neon, every trigger on and the usage ledger's next id above its highest. It prints "Copy matches", or each difference.
@@ -109,7 +142,7 @@ Done once. Production's data moves from Supabase into the Neon `production` bran
 
 Production keeps running on Supabase until step 5. Anything done in Studio between the copy (step 3) and the switch is not copied, so nobody uses Studio meanwhile.
 
-1. **Check nothing is in progress.** In Studio's runs list nothing is queued or running, and in the Inngest dashboard (through Vercel, see "Notes from the first set-up") **Runs** shows nothing running. A run waiting for an approval can stay waiting (its id is unchanged, so it carries on after the move), but nobody approves anything until the smoke test.
+1. **Check nothing is in progress.** In Studio's runs list nothing is queued or running, and in the Inngest dashboard (through Vercel, see "Notes" above) **Runs** shows nothing running. A run waiting for an approval can stay waiting (its id is unchanged, so it carries on after the move), but nobody approves anything until the smoke test.
 2. **Keep the way back.** In Vercel → campaign-studio → Settings → Environment Variables, reveal Production `DATABASE_URL` (the Supabase transaction pooler string) and save it in your password manager. Note which deployment is current under **Deployments** (the last one on Supabase).
 3. **Copy.** Run the Action again with target `production` and `production` in the confirm box, and approve it. The Copy step must end with "every trigger is enabled again" and the Check step must say "Copy matches". If either fails, stop here: production is still on Supabase and unchanged, and Neon's transaction left it empty.
 4. **Point production at Neon.** Vercel → campaign-studio → Settings → Environment Variables → Production `DATABASE_URL` → **Edit**, and paste Neon's `production` string with **Connection pooling on** (database `studio`, role `studio_owner`; the host has `-pooler`). Check that Production also has `RESEND_API_KEY` and `EMAIL_FROM` (N-3).
@@ -119,17 +152,19 @@ Production keeps running on Supabase until step 5. Anything done in Studio betwe
 
 ### 4. The way back
 
-Supabase stays exactly as it was, untouched, for 14 days: don't pause it, change it or delete it until N-7. To go back:
+Supabase stays exactly as it was, untouched, for 14 days after the switch: don't change it or delete it, and leave its variables (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`, `SUPABASE_SECRET_KEY`) in Vercel, because the Sprint 5 deployment reads them. After the 14 days Rory removes those variables, then pauses and deletes both Supabase projects (Q6).
+
+**A free Supabase project pauses itself after about a week without activity**, and nothing reaches it once production is on Neon (the keep-awake cron is gone too, and it called Neon anyway). So from about a week after the switch, going back starts with a step 0: Supabase dashboard → the production project → **Restore project** (a click, then a few minutes until it says it is healthy). The data is kept while paused. Then:
 
 1. Vercel → **Deployments** → the last production deployment from before the switch (step 3.2) → **⋯ → Instant Rollback**. It runs that deployment's code with the variables it was built with, so the Sprint 5 code on Supabase, with Supabase's sign-in. (Setting `DATABASE_URL` back alone is not enough: Sprint 6's sign-in needs tables Supabase doesn't have.)
 2. Set Production `DATABASE_URL` back to the Supabase string you saved, so a later push doesn't reach Neon by surprise. Vercel doesn't promote new pushes after an Instant Rollback until you undo it, so nothing redeploys onto Neon meanwhile.
-3. Resync Inngest by hand (see "Notes from the first set-up").
+3. Resync Inngest by hand (see "Notes" above).
 
 Anything done on Neon between the switch and the way back is lost. The 14 days are for finding problems, not for running both.
 
-## Sprint 4: public address, invites and previews
+## Sprint 4: public address, invites and previews (Supabase era)
 
-Done once, in this order, after the Sprint 4 deploy.
+Done once, in this order, after the Sprint 4 deploy. Steps 1 and 3 were replaced in Sprint 6 (own sign-in; the Neon `preview` branch); steps 2, 5 and 6 are in the set-up above.
 
 1. **Supabase secret key (for invite sign-ins).** Supabase → Project Settings → API Keys → copy the **secret** key (starts `sb_secret_`). In Vercel → campaign-studio → Settings → Environment Variables, add `SUPABASE_SECRET_KEY` for **Production** only. Never prefix it with `NEXT_PUBLIC_`.
 2. **Owner and caps.** In the same place, add `OWNER_EMAIL` (your sign-in email) and, if you want a different per-workspace limit than 50p a day, `WORKSPACE_DAILY_CAP_PENCE`, both for Production.
@@ -141,7 +176,7 @@ Done once, in this order, after the Sprint 4 deploy.
 
 **Inviting someone:** sign in, open the account menu → **Invites**, enter their email, copy the link and send it in your own message. It works once, for 7 days. If they lose their session later, make a new invite. Revoke an invite to stop the link, or to remove someone who has used it.
 
-## Sprint 5: migrations and the image key
+## Sprint 5: migrations and the image key (Supabase era)
 
 Done once, before or with the Sprint 5 deploy, for production and then the preview project.
 

@@ -9,7 +9,10 @@ const PATTERNS = [
   { name: "OpenAI-style key", re: /\bsk-(?:proj-)?[A-Za-z0-9]{20,}/ },
   { name: "Google API key", re: /AIza[0-9A-Za-z_-]{20,}/ },
   { name: "Inngest key", re: /signkey-(?:prod|test)-[A-Za-z0-9]{16,}/ },
-  { name: "Supabase secret key", re: /sb_secret_[A-Za-z0-9_-]{16,}/ },
+  // The old database provider's server key (kept: its project lives on for the 14-day way back).
+  { name: "sb_secret_ server key", re: /sb_secret_[A-Za-z0-9_-]{16,}/ },
+  { name: "Neon API key", re: /\bnapi_[A-Za-z0-9]{32,}/ },
+  { name: "Resend API key", re: /\bre_[A-Za-z0-9]{6,}_[A-Za-z0-9]{16,}/ },
   { name: "JWT", re: /eyJ[A-Za-z0-9_-]{10,}\.eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}/ },
   { name: "Postgres URL with password", re: /postgres(?:ql)?:\/\/[^:\s/]+:[^@\s]{6,}@(?!localhost|127\.0\.0\.1)/ },
 ];

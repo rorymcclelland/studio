@@ -3,8 +3,9 @@ import { getSql } from "@/lib/db/client";
 import { functions } from "@/inngest/functions";
 import { deployedCommit } from "@/lib/deploy/commit";
 
-// Keep-awake and health check (S1-1 #6). Vercel cron calls this daily so the
-// free Supabase project never reaches a week without activity.
+// Health check (S1-1 #6): the database answers, which Inngest functions this
+// deployment serves, its commit and its database host. The after-deploy Action
+// polls it; nothing needs to keep the database awake (Neon resumes on its own).
 export async function GET() {
   await connection();
   const started = Date.now();

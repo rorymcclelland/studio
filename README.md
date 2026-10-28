@@ -2,11 +2,11 @@
 
 A multi-agent campaign studio for marketing teams. Three squads of AI agents (Strategy, Creative and Performance) share one Business Context store and take a campaign from a one-line objective to on-brand creative that stays above its performance threshold. A person approves every consequential move.
 
-**Status: Sprint 1 of 10.** What works today: magic-link sign-in to your own workspace; a hello-world tagline agent that proposes three taglines, waits for your approval and records a full decision trail; a daily spending cap on every model call; and three design-direction prototypes. The Strategy, Creative and Performance squads arrive in Sprints 3 to 9. All brands and figures in the app are fictional or simulated.
+**Status: Sprint 6 of 11 (hosting moved to Neon).** What works today: sign-in by emailed link or invite, each person in their own workspace; brands and their Business Context; the Strategy squad (market notes, audiences, a brief with sign-off, personas and a test plan); the first Creative agents (copy, imagery and ads composed in code, in a variant gallery); a full decision trail for every agent run; and a daily spending cap on every model call. The Performance squad and the rest of Creative arrive in later sprints. All brands and figures in the app are fictional or simulated.
 
 ## Stack
 
-Next.js 16 on Vercel, Postgres on Supabase (with row-level security per workspace), Inngest for durable agent workflows, the Vercel AI SDK with Claude and Gemini behind one provider layer. See `docs/decisions/` for why.
+Next.js 16 on Vercel (London), Postgres on Neon (London, with row-level security per workspace), Studio's own sign-in with links sent by Resend, Inngest for durable agent workflows, the Vercel AI SDK with Claude and Gemini behind one provider layer. See `docs/decisions/` for why (0015 for Neon and the sign-in).
 
 ## Run it locally
 
@@ -45,4 +45,5 @@ Honest by default; fictional brands only; people approve consequential actions; 
 - `docs/refinement/`: each sprint's stories, test cases and agreed answers
 - `docs/decisions/`: decision records
 - `docs/design/directions.md`: the Sprint 1 design directions (Soft machine chosen; see decision 0007 and `/design` for the design system)
-- `docs/hosting.md`: setting up Supabase, Vercel, Inngest and the model keys
+- `docs/hosting.md`: setting up Neon, Resend, Vercel, Inngest and the model keys, and applying migrations
+- `docs/new-demo-app.md`: the sign-in, migrations and Neon set-up to copy into the next demo app
