@@ -25,7 +25,9 @@ Email links and invite links, with sessions Studio keeps itself. No passwords, n
 - Tokens are 32 random bytes; only their SHA-256 is stored. The `cs_session` cookie is httpOnly, SameSite=Lax, Secure except on local http, 30 days, extended when used after a day.
 - A link or invite is used only by a POST behind a **Continue** button, so link scanners can't use it up. Links last 15 minutes and work once.
 - /signin gives the same reply, at once, whoever asks; the access check and the email run after the response.
-- Limits: 3 links per address and 30 in all per hour (Resend's free plan sends 100 a day).
+- Limits: per address, 3 links an hour and 10 a day; in all, 30 an hour and 80 a day (Resend's free plan sends 100 a day). `request_sign_in` trusts the server's allow-list flag, so it is granted to no app role and the app calls it on its own connection, like `start_session`.
+- A session cookie no session matches is cleared (through a small route, since pages can't set cookies), not renewed.
+- The mailer never logs the recipient, and scrubs addresses from the provider's error reply.
 - Links point at the production domain (`VERCEL_PROJECT_PRODUCTION_URL`) or the preview's own address, never the request's Host header.
 - Every request re-checks the allow-list or invite, so revoking someone signs them out on their next request.
 - The `anon` role must only be reachable by the app's own server: never turn on a Data API for the database.
