@@ -38,9 +38,8 @@ This pack follows the runbook in `docs/hosting.md` ("Cutover"), step by step. Cl
 - **What it checks:** N-3 #7 (first half): the move signs everyone out, so email must work first.
 - **User:** you, in Resend.
 - **Flow:**
-  1. Resend → **Domains**: `mail.mcclelland.info` shows **Verified**.
-  2. Resend → **Emails** → send a test email from the dashboard to your own address.
-- **Expected outcome:** the test email arrives within a minute, in your inbox, not spam. If not, stop here: the switch waits until it does.
+  1. Resend → **Domains** → `mail.mcclelland.info`.
+- **Expected outcome:** the status is **Verified** and every DNS record (SPF/MX and DKIM) has a green tick. If not, stop here: the switch waits until it is. (Resend's dashboard has no send-a-test button, so the first real email is the sign-in link in TC-6; if it doesn't arrive, Claude checks the logs and, if needed, the way back puts production on Supabase in a minute or two.)
 - **Result:** ☐ Pass ☐ Fail.
 - **Notes:** ________________________________________________
 
