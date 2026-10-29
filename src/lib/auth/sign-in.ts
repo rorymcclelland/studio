@@ -65,6 +65,7 @@ export async function requestSignInLink(email: string, origin: string, mailer: M
       select public.request_sign_in(${email}, ${hashToken(token)}, ${isEmailAllowed(email)}) as ok`,
   );
   if (r?.ok !== true) return false;
+  console.info(`[signIn] link recorded; sending with the ${mailer.kind} mailer`);
   await mailer.send(signInEmail(email, `${origin}/signin/link/${token}`, SIGN_IN_MINUTES));
   return true;
 }
