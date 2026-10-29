@@ -29,7 +29,11 @@ const PATH_HEADER = "x-studio-path";
  * were no cookie: to sign-in, or, from /, to the welcome page; a cookie that
  * no longer signs anyone in is cleared on the way.
  */
-export async function requireMember(): Promise<CurrentMember> {
+export const requireMember = cache(requireMemberUncached);
+
+// Cutover day (29 Oct): one workspace check per request, not one transaction
+// per component that asks (layout, page and sections all call requireMember).
+async function requireMemberUncached(): Promise<CurrentMember> {
   const user = await getCurrentUser();
   if (!user) {
     if ((await cookies()).has(SESSION_COOKIE)) {
