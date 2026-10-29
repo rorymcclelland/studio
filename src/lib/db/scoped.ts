@@ -5,9 +5,10 @@ export type Tx = postgres.TransactionSql;
 
 /**
  * Runs `fn` in a transaction as the given user, with row-level security in
- * force: the same role and JWT claims Supabase's own API would set. Every
- * read and write in the app goes through here (rule 7), so a bug in app code
- * cannot reach another workspace's rows.
+ * force: the `authenticated` role, with the user's id in `request.jwt.claims`
+ * for `auth.uid()` (see the baseline migration). Every read and write in the
+ * app goes through here (rule 7), so a bug in app code cannot reach another
+ * workspace's rows.
  */
 export async function asUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
   if (!/^[0-9a-f-]{36}$/i.test(userId)) throw new Error("Invalid user id");

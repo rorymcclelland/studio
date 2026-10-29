@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import { getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 
-/** Creates an auth user directly (local shim only) and returns its id. */
+/** Creates an auth user directly (Studio owns auth.users from N-1) and returns its id. */
 export async function createUser(email = `${randomUUID()}@example.test`): Promise<string> {
   const sql = getSql();
   const [row] = await sql`insert into auth.users (id, email) values (gen_random_uuid(), ${email}) returning id`;

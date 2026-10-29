@@ -92,7 +92,7 @@ describe("F-11 stable kit keys", () => {
     await sql`insert into public.context_items (workspace_id, brand_id, kind, title, body, source, source_ref, created_by_kind)
       values (${a.workspaceId}, ${fernId}, 'brand_rule', 'Do: dup', ${kit.doRules[0]}, 'Brand kit', ${`rule:do:${kit.doRules.length}`}, 'system')`;
     const before = await ruleItems(fernId);
-    const migration = readFileSync("supabase/migrations/20261026000001_stable_kit_keys.sql", "utf8");
+    const migration = readFileSync("db/migrations/20261026000001_stable_kit_keys.sql", "utf8");
     await sql.unsafe(migration.slice(migration.indexOf("$$;") + 3));
     const after = await ruleItems(fernId);
     expect(after.length).toBe(before.length - 1);

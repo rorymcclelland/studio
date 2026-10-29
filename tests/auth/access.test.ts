@@ -1,7 +1,8 @@
-// S1-3 #5 (allow-list), S1-1 #4 (configuration errors), dev session signing.
+// S1-3 #5 (allow-list), S1-1 #4 (configuration errors), N-7 #2 (production names a missing Resend key).
 import { describe, expect, it } from "vitest";
 import { configProblems, isEmailAllowed } from "@/lib/env";
-import { decodeDevSession, encodeDevSession } from "@/lib/auth/dev-session";
+
+const BASE = { DATABASE_URL: "postgres://x", ALLOWED_EMAILS: "a@b.c", MODEL_PROVIDER_OVERRIDE: "mock" };
 
 describe("access", () => {
   it("S1-3 #5: only allow-listed emails may sign in, case and spaces ignored", () => {
@@ -15,48 +16,28 @@ describe("access", () => {
     expect(isEmailAllowed("rory@example.test", [])).toBe(false);
   });
 
-  it("dev sessions are signed: tampering or the wrong secret is refused", () => {
-    process.env.SESSION_SECRET = "a".repeat(32);
-    const v = encodeDevSession("00000000-0000-4000-8000-000000000001", "dev@example.test");
-    expect(decodeDevSession(v)).toEqual({
-      userId: "00000000-0000-4000-8000-000000000001",
-      email: "dev@example.test",
-    });
-    const [payload, mac] = v.split(".");
-    const forged = Buffer.from(JSON.stringify({ userId: "x", email: "dev@example.test" })).toString("base64url");
-    expect(decodeDevSession(`${forged}.${mac}`)).toBeNull();
-    expect(decodeDevSession(`${payload}.AAAA`)).toBeNull();
-    expect(decodeDevSession("garbage")).toBeNull();
-    process.env.SESSION_SECRET = "b".repeat(32);
-    expect(decodeDevSession(v)).toBeNull();
-  });
-
   it("S1-1 #4: missing configuration is listed by name, not a blank page", () => {
     const problems = configProblems({ MODEL_PROVIDER_OVERRIDE: "" });
     expect(problems.join("\n")).toMatch(/DATABASE_URL/);
     expect(problems.join("\n")).toMatch(/ALLOWED_EMAILS/);
-    expect(problems.join("\n")).toMatch(/NEXT_PUBLIC_SUPABASE_URL/);
     expect(problems.join("\n")).toMatch(/ANTHROPIC_API_KEY/);
-    const ok = configProblems({
-      DATABASE_URL: "postgres://x",
-      ALLOWED_EMAILS: "a@b.c",
-      AUTH_MODE: "dev",
-      SESSION_SECRET: "s".repeat(32),
-      MODEL_PROVIDER_OVERRIDE: "mock",
-    });
-    expect(ok).toEqual([]);
+    // Locally, sign-in needs nothing more: links go to the console mailer.
+    expect(configProblems(BASE)).toEqual([]);
   });
 
-  it("dev auth mode is refused on Vercel", () => {
-    const problems = configProblems({
-      DATABASE_URL: "postgres://x",
-      ALLOWED_EMAILS: "a@b.c",
-      AUTH_MODE: "dev",
-      SESSION_SECRET: "s".repeat(32),
-      MODEL_PROVIDER_OVERRIDE: "mock",
-      VERCEL: "1",
-      INNGEST_DEV: "1",
-    });
-    expect(problems.join("\n")).toMatch(/refused on Vercel/);
+  it("N-2: Supabase's variables are no longer needed or read, and dev auth mode has gone", () => {
+    const text = configProblems(BASE).join("\n");
+    expect(text).not.toMatch(/SUPABASE|SESSION_SECRET|AUTH_MODE/);
+    // A leftover AUTH_MODE=dev changes nothing.
+    expect(configProblems({ ...BASE, AUTH_MODE: "dev" })).toEqual([]);
+  });
+
+  it("N-3 and N-7 #2: production names a missing RESEND_API_KEY or EMAIL_FROM; previews need neither", () => {
+    const prod = { ...BASE, VERCEL: "1", VERCEL_ENV: "production", INNGEST_DEV: "1" };
+    const text = configProblems(prod).join("\n");
+    expect(text).toMatch(/RESEND_API_KEY is not set/);
+    expect(text).toMatch(/EMAIL_FROM is not set/);
+    expect(configProblems({ ...prod, RESEND_API_KEY: "re_test", EMAIL_FROM: "Studio <sign-in@studio.example.test>" })).toEqual([]);
+    expect(configProblems({ ...prod, VERCEL_ENV: "preview" })).toEqual([]);
   });
 });

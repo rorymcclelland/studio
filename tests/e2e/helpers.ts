@@ -1,13 +1,62 @@
 // Shared steps for the end-to-end specs.
+import { existsSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type Page } from "@playwright/test";
+import { expect, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
 
 export const DEV_EMAIL = "dev@example.test";
 
+/** What the sign-in page says for every valid address (src/lib/auth/sign-in.ts). */
+export const SIGN_IN_REPLY = "If that address has access, we've sent a sign-in link. It works once, for 15 minutes.";
+
+/**
+ * The owner's signed-in browser state, saved once per run by the sign-in
+ * setup project (sign-in.setup.ts), which signs in by email like a person.
+ * Reusing it keeps the suite inside the sign-in limit of 3 links per address
+ * per hour. Gitignored.
+ */
+export const DEV_STATE = "playwright/.auth/dev.json";
+
+/** Signs in as the owner (dev@example.test): reuses the saved session, or signs in by email if there is none. */
 export async function signIn(page: Page) {
+  if (existsSync(DEV_STATE)) {
+    const state = JSON.parse(readFileSync(DEV_STATE, "utf8")) as { cookies: Parameters<BrowserContext["addCookies"]>[0] };
+    await page.context().addCookies(state.cookies);
+    await page.goto("/");
+  } else {
+    await signInByEmail(page, DEV_EMAIL);
+  }
+  await expect(page.getByRole("heading", { name: "Try the tagline agent" })).toBeVisible();
+}
+
+/**
+ * How many sign-in links the console mailer has sent to an address, and the
+ * newest, read through /api/dev/last-sign-in-link (only off Vercel, with the
+ * console mailer).
+ */
+export async function sentLinks(request: APIRequestContext, email: string): Promise<{ link: string | null; count: number }> {
+  const res = await request.get(`/api/dev/last-sign-in-link?email=${encodeURIComponent(email)}`);
+  expect(res.status(), "the console mailer route (is the app running off Vercel, without RESEND_API_KEY?)").toBe(200);
+  return res.json();
+}
+
+/** Asks for a sign-in link on /signin and returns it once the console mailer has sent it. */
+export async function requestLink(page: Page, email: string): Promise<string> {
+  const before = (await sentLinks(page.request, email)).count;
   await page.goto("/signin");
-  await page.getByLabel("Email").fill(DEV_EMAIL);
-  await page.getByRole("button", { name: "Sign in" }).click();
+  await page.getByLabel("Email").fill(email);
+  await page.getByRole("button", { name: "Send sign-in link" }).click();
+  await expect(page.getByRole("status")).toHaveText(SIGN_IN_REPLY);
+  // The link is sent just after the reply (after()), so wait for it.
+  await expect.poll(async () => (await sentLinks(page.request, email)).count, { timeout: 15_000 }).toBeGreaterThan(before);
+  const { link } = await sentLinks(page.request, email);
+  return new URL(link!).pathname;
+}
+
+/** Signs in by email the way a person does: ask for a link, open it, press Continue. */
+export async function signInByEmail(page: Page, email: string) {
+  const path = await requestLink(page, email);
+  await page.goto(path);
+  await page.getByRole("button", { name: "Continue to Studio" }).click();
   await expect(page.getByRole("heading", { name: "Try the tagline agent" })).toBeVisible();
 }
 
