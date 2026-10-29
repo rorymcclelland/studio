@@ -1,5 +1,5 @@
 import { connection } from "next/server";
-import { getSql } from "@/lib/db/client";
+import { withSql } from "@/lib/db/client";
 import { functions } from "@/inngest/functions";
 import { deployedCommit } from "@/lib/deploy/commit";
 
@@ -11,7 +11,7 @@ export async function GET() {
   await connection();
   const started = Date.now();
   try {
-    await getSql()`select 1`;
+    await withSql((sql) => sql`select 1`);
     const ms = Date.now() - started;
     console.log(`[health] database ok in ${ms}ms`);
     // F-15: the deploy check compares this with what Inngest has registered.

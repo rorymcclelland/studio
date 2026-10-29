@@ -1,6 +1,6 @@
 import "server-only";
 import { z } from "zod";
-import { getSql } from "@/lib/db/client";
+import { withSql } from "@/lib/db/client";
 import { asAnon } from "@/lib/db/scoped";
 import { isEmailAllowed } from "@/lib/env";
 import { getMailer, type Mailer } from "@/lib/email/mailer";
@@ -60,8 +60,10 @@ export async function requestSignInLink(email: string, origin: string, mailer: M
   // request_sign_in trusts its allow-list flag, so it is granted to no app
   // role (anon included) and runs on the app's own connection, as
   // start_session does (Sprint 6 review).
-  const [r] = await getSql()`
-    select public.request_sign_in(${email}, ${hashToken(token)}, ${isEmailAllowed(email)}) as ok`;
+  const [r] = await withSql(
+    (sql) => sql`
+      select public.request_sign_in(${email}, ${hashToken(token)}, ${isEmailAllowed(email)}) as ok`,
+  );
   if (r?.ok !== true) return false;
   await mailer.send(signInEmail(email, `${origin}/signin/link/${token}`, SIGN_IN_MINUTES));
   return true;

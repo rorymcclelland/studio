@@ -35,6 +35,19 @@ export function getSql(): postgres.Sql {
   return globalThis.__csSql;
 }
 
+/**
+ * Runs one or more statements on the app's own connection (no role, no RLS:
+ * only for the security-definer calls that need it) and starts the idle wait
+ * once they have settled, so a slow connect can't outlast it.
+ */
+export async function withSql<T>(fn: (sql: postgres.Sql) => Promise<T>): Promise<T> {
+  try {
+    return await fn(getSql());
+  } finally {
+    keepInstanceUntilIdle();
+  }
+}
+
 export async function closeSql(): Promise<void> {
   if (globalThis.__csSql) {
     await globalThis.__csSql.end({ timeout: 5 });

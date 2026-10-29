@@ -1,5 +1,5 @@
 import "server-only";
-import { getSql } from "@/lib/db/client";
+import { withSql } from "@/lib/db/client";
 
 /**
  * The id of the auth.users row for an email, created if it is new. Called
@@ -10,9 +10,11 @@ import { getSql } from "@/lib/db/client";
  */
 export async function findOrCreateUser(email: string): Promise<string> {
   const e = email.trim().toLowerCase();
-  const [u] = await getSql()`
-    insert into auth.users (email) values (${e})
-    on conflict (email) do update set email = excluded.email
-    returning id`;
+  const [u] = await withSql(
+    (sql) => sql`
+      insert into auth.users (email) values (${e})
+      on conflict (email) do update set email = excluded.email
+      returning id`,
+  );
   return u.id as string;
 }

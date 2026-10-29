@@ -7,7 +7,9 @@ vi.mock("next/server", async (importOriginal) => ({
   ...(await importOriginal<typeof import("next/server")>()),
   connection: async () => {},
 }));
-vi.mock("@/lib/db/client", () => ({ getSql: () => async () => [{ "?column?": 1 }] }));
+vi.mock("@/lib/db/client", () => ({
+  withSql: async <T>(fn: (sql: () => Promise<unknown>) => Promise<T>) => fn(async () => [{ "?column?": 1 }]),
+}));
 vi.mock("@/inngest/functions", () => ({ functions: [{ id: () => "campaign-studio-agent-run" }] }));
 
 const { GET } = await import("@/app/api/health/route");

@@ -1,21 +1,24 @@
 diff --git a/node_modules/postgres/cf/src/connection.js b/node_modules/postgres/cf/src/connection.js
-index 8e79170..856e830 100644
+index 8e79170..24ec1ac 100644
 --- a/node_modules/postgres/cf/src/connection.js
 +++ b/node_modules/postgres/cf/src/connection.js
-@@ -159,6 +159,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -159,6 +159,15 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
      if (terminated)
        return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
  
 +    // Studio patch (decision 0016): the socket closed under a reserved
 +    // connection or a transaction (e.g. its rollback). Fail the query instead
-+    // of queueing a write to a null socket. True leaves the pool's queues alone.
++    // of queueing a write to a null socket. True leaves the pool's queues alone:
++    // right only for the begin() and reserve() handlers, the only callers that
++    // can hold a closed connection (the pool's own handler only uses open ones).
++    // Studio uses begin(), not reserve().
 +    if (!socket)
 +      return (queryError(q, Errors.connection('CONNECTION_CLOSED', options)), true)
 +
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
-@@ -254,6 +260,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -254,6 +263,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
    }
  
    function nextWrite(fn) {
@@ -28,7 +31,7 @@ index 8e79170..856e830 100644
      const x = socket.write(chunk, fn)
      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
      chunk = nextWriteTimer = null
-@@ -440,6 +452,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -440,6 +455,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
      remaining = 0
      incomings = null
      clearImmediate(nextWriteTimer)
@@ -38,24 +41,53 @@ index 8e79170..856e830 100644
      socket.removeListener('data', data)
      socket.removeListener('connect', connected)
      idleTimer.cancel()
+@@ -449,10 +467,23 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     socket.removeAllListeners()
+     socket = null
+ 
+-    if (initial)
++    // Studio patch (decision 0016): reconnect at once only when this side
++    // ended the startup on purpose (terminate(), e.g. target_session_attrs
++    // moving to the next host) or another host is left to try (as error()
++    // decides). A single server that closes during startup fails the waiting
++    // query below, rather than reconnecting in a loop with no timeout.
++    if (initial && (terminated || options.host[retries + 1])) {
++      query = null
+       return reconnect()
++    }
+ 
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    !hadError && (query || sent.length || initial) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    // Studio patch (decision 0016): the query that was running has been
++    // rejected; forget it, or the next startup's ErrorResponse is taken as
++    // its error, the waiting query is never rejected, and connects loop.
++    query = errorResponse = results = null
++    result = new Result()
++    rows = 0
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
 diff --git a/node_modules/postgres/cjs/src/connection.js b/node_modules/postgres/cjs/src/connection.js
-index 07f6716..8e32112 100644
+index 07f6716..c0b6e65 100644
 --- a/node_modules/postgres/cjs/src/connection.js
 +++ b/node_modules/postgres/cjs/src/connection.js
-@@ -157,6 +157,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -157,6 +157,15 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
      if (terminated)
        return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
  
 +    // Studio patch (decision 0016): the socket closed under a reserved
 +    // connection or a transaction (e.g. its rollback). Fail the query instead
-+    // of queueing a write to a null socket. True leaves the pool's queues alone.
++    // of queueing a write to a null socket. True leaves the pool's queues alone:
++    // right only for the begin() and reserve() handlers, the only callers that
++    // can hold a closed connection (the pool's own handler only uses open ones).
++    // Studio uses begin(), not reserve().
 +    if (!socket)
 +      return (queryError(q, Errors.connection('CONNECTION_CLOSED', options)), true)
 +
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
-@@ -252,6 +258,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -252,6 +261,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
    }
  
    function nextWrite(fn) {
@@ -68,7 +100,7 @@ index 07f6716..8e32112 100644
      const x = socket.write(chunk, fn)
      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
      chunk = nextWriteTimer = null
-@@ -438,6 +450,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -438,6 +453,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
      remaining = 0
      incomings = null
      clearImmediate(nextWriteTimer)
@@ -78,24 +110,53 @@ index 07f6716..8e32112 100644
      socket.removeListener('data', data)
      socket.removeListener('connect', connected)
      idleTimer.cancel()
+@@ -447,10 +465,23 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     socket.removeAllListeners()
+     socket = null
+ 
+-    if (initial)
++    // Studio patch (decision 0016): reconnect at once only when this side
++    // ended the startup on purpose (terminate(), e.g. target_session_attrs
++    // moving to the next host) or another host is left to try (as error()
++    // decides). A single server that closes during startup fails the waiting
++    // query below, rather than reconnecting in a loop with no timeout.
++    if (initial && (terminated || options.host[retries + 1])) {
++      query = null
+       return reconnect()
++    }
+ 
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    !hadError && (query || sent.length || initial) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    // Studio patch (decision 0016): the query that was running has been
++    // rejected; forget it, or the next startup's ErrorResponse is taken as
++    // its error, the waiting query is never rejected, and connects loop.
++    query = errorResponse = results = null
++    result = new Result()
++    rows = 0
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000
 diff --git a/node_modules/postgres/src/connection.js b/node_modules/postgres/src/connection.js
-index 1b1cccd..bc45a3e 100644
+index 1b1cccd..81309c8 100644
 --- a/node_modules/postgres/src/connection.js
 +++ b/node_modules/postgres/src/connection.js
-@@ -157,6 +157,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -157,6 +157,15 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
      if (terminated)
        return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
  
 +    // Studio patch (decision 0016): the socket closed under a reserved
 +    // connection or a transaction (e.g. its rollback). Fail the query instead
-+    // of queueing a write to a null socket. True leaves the pool's queues alone.
++    // of queueing a write to a null socket. True leaves the pool's queues alone:
++    // right only for the begin() and reserve() handlers, the only callers that
++    // can hold a closed connection (the pool's own handler only uses open ones).
++    // Studio uses begin(), not reserve().
 +    if (!socket)
 +      return (queryError(q, Errors.connection('CONNECTION_CLOSED', options)), true)
 +
      if (stream)
        return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
  
-@@ -252,6 +258,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -252,6 +261,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
    }
  
    function nextWrite(fn) {
@@ -108,7 +169,7 @@ index 1b1cccd..bc45a3e 100644
      const x = socket.write(chunk, fn)
      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
      chunk = nextWriteTimer = null
-@@ -438,6 +450,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+@@ -438,6 +453,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
      remaining = 0
      incomings = null
      clearImmediate(nextWriteTimer)
@@ -118,3 +179,29 @@ index 1b1cccd..bc45a3e 100644
      socket.removeListener('data', data)
      socket.removeListener('connect', connected)
      idleTimer.cancel()
+@@ -447,10 +465,23 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     socket.removeAllListeners()
+     socket = null
+ 
+-    if (initial)
++    // Studio patch (decision 0016): reconnect at once only when this side
++    // ended the startup on purpose (terminate(), e.g. target_session_attrs
++    // moving to the next host) or another host is left to try (as error()
++    // decides). A single server that closes during startup fails the waiting
++    // query below, rather than reconnecting in a loop with no timeout.
++    if (initial && (terminated || options.host[retries + 1])) {
++      query = null
+       return reconnect()
++    }
+ 
+-    !hadError && (query || sent.length) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    !hadError && (query || sent.length || initial) && error(Errors.connection('CONNECTION_CLOSED', options, socket))
++    // Studio patch (decision 0016): the query that was running has been
++    // rejected; forget it, or the next startup's ErrorResponse is taken as
++    // its error, the waiting query is never rejected, and connects loop.
++    query = errorResponse = results = null
++    result = new Result()
++    rows = 0
+     closedTime = performance.now()
+     hadError && options.shared.retries++
+     delay = (typeof backoff === 'function' ? backoff(options.shared.retries) : backoff) * 1000

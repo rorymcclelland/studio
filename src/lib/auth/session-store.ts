@@ -1,5 +1,5 @@
 import "server-only";
-import { getSql } from "@/lib/db/client";
+import { withSql } from "@/lib/db/client";
 import { asAnon, asUser } from "@/lib/db/scoped";
 import { isEmailAllowed } from "@/lib/env";
 import { hashToken, isTokenShaped, newToken } from "./tokens";
@@ -20,7 +20,7 @@ export async function createSession(userId: string): Promise<{ token: string; ex
   const token = newToken();
   const expiresAt = new Date(Date.now() + SESSION_SECONDS * 1000);
   // start_session is granted to no app role, so it runs on the app's own connection.
-  await getSql()`select public.start_session(${userId}, ${hashToken(token)}, ${expiresAt})`;
+  await withSql((sql) => sql`select public.start_session(${userId}, ${hashToken(token)}, ${expiresAt})`);
   return { token, expiresAt };
 }
 
