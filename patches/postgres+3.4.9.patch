@@ -1,0 +1,120 @@
+diff --git a/node_modules/postgres/cf/src/connection.js b/node_modules/postgres/cf/src/connection.js
+index 8e79170..856e830 100644
+--- a/node_modules/postgres/cf/src/connection.js
++++ b/node_modules/postgres/cf/src/connection.js
+@@ -159,6 +159,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (terminated)
+       return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
+ 
++    // Studio patch (decision 0016): the socket closed under a reserved
++    // connection or a transaction (e.g. its rollback). Fail the query instead
++    // of queueing a write to a null socket. True leaves the pool's queues alone.
++    if (!socket)
++      return (queryError(q, Errors.connection('CONNECTION_CLOSED', options)), true)
++
+     if (stream)
+       return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
+ 
+@@ -254,6 +260,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+ 
+   function nextWrite(fn) {
++    // Studio patch (decision 0016): never write to a socket that has gone.
++    if (!socket) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -440,6 +452,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    // Studio patch (decision 0016): drop the unsent bytes and the cleared
++    // timer, or the next connect prepends them and never flushes (CONNECT_TIMEOUT).
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+diff --git a/node_modules/postgres/cjs/src/connection.js b/node_modules/postgres/cjs/src/connection.js
+index 07f6716..8e32112 100644
+--- a/node_modules/postgres/cjs/src/connection.js
++++ b/node_modules/postgres/cjs/src/connection.js
+@@ -157,6 +157,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (terminated)
+       return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
+ 
++    // Studio patch (decision 0016): the socket closed under a reserved
++    // connection or a transaction (e.g. its rollback). Fail the query instead
++    // of queueing a write to a null socket. True leaves the pool's queues alone.
++    if (!socket)
++      return (queryError(q, Errors.connection('CONNECTION_CLOSED', options)), true)
++
+     if (stream)
+       return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
+ 
+@@ -252,6 +258,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+ 
+   function nextWrite(fn) {
++    // Studio patch (decision 0016): never write to a socket that has gone.
++    if (!socket) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -438,6 +450,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    // Studio patch (decision 0016): drop the unsent bytes and the cleared
++    // timer, or the next connect prepends them and never flushes (CONNECT_TIMEOUT).
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
+diff --git a/node_modules/postgres/src/connection.js b/node_modules/postgres/src/connection.js
+index 1b1cccd..bc45a3e 100644
+--- a/node_modules/postgres/src/connection.js
++++ b/node_modules/postgres/src/connection.js
+@@ -157,6 +157,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     if (terminated)
+       return queryError(q, Errors.connection('CONNECTION_DESTROYED', options))
+ 
++    // Studio patch (decision 0016): the socket closed under a reserved
++    // connection or a transaction (e.g. its rollback). Fail the query instead
++    // of queueing a write to a null socket. True leaves the pool's queues alone.
++    if (!socket)
++      return (queryError(q, Errors.connection('CONNECTION_CLOSED', options)), true)
++
+     if (stream)
+       return queryError(q, Errors.generic('COPY_IN_PROGRESS', 'You cannot execute queries during copy'))
+ 
+@@ -252,6 +258,12 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+   }
+ 
+   function nextWrite(fn) {
++    // Studio patch (decision 0016): never write to a socket that has gone.
++    if (!socket) {
++      nextWriteTimer !== null && clearImmediate(nextWriteTimer)
++      chunk = nextWriteTimer = null
++      return false
++    }
+     const x = socket.write(chunk, fn)
+     nextWriteTimer !== null && clearImmediate(nextWriteTimer)
+     chunk = nextWriteTimer = null
+@@ -438,6 +450,9 @@ function Connection(options, queues = {}, { onopen = noop, onend = noop, onclose
+     remaining = 0
+     incomings = null
+     clearImmediate(nextWriteTimer)
++    // Studio patch (decision 0016): drop the unsent bytes and the cleared
++    // timer, or the next connect prepends them and never flushes (CONNECT_TIMEOUT).
++    chunk = nextWriteTimer = null
+     socket.removeListener('data', data)
+     socket.removeListener('connect', connected)
+     idleTimer.cancel()
