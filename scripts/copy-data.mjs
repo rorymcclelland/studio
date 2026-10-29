@@ -408,6 +408,9 @@ export async function copyData(source, target, { batch = 500, log = console.log 
   let aborted = false;
   await source.begin("isolation level repeatable read read only", async (src) => {
     for (const s of SESSION_SETTINGS) await src.unsafe(s);
+    // Again inside the snapshot that is copied, in case a row changed since the check above.
+    const late = await unnormalisedEmails(src);
+    if (late) throw new CopyError(`Refusing to copy: ${unnormalisedMessage(late)}`);
     await target.begin(async (tgt) => {
       for (const s of SESSION_SETTINGS) await tgt.unsafe(s);
       await tgt.unsafe("set local lock_timeout = '30s'");

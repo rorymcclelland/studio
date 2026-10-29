@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { signInEmail } from "@/lib/auth/sign-in-email";
 import { clearOutbox, consoleMailer, lastSignInLink, sentTo } from "@/lib/email/console";
 import { getMailer, mailerKind } from "@/lib/email/mailer";
-import { MailError, resendMailer } from "@/lib/email/resend";
+import { MailError, resendMailer, scrubEmails } from "@/lib/email/resend";
 
 const LINK = "https://studio.example.test/signin/link/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
 
@@ -79,6 +79,11 @@ describe("N-3 mailer", () => {
     const empty = vi.fn(async () => new Response("", { status: 500 }));
     const e3 = await resendMailer("re_x", "a@b.c", empty as unknown as typeof fetch).send(signInEmail("someone@example.test", LINK, 15)).catch((e) => e);
     expect(e3.message).toBe("Resend refused the email (HTTP 500).");
+  });
+
+  it("scrubEmails (review): replaces every address, quoted or not, and keeps the sentence around it", () => {
+    expect(scrubEmails('connect failed for "Rory@Example.TEST"; cc <a.b+c@d.example>, then x@y.z.')).toBe('connect failed for "[address]"; cc <[address]>, then [address].');
+    expect(scrubEmails("no address here, only an @ sign")).toBe("no address here, only an @ sign");
   });
 
   it("console: writes the link to the server log and keeps it in memory for tests", async () => {

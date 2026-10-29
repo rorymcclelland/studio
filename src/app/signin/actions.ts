@@ -5,6 +5,7 @@ import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { endCurrentSession } from "@/lib/auth/session";
 import { linkOrigin, parseSignInEmail, requestSignInLink, SIGN_IN_REPLY } from "@/lib/auth/sign-in";
+import { scrubEmails } from "@/lib/email/resend";
 
 export type SignInState = { message: string; tone: "info" | "error" } | null;
 
@@ -22,8 +23,8 @@ export async function signIn(_prev: SignInState, form: FormData): Promise<SignIn
     try {
       await requestSignInLink(parsed.email, origin);
     } catch (err) {
-      // Logged without the address; the reply stays the same.
-      console.error("[signIn] couldn't send a sign-in link", err instanceof Error ? err.message : err);
+      // Logged without the address (any error, not only the mailer's, is scrubbed); the reply stays the same.
+      console.error("[signIn] couldn't send a sign-in link", scrubEmails(err instanceof Error ? err.message : String(err)));
     }
   });
   return { message: SIGN_IN_REPLY, tone: "info" };
