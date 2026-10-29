@@ -113,6 +113,12 @@ test("N-3 #2 and #3, N-2 #4 and #5: an invitee signs out, signs back in by email
   await replay.context().addCookies([first]);
   await replay.goto("/brands");
   await expect(replay).toHaveURL(/\/signin$/);
+  // Sprint 6 review: the dead cookie is cleared, not renewed.
+  expect((await replay.context().cookies()).find((c) => c.name === "cs_session")).toBeUndefined();
+  await replay.context().addCookies([first]);
+  await replay.goto("/");
+  await expect(replay).toHaveURL(/\/welcome$/);
+  expect((await replay.context().cookies()).find((c) => c.name === "cs_session")).toBeUndefined();
   await replay.context().close();
 
   // N-3 #2: the invitee signs back in by email, to their own empty workspace.

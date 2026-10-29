@@ -11,7 +11,10 @@
 //   - the tables on each side (auth.users and public, less schema_migrations);
 //   - per table, the row count and an md5 of every row in primary-key order
 //     (each row cast to text, generated columns left out; for auth.users only
-//     id and email), so values match and not just counts;
+//     id, email and created_at), so values match and not just counts;
+//   - on both sides, that every auth.users email is lower-case and trimmed
+//     (a count only, never the addresses), since sign-in looks people up by
+//     lower-cased address;
 //   - every asset's sha256: the stored column and one recomputed from its
 //     bytes, on both sides;
 //   - on B, every foreign key: no row points at a missing parent (queried per
@@ -23,11 +26,23 @@
 // 2 when it could not run.
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CopyError, SESSION_SETTINGS, arg, catalogue, connectFromEnv, copiedColumns, disabledTriggers, q } from "./copy-data.mjs";
+import {
+  AUTH_USER_COLUMNS,
+  CopyError,
+  SESSION_SETTINGS,
+  arg,
+  catalogue,
+  connectFromEnv,
+  copiedColumns,
+  disabledTriggers,
+  q,
+  unnormalisedEmails,
+  unnormalisedMessage,
+} from "./copy-data.mjs";
 
 /** The columns compared for a table, by name so column order doesn't matter. */
 function comparedColumns(table) {
-  const cols = table.full === "auth.users" ? table.columns.filter((c) => c.name === "id" || c.name === "email") : copiedColumns(table);
+  const cols = table.full === "auth.users" ? table.columns.filter((c) => AUTH_USER_COLUMNS.includes(c.name)) : copiedColumns(table);
   return cols.map((c) => c.name).sort();
 }
 
@@ -61,6 +76,9 @@ async function measure(sql, checkIntegrity) {
     }
 
     const problems = [];
+    const hasUsers = [...cat.values()].some((t) => t.full === "auth.users");
+    const mixed = hasUsers ? await unnormalisedEmails(tx) : 0;
+    if (mixed) problems.push(unnormalisedMessage(mixed));
     if (checkIntegrity) {
       for (const t of cat.values()) {
         for (const fk of t.fks) {
@@ -120,6 +138,7 @@ export async function compareCopy(a, b, labels = ["A", "B"]) {
     else if (!x) out.push(`asset ${id} is only on ${lb}`);
     else if (x.stored !== y.stored || x.actual !== y.actual) out.push(`asset ${id}: sha256 differs between ${la} and ${lb}`);
   }
+  for (const p of ma.problems) out.push(`${la}: ${p}`);
   for (const p of mb.problems) out.push(`${lb}: ${p}`);
   const rows = [...ma.tables.values()].reduce((s, t) => s + t.rows, 0);
   return { differences: out, summary: `${ma.tables.size} tables, ${rows} rows, ${ma.assets.size} assets` };

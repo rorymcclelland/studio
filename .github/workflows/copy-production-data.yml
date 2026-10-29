@@ -11,6 +11,12 @@
 #                       is left as copied.
 #   target: production  copies into the Neon production branch (NEON_DB_URL), which
 #                       must be fully migrated and empty, or the copy refuses.
+#   target: check       copies nothing: only runs check-copy.mjs --a SUPABASE_DB_URL
+#                       --b NEON_DB_URL (Neon production). Run it right after the
+#                       switch, before the smoke test (runbook step 3.6), to prove
+#                       Supabase and Neon still match, so nothing was written to
+#                       Supabase between the copy and the switch: a later write shows
+#                       as a difference naming its table. Type `check` to confirm.
 #
 # Connection strings never appear in the log: SUPABASE_DB_URL and NEON_DB_URL are
 # environment secrets (masked by GitHub), their passwords are masked as well, and
@@ -26,10 +32,10 @@ on:
       target:
         description: Where to copy to
         type: choice
-        options: [rehearsal, production]
+        options: [rehearsal, production, check]
         required: true
       confirm:
-        description: Type the target's name again (rehearsal or production) to confirm
+        description: Type the target's name again (rehearsal, production or check) to confirm
         type: string
         required: true
 
@@ -42,7 +48,7 @@ concurrency:
 
 jobs:
   copy:
-    name: Copy into ${{ inputs.target }}
+    name: ${{ inputs.target == 'check' && 'Check Neon production against Supabase' || format('Copy into {0}', inputs.target) }}
     runs-on: ubuntu-latest
     environment: cutover
     timeout-minutes: 75
@@ -66,7 +72,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
         run: |
           need="SUPABASE_DB_URL"
-          if [ "$TARGET" = "production" ]; then need="$need NEON_DB_URL"; else need="$need NEON_API_KEY"; fi
+          if [ "$TARGET" = "rehearsal" ]; then need="$need NEON_API_KEY"; else need="$need NEON_DB_URL"; fi
           for name in $need; do
             if [ -z "${!name}" ]; then
               echo "::error title=$name is missing::Add $name as a secret of the cutover environment (Settings, Environments, cutover). See docs/hosting.md, Cutover."
@@ -134,12 +140,13 @@ jobs:
         run: node scripts/db-migrate.mjs --url TARGET_DB_URL
 
       - name: Use the Neon production branch as the target
-        if: inputs.target == 'production'
+        if: inputs.target == 'production' || inputs.target == 'check'
         env:
           NEON_DB_URL: ${{ secrets.NEON_DB_URL }}
         run: echo "TARGET_DB_URL=$NEON_DB_URL" >> "$GITHUB_ENV"
 
       - name: Copy the data
+        if: inputs.target != 'check'
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: node scripts/copy-data.mjs --from SUPABASE_DB_URL --to TARGET_DB_URL
@@ -195,13 +202,13 @@ jobs:
           node scripts/check-copy.mjs --a SUPABASE_DB_URL --b SUITE_DB_URL
       # Same scope as CI's Neon job: the runner is in the US and the branch in London, so
       # the agent tests (hundreds of queries each) time out; they run on plain Postgres in CI.
-      - name: Database and model tests on the copied data
+      - name: Database, auth and model tests on the copied data
         if: inputs.target == 'rehearsal'
         timeout-minutes: 45
         env:
           SKIP_DB_RESET: "1"
         run: |
-          TEST_DATABASE_URL="$SUITE_DB_URL" npx vitest run tests/db tests/models --testTimeout=60000 \
+          TEST_DATABASE_URL="$SUITE_DB_URL" npx vitest run tests/db tests/auth tests/models --testTimeout=60000 \
             --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts
       - name: Delete the suite's branch (the rehearsal branch stays)
         if: always() && steps.suite.outputs.branch_id != ''
@@ -221,5 +228,9 @@ jobs:
             if [ "$TARGET" = "rehearsal" ] && [ -n "$BRANCH_ID" ]; then
               echo "Rehearsal branch: \`rehearsal-${{ github.run_id }}\` (id \`$BRANCH_ID\`), kept for inspection; it deletes itself after about two days."
             fi
-            echo "See the Copy and Check steps for per-table row counts and the comparison."
+            if [ "$TARGET" = "check" ]; then
+              echo "Nothing was copied: the Check step compares Supabase with Neon production as they stand."
+            else
+              echo "See the Copy and Check steps for per-table row counts and the comparison."
+            fi
           } >> "$GITHUB_STEP_SUMMARY"

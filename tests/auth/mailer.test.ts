@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { signInEmail } from "@/lib/auth/sign-in-email";
 import { clearOutbox, consoleMailer, lastSignInLink, sentTo } from "@/lib/email/console";
 import { getMailer, mailerKind } from "@/lib/email/mailer";
-import { MailError, resendMailer } from "@/lib/email/resend";
+import { MailError, resendMailer, scrubEmails } from "@/lib/email/resend";
 
 const LINK = "https://studio.example.test/signin/link/abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQ";
 
@@ -52,6 +52,38 @@ describe("N-3 mailer", () => {
     await expect(resendMailer(undefined, "a@b.c", never as unknown as typeof fetch).send(signInEmail("x@example.test", LINK, 15))).rejects.toThrow(/RESEND_API_KEY is not set/);
     await expect(resendMailer("re_x", undefined, never as unknown as typeof fetch).send(signInEmail("x@example.test", LINK, 15))).rejects.toThrow(/EMAIL_FROM is not set/);
     expect(never).not.toHaveBeenCalled();
+  });
+
+  it("Resend failure (review): the error names neither the recipient nor any address in the provider's body, and keeps status and a short reason", async () => {
+    const body = JSON.stringify({
+      statusCode: 422,
+      name: "validation_error",
+      message: "Invalid `to` field: Private.Person+tag@example.test is not allowed. Contact support@resend.example.",
+    });
+    const fetchImpl = vi.fn(async () => new Response(body, { status: 422 }));
+    const m = resendMailer("re_secret_key", "a@b.c", fetchImpl as unknown as typeof fetch);
+    const err = await m.send(signInEmail("private.person+tag@example.test", LINK, 15)).catch((e) => e);
+    expect(err).toBeInstanceOf(MailError);
+    expect(err.message).toBe("Resend refused the email (HTTP 422). Invalid `to` field: [address] is not allowed. Contact [address].");
+    expect(err.message.toLowerCase()).not.toContain("private.person");
+    expect(err.message).not.toContain("@");
+
+    // A long, non-JSON body is cut short and scrubbed too.
+    const long = vi.fn(async () => new Response(`bad gateway for someone@example.test ${"x".repeat(500)}`, { status: 502 }));
+    const e2 = await resendMailer("re_x", "a@b.c", long as unknown as typeof fetch).send(signInEmail("someone@example.test", LINK, 15)).catch((e) => e);
+    expect(e2.message).toMatch(/^Resend refused the email \(HTTP 502\)\. bad gateway for \[address\] x+$/);
+    expect(e2.message.length).toBeLessThan(260);
+    expect(e2.message).not.toContain("@");
+
+    // An empty body: status only.
+    const empty = vi.fn(async () => new Response("", { status: 500 }));
+    const e3 = await resendMailer("re_x", "a@b.c", empty as unknown as typeof fetch).send(signInEmail("someone@example.test", LINK, 15)).catch((e) => e);
+    expect(e3.message).toBe("Resend refused the email (HTTP 500).");
+  });
+
+  it("scrubEmails (review): replaces every address, quoted or not, and keeps the sentence around it", () => {
+    expect(scrubEmails('connect failed for "Rory@Example.TEST"; cc <a.b+c@d.example>, then x@y.z.')).toBe('connect failed for "[address]"; cc <[address]>, then [address].');
+    expect(scrubEmails("no address here, only an @ sign")).toBe("no address here, only an @ sign");
   });
 
   it("console: writes the link to the server log and keeps it in memory for tests", async () => {

@@ -131,6 +131,8 @@ Studio runs on Neon with its own sign-in, and nothing depends on Supabase. Rory 
 
 **Risk.** The free plan allows 10 branches per project; CI branches are deleted at the end of each run, and concurrent runs are limited to one.
 
+**Changed while building (28 Oct).** The agent tests run on plain Postgres in the first job, not on Neon: GitHub's runner is in the US and the branch in London, and on the first Neon run two agent test files timed out. The database, auth and model tests run on Neon.
+
 ### N-5 Previews on a Neon branch (S)
 
 **The job.** Previews keep their own database (F-8) without needing a second project anywhere.

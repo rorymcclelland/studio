@@ -471,6 +471,38 @@ describe("N-6 copy refusals and failures", () => {
     expect(r.out).not.toContain("Copy matches");
   });
 
+  it("the check compares auth.users's created_at as well as id and email", async () => {
+    const t = await buildTarget();
+    expect(copy(source, t.url).code).toBe(0);
+    expect(check(source, t.url).code).toBe(0);
+    await withDb(urlFor(t.db), (su) => su`update auth.users set created_at = created_at + interval '1 microsecond' where id = ${ID.guest}`);
+    const r = check(source, t.url);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain("table auth.users: same 3 rows counted, but their values differ");
+  });
+
+  it("refuses a source whose auth.users emails aren't lower-case and trimmed, giving only a count; the check reports it too", async () => {
+    const mixed = "Guest@Example.TEST ";
+    await withDb(source, (sql) => sql`update auth.users set email = ${mixed} where id = ${ID.guest}`);
+    try {
+      const t = await buildTarget();
+      const r = copy(source, t.url);
+      expect(r.code).toBe(1);
+      expect(r.err).toContain("Refusing to copy: 1 auth.users email(s) are not lower-case and trimmed.");
+      expect(r.err + r.out).not.toMatch(/guest@example\.test/i);
+      // Refused before anything was written.
+      expect(Object.values(await rowCounts(t.url)).every((n) => n === 0)).toBe(true);
+
+      const c = check(source, target.url);
+      expect(c.code).toBe(1);
+      expect(c.out).toContain("CHECK_A: 1 auth.users email(s) are not lower-case and trimmed.");
+      expect(c.out).not.toMatch(/guest@example\.test/i);
+    } finally {
+      await withDb(source, (sql) => sql`update auth.users set email = 'guest@example.test' where id = ${ID.guest}`);
+    }
+    expect(check(source, target.url).code).toBe(0);
+  });
+
   it("the check reports orphaned foreign keys and a disabled trigger on the copy", async () => {
     const t = await buildTarget();
     expect(copy(source, t.url).code).toBe(0);

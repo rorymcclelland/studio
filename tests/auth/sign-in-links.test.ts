@@ -141,6 +141,43 @@ describe("N-3 sign in by email", () => {
     expect(sentTo(LISTED)).toEqual([]);
   });
 
+  it("#4 (review): ten links a day per address; the eleventh sends nothing until the oldest is a day old", async () => {
+    await getSql()`
+      insert into auth.sign_in_tokens (token_hash, email, created_at, expires_at)
+      select encode(sha256(('day-' || g)::bytea), 'hex'), ${LISTED}, now() - make_interval(hours => 2 * g), now() - make_interval(hours => 2 * g) + interval '15 minutes'
+      from generate_series(1, 10) g`;
+    // None in the last hour, so only the daily limit holds it back.
+    expect(await requestSignInLink(LISTED, ORIGIN, mailer)).toBe(false);
+    expect(sentTo(LISTED)).toEqual([]);
+    // Another address isn't held up by this one.
+    expect(await requestSignInLink(OWNER, ORIGIN, mailer)).toBe(true);
+    await getSql()`update auth.sign_in_tokens set created_at = now() - interval '25 hours' where token_hash = encode(sha256('day-10'::bytea), 'hex')`;
+    expect(await requestSignInLink(LISTED, ORIGIN, mailer)).toBe(true);
+  });
+
+  it("#4 (review): eighty links a day in all, across addresses; the eighty-first sends nothing", async () => {
+    await getSql()`
+      insert into auth.sign_in_tokens (token_hash, email, created_at, expires_at)
+      select encode(sha256(('daily-filler-' || g)::bytea), 'hex'), 'daily-filler-' || g || '@example.test', now() - interval '2 hours', now() - interval '105 minutes'
+      from generate_series(1, 80) g`;
+    expect(await requestSignInLink(LISTED, ORIGIN, mailer)).toBe(false);
+    expect(sentTo(LISTED)).toEqual([]);
+    // A day later they no longer count.
+    await getSql()`update auth.sign_in_tokens set created_at = now() - interval '25 hours' where email like 'daily-filler-%'`;
+    expect(await requestSignInLink(LISTED, ORIGIN, mailer)).toBe(true);
+  });
+
+  it("#4 (review): the clean-up keeps the rows the daily limits count, and removes only those over two days old", async () => {
+    await getSql()`
+      insert into auth.sign_in_tokens (token_hash, email, created_at, expires_at) values
+        (${"1".repeat(64)}, 'kept@example.test', now() - interval '23 hours', now()),
+        (${"2".repeat(64)}, 'kept@example.test', now() - interval '47 hours', now()),
+        (${"3".repeat(64)}, 'gone@example.test', now() - interval '49 hours', now())`;
+    expect(await requestSignInLink(LISTED, ORIGIN, mailer)).toBe(true);
+    const left = await getSql()`select email from auth.sign_in_tokens where email in ('kept@example.test', 'gone@example.test')`;
+    expect(left.map((r) => r.email)).toEqual(["kept@example.test", "kept@example.test"]);
+  });
+
   it("#4: concurrent requests can't get past the limit together", async () => {
     const results = await Promise.all(Array.from({ length: 6 }, () => requestSignInLink(LISTED, ORIGIN, mailer)));
     expect(results.filter(Boolean)).toHaveLength(3);
@@ -159,8 +196,15 @@ describe("N-3 sign in by email", () => {
     expect(parseSignInEmail("  Rory@Example.TEST ")).toEqual({ email: "rory@example.test" });
   });
 
+  it("hostile (review): no app role can call request_sign_in and pass its own allow-list flag", async () => {
+    const attempt = (tx: Parameters<Parameters<typeof asAnon>[0]>[0]) => tx`select public.request_sign_in(${"outsider@example.test"}, ${"f".repeat(64)}, true)`;
+    await expect(asAnon(attempt)).rejects.toThrow(/permission denied/);
+    await expect(asUser(owner.userId, attempt)).rejects.toThrow(/permission denied/);
+    expect((await getSql()`select count(*)::int as n from auth.sign_in_tokens`)[0].n).toBe(0);
+  });
+
   it("#6 hostile: the database refuses an over-long address or SQL in it, even if the app's check were skipped", async () => {
-    const ask = (email: string) => asAnon(async (tx) => (await tx`select public.request_sign_in(${email}, ${hashToken(email)}, true) as ok`)[0].ok);
+    const ask = async (email: string) => (await getSql()`select public.request_sign_in(${email}, ${hashToken(email)}, true) as ok`)[0].ok;
     expect(await ask(`${"a".repeat(300)}@example.test`)).toBe(false);
     expect(await ask("no-at-sign")).toBe(false);
     await expect(ask("x'); delete from auth.sign_in_tokens; --@example.test")).resolves.toBeTypeOf("boolean");
