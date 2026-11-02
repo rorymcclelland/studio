@@ -28,9 +28,10 @@ import {
   type VariantOrigin,
 } from "./variants";
 import { renderAd } from "./render/render";
-import { translationBadge } from "./ad-sizes";
+import { sentence, translationBadge } from "./ad-sizes";
+import { fitBase, fitsFor, logoFor } from "./fit-cache";
 import { LANG_NAMES, SUPPORTED_LANGS, type Lang } from "./languages";
-import { sizesFor } from "./render/sizes";
+import { SIZES, type SizeId } from "./render/sizes";
 import { languageOptions, translateCost, type LanguageOption } from "./translate";
 
 // S5-4: what the Creative section of a campaign shows and does. The gallery
@@ -103,14 +104,17 @@ export type VariantView = {
   restore: { allowed: boolean; reason: string | null };
   /**
    * C7-2: the ad in the brand's other languages: its words' current
-   * translations, each drawn on request from this ad (the first size of its
-   * channel as the thumbnail) and badged "Machine translation" (rule 1).
+   * translations, each drawn on request from this ad and badged "Machine
+   * translation" (rule 1). The thumbnail is the first size of the channel the
+   * translation fits, at that size's own width and height (review fix 8).
    */
   translations: {
     lang: Lang;
     name: string;
     setId: string;
-    src: string;
+    /** Null when no size of the channel holds these words; thumbReason says why. */
+    thumb: { src: string; size: SizeId; width: number; height: number } | null;
+    thumbReason: string | null;
     sizesHref: string;
     headline: string;
     body: string;
@@ -182,6 +186,13 @@ export type CreativeView = {
     runningRunId: string | null;
     /** Any translation on the page was written by the mock model. */
     simulated: boolean;
+    /**
+     * When some of the brand's languages are refused and others allowed, why
+     * the refused ones are left out (test case 5), shown as text beside the
+     * button. Null when none is refused, or when all are (the button's own
+     * reason says it then).
+     */
+    refusedNote: string | null;
   };
 };
 
@@ -288,20 +299,29 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
     const currentPairs = new Map(rows.filter((r) => !r.discarded_at).map((r) => [`${r.image_asset_id}:${r.copy_set_id}`, r]));
     const kit = await kitSnapshot(tx, c.brand_id);
 
-    const translationsOf = (variantId: string, setId: string, channel: string): Pick<VariantView, "translations" | "translate"> => {
+    const logos = new Map<string, Buffer | null>();
+    const translationsOf = async (r: (typeof rows)[number]): Promise<Pick<VariantView, "translations" | "translate">> => {
+      const variantId = r.id as string;
+      const kit = r.kit as KitSnapshot;
       const mine = translatedRows
-        .filter((t) => t.translated_from === setId)
+        .filter((t) => t.translated_from === r.copy_set_id)
         .sort((x, y) => SUPPORTED_LANGS.indexOf(x.lang as Lang) - SUPPORTED_LANGS.indexOf(y.lang as Lang));
-      const first = sizesFor(channel)[0]?.id ?? "1080x1080";
-      const translations = mine.map((t) => {
+      const translations: VariantView["translations"] = [];
+      for (const t of mine) {
         const w = t.set as AdWords;
         const shown = (x: string) => x.split("\u00AD").join("");
         const badge = translationBadge(t.simulated === true);
-        return {
+        const name = LANG_NAMES[t.lang as Lang] ?? (t.lang as string);
+        // Review fix 8: the first size these words fit, as drawInSize would draw it (the launch pack's fits, cached).
+        const fits = await fitsFor(t.id as string, fitBase(w, t.legal_lines as string[], await logoFor(tx, kit, logos), kit), r.layout as LayoutId, r.channel as AdChannel, kit);
+        const fit = fits.find((f) => f.ok);
+        const refusals = [...new Set(fits.flatMap((f) => (f.ok ? [] : [sentence(f.refused)])))];
+        translations.push({
           lang: t.lang as Lang,
-          name: LANG_NAMES[t.lang as Lang] ?? (t.lang as string),
+          name,
           setId: t.id as string,
-          src: `/ads/${variantId}/${first}.png?lang=${t.lang}`,
+          thumb: fit ? { src: `/ads/${variantId}/${fit.size}.png?lang=${t.lang}`, size: fit.size, width: SIZES[fit.size].width, height: SIZES[fit.size].height } : null,
+          thumbReason: fit ? null : `No size of this ad can hold the ${name} words. ${refusals.join(" ")}`.trim(),
           sizesHref: `/campaigns/${campaignId}/ads/${variantId}/sizes?lang=${t.lang}`,
           headline: shown(w.headline),
           body: shown(w.body),
@@ -310,12 +330,15 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
           simulated: t.simulated === true,
           badge: { label: badge.label, detail: badge.detail },
           runId: (t.run_id as string | null) ?? null,
-        };
-      });
+        });
+      }
       const todo = allowedLangs.filter((l) => !mine.some((t) => t.lang === l)).length;
       const reason = languageRefusalText ?? (todo === 0 ? `Already in ${allowedLangs.map((l) => LANG_NAMES[l]).join(", ").replace(/, ([^,]*)$/, " and $1")}.` : null);
       return { translations, translate: { todo, estimate: translateCost(todo).label, reason } };
     };
+
+    const translated = new Map<string, Pick<VariantView, "translations" | "translate">>();
+    for (const r of rows) translated.set(r.id as string, await translationsOf(r));
 
     const views: VariantView[] = rows.map((r) => {
       const words = r.set as AdWords;
@@ -376,7 +399,7 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
           : null,
         busy: { picture: pictureBusy.get(r.id) ?? null, words: wordsBusy.get(r.copy_set_id) ?? null },
         restore,
-        ...translationsOf(r.id as string, r.copy_set_id as string, r.channel as string),
+        ...translated.get(r.id as string)!,
       };
     });
     const unordered = views.filter((v) => !v.discardedAt && !v.image.discarded && !v.words.discarded);
@@ -455,6 +478,13 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
         picked: pickedTranslate(live, allowedLangs, languageRefusalText),
         runningRunId: translating,
         simulated: live.some((v) => v.translations.some((t) => t.simulated)),
+        refusedNote:
+          languageRefusalText === null && languages.some((l) => !l.allowed)
+            ? languages
+                .filter((l) => !l.allowed)
+                .map((l) => `${l.name} is left out: ${l.reason}`)
+                .join(" ")
+            : null,
       },
     };
   });
