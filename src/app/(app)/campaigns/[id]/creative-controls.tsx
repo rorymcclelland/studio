@@ -21,6 +21,8 @@ import {
   newAdWords,
   newSetWords,
   pickAd,
+  redrawAd,
+  redrawAllAds,
   restoreAd,
   restoreSet,
   switchLayout,
@@ -96,9 +98,11 @@ type AdProps = {
   words: { headline: string; body: string; cta: string };
   fields: FieldSpec[];
   pendingWords: boolean;
+  /** F-26: made with an older kit, so Redraw with current kit is offered. */
+  olderKit: boolean;
 };
 
-/** The layout switcher, Pick, Discard, New picture, New words and Edit words for one ad. */
+/** The layout switcher, Redraw with current kit (F-26), Pick, Discard, New picture, New words and Edit words for one ad. */
 export function AdControls(p: AdProps) {
   const { run, pending, error } = useBriefAction();
   const [doing, setDoing] = useState<string | null>(null);
@@ -136,6 +140,18 @@ export function AdControls(p: AdProps) {
       </fieldset>
 
       <div className="grid grid-cols-2 gap-2">
+        {p.olderKit && (
+          <Button
+            type="button"
+            size="sm"
+            className="col-span-2 flex-wrap px-3"
+            disabled={pending || !!p.busy.picture}
+            aria-label={`Redraw ${name} with the current kit, no AI cost`}
+            onClick={() => go("redraw", () => redrawAd(p.campaignId, p.variantId))}
+          >
+            {busyNow("redraw") ? "Redrawing…" : <Costed label="Redraw with current kit" estimate="no AI cost" />}
+          </Button>
+        )}
         <Button
           type="button"
           size="sm"
@@ -201,6 +217,19 @@ export function AdControls(p: AdProps) {
         />
       </div>
       {p.usedIn > 1 && <p className="text-sm text-ink-2">Words used in {p.usedIn} ads: New words and Edit words change them all.</p>}
+      <ActionError error={error} />
+    </div>
+  );
+}
+
+/** F-26: redraws every ad made with an older kit, in code (no AI cost); each can be undone under Discarded. */
+export function RedrawAllButton({ campaignId, count }: { campaignId: string; count: number }) {
+  const { run, pending, error } = useBriefAction();
+  return (
+    <div className="flex min-w-0 shrink-0 flex-col items-start gap-2 sm:items-end">
+      <Button type="button" size="sm" disabled={pending} onClick={() => run(() => redrawAllAds(campaignId))} className="flex-wrap">
+        {pending ? "Redrawing…" : <Costed label={count === 1 ? "Redraw the older ad" : `Redraw all ${count} older ads`} estimate="no AI cost" />}
+      </Button>
       <ActionError error={error} />
     </div>
   );

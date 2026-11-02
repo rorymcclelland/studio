@@ -21,6 +21,8 @@ import {
   newPicture,
   newWords,
   pickVariant,
+  redrawOlderAds,
+  redrawVariant,
   restoreVariant,
   setLayout,
   startMakeCreative,
@@ -80,6 +82,25 @@ export async function restoreAd(campaignId: string, variantId: string): Promise<
   return act(campaignId, "restoreAd", "Couldn't restore the ad. Nothing was changed; try again.", async (member) => {
     await restoreVariant(member, variantId);
     return "Ad restored to the gallery.";
+  });
+}
+
+/** F-26: one ad redrawn with the brand's current kit (drawn in code: no AI cost). */
+export async function redrawAd(campaignId: string, variantId: string): Promise<BriefActionState> {
+  return act(campaignId, "redrawAd", "Couldn't redraw the ad. Nothing was changed; try again.", async (member) => {
+    await redrawVariant(member, variantId);
+    return "Ad redrawn with the current kit. The old one is under Discarded, where restoring it undoes the redraw.";
+  });
+}
+
+/** F-26: every ad made with an older kit redrawn with the current kit; any the renderer refuses keep the older kit. */
+export async function redrawAllAds(campaignId: string): Promise<BriefActionState> {
+  return act(campaignId, "redrawAllAds", "Couldn't redraw the ads. Nothing was changed; try again.", async (member) => {
+    const { redrawn, kept } = await redrawOlderAds(member, campaignId);
+    const keptNote = kept.length
+      ? ` ${plural(kept.length, "ad")} kept the older kit: ${[...new Set(kept.map((k) => k.reason))].join("; ")}.`
+      : "";
+    return `${plural(redrawn.length, "ad")} redrawn with the current kit.${keptNote} The old ones are under Discarded, where restoring one undoes its redraw.`;
   });
 }
 

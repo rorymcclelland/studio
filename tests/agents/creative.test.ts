@@ -28,6 +28,8 @@ import {
   newWords,
   NOT_SIGNED_OFF,
   pickVariant,
+  redrawOlderAds,
+  redrawVariant,
   restoreVariant,
   setLayout,
   startMakeCreative,
@@ -145,7 +147,13 @@ describe("S5-4 Make creative and the gallery", () => {
         expect(v.runId).toBe(runId);
       }
       expect(g.simulated).toBe(true);
-      expect(g.audienceNote).toBeNull();
+      // F-27 #3: one audience is one group, shown as today (no headings).
+      expect(g.audiences).toHaveLength(1);
+      expect(g.audiences[0].variants.map((v) => v.id)).toEqual(g.variants.map((v) => v.id));
+      expect(g.setsWithoutAds).toEqual([]);
+      // F-26 #3: just made, so every ad is on the brand's current kit (the stored kit reads back equal, whatever jsonb's key order).
+      expect(g.variants.every((v) => !v.olderKit)).toBe(true);
+      expect(g.olderKitCount).toBe(0);
       // The brief's email copy is a text-only channel, listed beside the gallery.
       expect(g.textSets.map((s) => s.channel)).toEqual(["email"]);
       expect(g.makeCreative.allowed).toBe(false);
@@ -580,29 +588,252 @@ describe("S5-4 Make creative and the gallery", () => {
     expect((await listCopySets(a.userId, id)).sets.map((s) => s.id).sort()).toEqual(copy.sets.map((s) => s.id).sort());
   });
 
-  it("several audiences and a display channel: the first audience's words are composed for both ad channels, and the note says so", async () => {
-    const id = await signedOff((x, segs) => ({
-      ...x,
-      audiences: [x.audiences[0], { segmentRef: segs.find((s) => s !== x.audiences[0].segmentRef)!, why: "They already trust the app and may move up a plan." }],
-      channels: [
-        { channel: "paid social", role: "Reach lapsed savers where they scroll." },
-        { channel: "display", role: "Remind them on the sites they read." },
-        { channel: "search", role: "Catch people looking for a budgeting app." },
-      ],
-    }));
+  describe("F-27 several audiences", () => {
+    let id: string;
+    let g: CreativeView;
+    let runSummary: string;
+    let titles: string[];
+    let estimateBefore: string;
+
+    beforeAll(async () => {
+      id = await signedOff((x, segs) => ({
+        ...x,
+        audiences: [x.audiences[0], { segmentRef: segs.find((s) => s !== x.audiences[0].segmentRef)!, why: "They already trust the app and may move up a plan." }],
+        channels: [
+          { channel: "paid social", role: "Reach lapsed savers where they scroll." },
+          { channel: "display", role: "Remind them on the sites they read." },
+          { channel: "search", role: "Catch people looking for a budgeting app." },
+        ],
+      }));
+      estimateBefore = (await view(id)).makeCreative.estimate.label;
+      const { status, run } = await make(id);
+      expect(status, run.error ?? "").toBe("completed");
+      runSummary = String(run.output!.summary);
+      g = await view(id);
+      const c = (await getCampaign(a.userId, id))!;
+      titles = c.brief!.audiences.map((x) => c.sources[x.segmentRef].title);
+    }, 120_000);
+
+    it("#1 two audiences get 24 social ads (12 each) and 24 display ads, grouped by audience in the brief's order", () => {
+      expect(g.variants).toHaveLength(48);
+      for (const [i, title] of titles.entries()) {
+        const mine = g.variants.filter((v) => v.words.audience.title === title);
+        expect(mine.filter((v) => v.channel === "paid social"), title).toHaveLength(12);
+        expect(mine.filter((v) => v.channel === "display"), title).toHaveLength(12);
+        expect(g.audiences[i].title).toBe(title);
+        expect(g.audiences[i].variants.map((v) => v.id).sort()).toEqual(mine.map((v) => v.id).sort());
+      }
+      expect(g.audiences).toHaveLength(2);
+      // The flat list is in the groups' order, so ad numbers run through the headings.
+      expect(g.variants.map((v) => v.id)).toEqual(g.audiences.flatMap((x) => x.variants.map((v) => v.id)));
+      // The four pictures are shared by both audiences.
+      expect(new Set(g.audiences[0].variants.map((v) => v.image.assetId))).toEqual(new Set(g.audiences[1].variants.map((v) => v.image.assetId)));
+      expect(new Set(g.variants.map((v) => `${v.image.assetId}:${v.words.setId}`)).size).toBe(48);
+      expect(g.setsWithoutAds).toEqual([]);
+      expect(g.textSets.map((s) => s.channel)).toEqual(["search", "search"]);
+      expect(runSummary).toMatch(/^48 ads from 4 pictures and 12 sets of words, for 2 audiences\./);
+    });
+
+    it("#4 the cost shown before Make creative is the same as for one audience (pictures are shared, the words are one Copy run)", async () => {
+      const single = await signedOff();
+      expect(estimateBefore).toBe((await view(single)).makeCreative.estimate.label);
+      expect(estimateBefore).toBe(makeCreativeEstimate({ writesCopy: true }).label);
+    });
+
+    it("composing again adds nothing: one current variant per picture and words still holds across audiences", async () => {
+      const again = await composeVariants(a, id);
+      expect(again).toMatchObject({ made: [], refused: [], existing: 48 });
+      expect(again.audiences.map((x) => x.title)).toEqual(titles);
+    });
+
+    it("#2 New words on the second audience's words redraws only that audience's ads on those words", async () => {
+      const second = g.audiences[1].variants;
+      const v = second.find((x) => x.channel === "paid social")!;
+      const onSet = g.variants.filter((x) => x.words.setId === v.words.setId).map((x) => x.id);
+      expect(onSet).toHaveLength(4);
+      const runId = await newWords(a, v.id, noSend);
+      expect((await execute(a, runId)).status).toBe("completed");
+      const waiting = await view(id);
+      expect(waiting.variants.filter((x) => x.pendingWords).map((x) => x.id).sort()).toEqual([...onSet].sort());
+
+      const kept = await keepWords(a, v.id, "new");
+      expect(kept.variantIds).toHaveLength(4);
+      const after = await view(id);
+      expect(after.variants).toHaveLength(48);
+      // The first audience's ads, and the second's other words, are untouched.
+      const untouched = g.variants.filter((x) => !onSet.includes(x.id)).map((x) => x.id);
+      expect(after.variants.filter((x) => !kept.variantIds.includes(x.id)).map((x) => x.id).sort()).toEqual(untouched.sort());
+      for (const m of after.variants.filter((x) => kept.variantIds.includes(x.id))) {
+        expect(m).toMatchObject({ origin: "new words", channel: "paid social", words: { audience: { title: titles[1] } } });
+      }
+      expect(after.audiences.map((x) => x.variants.length)).toEqual([24, 24]);
+    });
+
+    it("an audience's words with no ads (every ad on them discarded) are listed beside the gallery, with New words", async () => {
+      const v = (await view(id)).audiences[1].variants.find((x) => x.channel === "display")!;
+      const onSet = (await view(id)).variants.filter((x) => x.words.setId === v.words.setId);
+      for (const x of onSet) await discardVariant(a, x.id);
+      const after = await view(id);
+      expect(after.setsWithoutAds.map((s) => s.id)).toEqual([v.words.setId]);
+      expect(after.setsWithoutAds[0].audience.title).toBe(titles[1]);
+      for (const x of onSet) await restoreVariant(a, x.id);
+      expect((await view(id)).setsWithoutAds).toEqual([]);
+    });
+  });
+
+  it("F-27 #3: a brief with no named audience works as today: 12 ads for everyone, in one group", async () => {
+    // A person can't save a brief without an audience, but a brief can name none (the Copy agent then writes for "all"):
+    // the signed-off version is given no audiences directly, past its append-only guard.
+    const id = await signedOff();
+    await getSql().begin(async (tx) => {
+      await tx`set local session_replication_role = replica`;
+      await tx`update public.brief_versions set brief = jsonb_set(brief, '{audiences}', '[]'::jsonb) where campaign_id = ${id}`;
+    });
     const { status, run } = await make(id);
     expect(status, run.error ?? "").toBe("completed");
     const g = await view(id);
-    expect(g.variants).toHaveLength(24);
-    expect(g.variants.filter((v) => v.channel === "display")).toHaveLength(12);
-    const c = (await getCampaign(a.userId, id))!;
-    const first = c.sources[c.brief!.audiences[0].segmentRef].title;
-    expect(new Set(g.variants.map((v) => v.words.audience.title))).toEqual(new Set([first]));
-    expect(g.audienceNote).toBe(`Ads use the words for ${first}, the brief's first audience; the words for the other audience are in the copy lists.`);
-    expect(String(run.output!.summary)).toContain(g.audienceNote!);
-    expect(g.otherAudienceSets).toHaveLength(6);
-    expect(g.textSets.map((s) => s.channel)).toEqual(["search", "search"]);
+    expect(g.variants).toHaveLength(12);
+    expect(g.audiences).toHaveLength(1);
+    expect(g.audiences[0]).toMatchObject({ segmentRef: null, title: "Everyone the brief is for" });
+    expect(String(run.output!.summary)).toMatch(/^12 ads from 4 pictures and 3 sets of words\./);
   }, 60_000);
+
+  describe("F-26 Redraw with the current kit", () => {
+    let id: string;
+    let palette: unknown;
+    const newPalette = [
+      { name: "Moss", hex: "#2F5D50" },
+      { name: "Chalk", hex: "#F4F1EA" },
+    ];
+    const setPalette = (p: unknown) => getSql()`update public.brands set palette = ${getSql().json(p as never)} where id = ${quill}`;
+    const ledger = async () => Number((await getSql()`select count(*)::int as n from public.usage_ledger`)[0].n);
+    const runs = async () => Number((await getSql()`select count(*)::int as n from public.agent_runs`)[0].n);
+
+    beforeAll(async () => {
+      [{ palette }] = await getSql()`select palette from public.brands where id = ${quill}`;
+      id = await signedOff();
+      expect((await make(id)).status).toBe("completed");
+    }, 120_000);
+    afterAll(async () => {
+      await setPalette(palette);
+    });
+
+    it("#3 an ad already on the current kit has no button, and a redraw is refused", async () => {
+      const g = await view(id);
+      expect(g.olderKitCount).toBe(0);
+      expect(g.variants.every((v) => !v.olderKit && !v.badges.some((b) => b.key === "kit"))).toBe(true);
+      await expect(redrawVariant(a, g.variants[0].id)).rejects.toThrow("That ad already uses the brand's current kit.");
+      await expect(redrawOlderAds(a, id)).rejects.toThrow("Every ad already uses the brand's current kit.");
+    });
+
+    it("#1 and #4 after a palette change: the older ads say so; a redraw makes a new ad in the new colours (same picture, words and layout, the pick carried over) and discards the old one, at no AI cost", async () => {
+      await setPalette(newPalette);
+      const g = await view(id);
+      expect(g.olderKitCount).toBe(12);
+      for (const v of g.variants) {
+        expect(v.olderKit).toBe(true);
+        expect(v.badges.find((b) => b.key === "kit")).toMatchObject({ label: "Made with an older kit", tone: "warn" });
+      }
+      const target = g.variants[0];
+      await pickVariant(a, target.id);
+      await setLayout(a, target.id, "card");
+      const etag = (await adResponse(a.userId, target.id)).headers.get("etag");
+      const [ledgerBefore, runsBefore] = [await ledger(), await runs()];
+
+      const { variantId } = await redrawVariant(a, target.id);
+      const after = await view(id);
+      expect(after.variants).toHaveLength(12);
+      expect(after.olderKitCount).toBe(11);
+      const redrawn = after.variants.find((v) => v.id === variantId)!;
+      expect(redrawn).toMatchObject({ origin: "redrawn", basedOn: target.id, picked: true, olderKit: false, layout: "card", runId: null });
+      expect(redrawn.image.assetId).toBe(target.image.assetId);
+      expect(redrawn.words.setId).toBe(target.words.setId);
+      expect(after.variants.map((v) => v.id)).not.toContain(target.id);
+      const old = after.discarded.find((v) => v.id === target.id)!;
+      expect(old.restore).toEqual({ allowed: true, reason: null });
+      expect(old.redrawnBy).toBe(variantId);
+      // The new colours: the stored kit is the brand's palette now, and the drawing (its ETag) is new.
+      const [row] = await asUser(a.userId, (tx) => tx`select kit from public.ad_variants where id = ${variantId}`);
+      expect(row.kit.palette).toEqual(newPalette);
+      const res = await adResponse(a.userId, variantId);
+      expect(res.status).toBe(200);
+      expect(res.headers.get("etag")).not.toBe(etag);
+      expect((await png(res)).meta.width).toBe(1080);
+      // No AI cost: no run, no ledger row, no model call.
+      expect([await ledger(), await runs()]).toEqual([ledgerBefore, runsBefore]);
+      expect(mockBehaviour.imageCalls).toBe(0);
+      // Already redrawn: no second redraw of the old one, nor of the new one.
+      await expect(redrawVariant(a, target.id)).rejects.toThrow(/discarded/);
+      await expect(redrawVariant(a, variantId)).rejects.toThrow("That ad already uses the brand's current kit.");
+    });
+
+    it("#2 undo: restoring the old ad brings it back with its pick and discards the redrawn one", async () => {
+      const g = await view(id);
+      const redrawn = g.variants.find((v) => v.origin === "redrawn")!;
+      await restoreVariant(a, redrawn.basedOn!);
+      const after = await view(id);
+      expect(after.variants).toHaveLength(12);
+      expect(after.olderKitCount).toBe(12);
+      const back = after.variants.find((v) => v.id === redrawn.basedOn)!;
+      expect(back).toMatchObject({ olderKit: true, picked: true, layout: "card" });
+      expect(after.discarded.find((v) => v.id === redrawn.id)!.restore).toEqual({ allowed: false, reason: "The same picture and words are already in the gallery." });
+      await expect(restoreVariant(a, redrawn.id)).rejects.toThrow(/already in the gallery/);
+    });
+
+    it("Redraw all N older ads redraws each one at no AI cost, and each can be undone", async () => {
+      const before = await view(id);
+      const picked = before.variants.filter((v) => v.picked).map((v) => v.id);
+      const [ledgerBefore, runsBefore] = [await ledger(), await runs()];
+      const res = await redrawOlderAds(a, id);
+      expect(res.redrawn).toHaveLength(12);
+      expect(res.kept).toEqual([]);
+      const after = await view(id);
+      expect(after.olderKitCount).toBe(0);
+      expect(after.variants.every((v) => v.origin === "redrawn" && !v.olderKit)).toBe(true);
+      expect(after.variants.filter((v) => v.picked).map((v) => v.basedOn)).toEqual(picked);
+      expect([await ledger(), await runs()]).toEqual([ledgerBefore, runsBefore]);
+      // One undone: it comes back on the older kit.
+      await restoreVariant(a, after.variants[3].basedOn!);
+      expect((await view(id)).olderKitCount).toBe(1);
+    });
+
+    it("a redraw the renderer refuses (no colour in the new palette reaches AA contrast) says why and keeps the old ad", async () => {
+      await setPalette([]);
+      try {
+        const g = await view(id);
+        expect(g.olderKitCount).toBe(12);
+        const v = g.variants[0];
+        await expect(redrawVariant(a, v.id)).rejects.toThrow(
+          "That ad can't be redrawn with the current kit: no text colour reaches AA contrast: the palette is empty. It keeps the older kit.",
+        );
+        await expect(redrawOlderAds(a, id)).rejects.toThrow(/None of the 12 older ads could be redrawn with the current kit: no text colour reaches AA contrast: the palette is empty\. They keep the older kit\./);
+        const after = await view(id);
+        expect(after.variants.map((x) => x.id)).toEqual(g.variants.map((x) => x.id));
+      } finally {
+        await setPalette(newPalette);
+      }
+    });
+
+    it("waits while a new picture is drawn for the ad (Redraw all redraws the others and says which it kept); another workspace can't redraw these ads", async () => {
+      const v = (await view(id)).variants.find((x) => x.olderKit)!;
+      const pictureRun = await newPicture(a, v.id, noSend);
+      await expect(redrawVariant(a, v.id)).rejects.toThrow("A new picture is being drawn for that ad. Redraw it once the picture is done.");
+      // The only older ad is busy, so nothing is redrawn, and the refusal says why.
+      await expect(redrawOlderAds(a, id)).rejects.toThrow("That ad can't be redrawn with the current kit: a new picture is being drawn for it. It keeps the older kit.");
+      // Another kit change: the other eleven are redrawn, the busy one is kept with the reason.
+      await setPalette([{ name: "Plum", hex: "#4B2142" }, ...newPalette]);
+      const res = await redrawOlderAds(a, id);
+      expect(res.redrawn).toHaveLength(11);
+      expect(res.kept).toEqual([{ id: v.id, reason: "a new picture is being drawn for it" }]);
+      await getSql()`update public.agent_runs set status = 'failed' where id = ${pictureRun}`;
+
+      await expect(redrawVariant(b, v.id)).rejects.toThrow("That ad isn't in your workspace.");
+      await expect(redrawVariant(a, "not-an-id")).rejects.toThrow("That ad isn't in your workspace.");
+      await expect(redrawOlderAds(b, id)).rejects.toThrow("That campaign isn't in your workspace.");
+      await expect(redrawOlderAds(a, "not-an-id")).rejects.toThrow("That campaign isn't in your workspace.");
+      expect((await view(id)).variants.find((x) => x.id === v.id)!.olderKit).toBe(true);
+    });
+  });
 
   it("S5-3 #5: a brand without legal lines draws none, and each ad is labelled \"No legal line in the kit\"", async () => {
     const [kit] = await asUser(a.userId, (tx) => tx`select legal_lines from public.brands where id = ${quill}`);

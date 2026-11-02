@@ -3,6 +3,8 @@
 // (each a PNG drawn in code from a picture, a set of words and a layout), the
 // words for text-only channels, the discarded ads and words, and the AI cost
 // so far with its runs. Mock pictures are badged "Simulated image" (rule 1).
+// F-27: the gallery is grouped by audience when the brief has several. F-26:
+// ads made with an older kit say so and offer a redraw with the current kit.
 import type { CopySetView } from "@/lib/creative/copy";
 import { fieldsOf, type AnyCopy, type CopyChannel } from "@/lib/creative/copy-rules";
 import type { Badge, CreativeRunView, CreativeView, VariantView } from "@/lib/creative/gallery";
@@ -21,6 +23,7 @@ import {
   KeepSetButtons,
   KeepWordsButtons,
   MakeCreativeButton,
+  RedrawAllButton,
   RestoreButton,
   type FieldSpec,
 } from "./creative-controls";
@@ -75,6 +78,9 @@ export function CreativeSection({ view }: { view: CreativeView }) {
   const usedIn = new Map<string, number>();
   for (const v of view.variants) usedIn.set(v.words.setId, (usedIn.get(v.words.setId) ?? 0) + 1);
   const picked = view.variants.filter((v) => v.picked).length;
+  // Ads are numbered through the whole gallery, across the audiences' headings, so each name is unique.
+  const numbers = new Map(view.variants.map((v, i) => [v.id, i + 1]));
+  const grouped = view.audiences.length > 1;
 
   return (
     <section id="creative" aria-labelledby="creative-heading" className="scroll-mt-6 space-y-5" data-creative="">
@@ -158,21 +164,35 @@ export function CreativeSection({ view }: { view: CreativeView }) {
               <p className="text-ink-2" data-gallery-summary="">
                 {plural(view.variants.length, "ad")}, {picked} picked. Each shows its checks: contrast, fit and the legal line.
               </p>
-              {view.audienceNote && (
-                <p className="max-w-prose rounded-field bg-surface px-4 py-3" data-audience-note="">
-                  {view.audienceNote}
-                </p>
+              {view.olderKitCount > 0 && (
+                <div
+                  className="flex flex-col gap-3 rounded-field bg-review-soft px-4 py-3 text-review-ink sm:flex-row sm:items-center sm:justify-between"
+                  data-older-kit=""
+                >
+                  <p className="max-w-prose">
+                    <span className="font-semibold">
+                      {view.olderKitCount === view.variants.length && view.olderKitCount > 1
+                        ? `All ${view.olderKitCount} ads were made with an older kit.`
+                        : `${plural(view.olderKitCount, "ad was", "ads were")} made with an older kit.`}
+                    </span>{" "}
+                    The brand&apos;s palette, fonts or logo have changed since. Redrawing keeps each ad&apos;s picture, words and
+                    layout, costs nothing in AI, and can be undone under Discarded.
+                  </p>
+                  <RedrawAllButton campaignId={view.campaignId} count={view.olderKitCount} />
+                </div>
               )}
-              {/* Wider than the page column on large screens, so four ads sit side by side at a readable size. */}
-              <ul
-                aria-label={`Ads (${view.variants.length})`}
-                data-gallery=""
-                className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:mx-[calc(50%-min(50vw-3rem,38rem))] xl:grid-cols-4"
-              >
-                {view.variants.map((v, i) => (
-                  <AdCard key={v.id} view={view} v={v} number={i + 1} usedIn={usedIn.get(v.words.setId) ?? 1} />
-                ))}
-              </ul>
+              {grouped ? (
+                view.audiences.map((g, i) => (
+                  <section key={g.segmentRef ?? "all"} aria-labelledby={`audience-${i}`} className="space-y-3 pt-2" data-audience-group="">
+                    <h3 id={`audience-${i}`} className="text-xl font-strong tracking-tight wrap-anywhere">
+                      For {g.title} <span className="text-base font-normal text-ink-2">({plural(g.variants.length, "ad")})</span>
+                    </h3>
+                    <Gallery view={view} variants={g.variants} label={`Ads for ${g.title} (${g.variants.length})`} numbers={numbers} usedIn={usedIn} level={4} />
+                  </section>
+                ))
+              ) : (
+                <Gallery view={view} variants={view.variants} label={`Ads (${view.variants.length})`} numbers={numbers} usedIn={usedIn} level={3} />
+              )}
             </div>
           ) : (
             !running && (
@@ -195,8 +215,38 @@ export function CreativeSection({ view }: { view: CreativeView }) {
   );
 }
 
-function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantView; number: number; usedIn: number }) {
+function Gallery({
+  view,
+  variants,
+  label,
+  numbers,
+  usedIn,
+  level,
+}: {
+  view: CreativeView;
+  variants: VariantView[];
+  label: string;
+  numbers: Map<string, number>;
+  usedIn: Map<string, number>;
+  level: 3 | 4;
+}) {
+  return (
+    // Wider than the page column on large screens, so four ads sit side by side at a readable size.
+    <ul
+      aria-label={label}
+      data-gallery=""
+      className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:mx-[calc(50%-min(50vw-3rem,38rem))] xl:grid-cols-4"
+    >
+      {variants.map((v) => (
+        <AdCard key={v.id} view={view} v={v} number={numbers.get(v.id) ?? 0} usedIn={usedIn.get(v.words.setId) ?? 1} level={level} />
+      ))}
+    </ul>
+  );
+}
+
+function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: VariantView; number: number; usedIn: number; level: 3 | 4 }) {
   const titleId = `ad-${v.id}-title`;
+  const Heading = level === 3 ? "h3" : "h4";
   const { fields } = specFor(v.channel, { headline: v.words.headline, body: v.words.body, cta: v.words.cta });
   return (
     <li
@@ -229,9 +279,9 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
         </span>
       </a>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <h3 id={titleId} className="font-strong">
+        <Heading id={titleId} className="font-strong">
           Ad {number}
-        </h3>
+        </Heading>
         <span className="text-sm text-ink-2">{v.layoutName}</span>
         {v.picked && (
           <Pill tone="active" dot className="ml-auto">
@@ -282,6 +332,7 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
         words={{ headline: v.words.headline, body: v.words.body, cta: v.words.cta }}
         fields={fields}
         pendingWords={!!v.pendingWords}
+        olderKit={v.olderKit}
       />
       <details className="group text-sm">
         <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
@@ -305,6 +356,12 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
             <span className="font-semibold text-ink">Words:</span> {v.words.source === "person" ? "edited by a person" : "by the Copy agent"},
             for {v.words.audience.title}.
           </li>
+          {v.origin === "redrawn" && (
+            <li>
+              <span className="font-semibold text-ink">Redrawn</span> with a newer kit, from an ad made with an older one (the same
+              picture, words and layout).
+            </li>
+          )}
           {v.words.legalLines.length > 0 && (
             <li className="wrap-anywhere">
               <span className="font-semibold text-ink">Legal line:</span> {v.words.legalLines.join(" ")}
@@ -339,11 +396,12 @@ function WordsRow({ label, now, next }: { label: string; now: string; next: stri
   );
 }
 
-/** The words for text-only channels, and for other audiences, as lists beside the gallery. */
+/** The words for text-only channels, and ad words with no ads in the gallery, as lists beside the gallery. */
 function CopyLists({ view }: { view: CreativeView }) {
   const textSets = view.textSets.filter((s) => !s.replaces);
-  const waiting = new Map(view.textSets.filter((s) => s.replaces).map((s) => [s.replaces as string, s]));
-  if (textSets.length === 0 && view.otherAudienceSets.length === 0) return null;
+  const adSets = view.setsWithoutAds.filter((s) => !s.replaces);
+  const waiting = new Map([...view.textSets, ...view.setsWithoutAds].filter((s) => s.replaces).map((s) => [s.replaces as string, s]));
+  if (textSets.length === 0 && adSets.length === 0) return null;
   return (
     <div className="space-y-5">
       {textSets.length > 0 && (
@@ -359,14 +417,18 @@ function CopyLists({ view }: { view: CreativeView }) {
           </ul>
         </section>
       )}
-      {view.otherAudienceSets.length > 0 && (
-        <section aria-labelledby="other-audiences" className="space-y-3">
-          <h3 id="other-audiences" className="text-xl font-strong tracking-tight">
-            Ad words for the other audiences
+      {adSets.length > 0 && (
+        <section aria-labelledby="sets-without-ads" className="space-y-3">
+          <h3 id="sets-without-ads" className="text-xl font-strong tracking-tight">
+            Ad words without ads
           </h3>
-          <ul aria-label="Ad words for the other audiences" className="grid gap-4 md:grid-cols-2">
-            {view.otherAudienceSets.map((s) => (
-              <CopySetCard key={s.id} view={view} set={s} replacement={null} newWords={false} />
+          <p className="max-w-prose text-ink-2">
+            Paid-social and display words with no ad in the gallery: every ad on them was discarded, or the ads were made
+            before each audience got its own.
+          </p>
+          <ul aria-label="Ad words without ads" className="grid gap-4 md:grid-cols-2">
+            {adSets.map((s) => (
+              <CopySetCard key={s.id} view={view} set={s} replacement={waiting.get(s.id) ?? null} newWords />
             ))}
           </ul>
         </section>
@@ -464,8 +526,9 @@ function Discarded({ view }: { view: CreativeView }) {
                 <p className="font-semibold wrap-anywhere">Ad: {v.words.headline}</p>
                 <p className="text-sm text-ink-2">
                   {v.layoutName}
-                  {v.discardedAt ? `, discarded ${formatWhen(v.discardedAt)}` : ""}
+                  {v.discardedAt ? `, ${v.redrawnBy ? "redrawn with the current kit" : "discarded"} ${formatWhen(v.discardedAt)}` : ""}
                   {v.restore.reason ? `. ${v.restore.reason}` : ""}
+                  {v.redrawnBy && v.restore.allowed ? ". Restoring it brings back the older kit and discards the redrawn ad." : ""}
                 </p>
               </div>
               {v.restore.allowed && <RestoreButton campaignId={view.campaignId} id={v.id} kind="ad" what={what} />}
