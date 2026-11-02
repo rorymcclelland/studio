@@ -9,15 +9,28 @@
 // simulated pictures and words and machine translations labelled), 7 (hostile:
 // another workspace's campaign, no session and malformed ids are the same 404;
 // words like "../../x" can't leave the folders). Test case 5 (a 60-file pack,
-// timed) is the e2e spec's: CI's database is too far away to time here.
+// timed) is the e2e spec's: CI's database is too far away to time here. Review
+// fixes: a ceiling of 200 files and one pack at a time per instance (2), legal
+// lines written for the demo marked (5), the README's claims only where true
+// (6), and each file's picture size and upscale factor (7).
 import sharp from "sharp";
 import { unzipSync, strFromU8 } from "fflate";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { insertImage, toWebp } from "@/lib/assets/store";
 import { clearSizeCache } from "@/lib/creative/ad-sizes";
 import { getCreative } from "@/lib/creative/gallery";
-import { DEMO_LANGUAGES, insertDemoLanguages, MACHINE_TRANSLATION } from "@/lib/creative/languages";
-import { clearPackFitCache, CSV_COLUMNS, NOT_SIGNED_OFF_PACK, NOTHING_PICKED_PACK, packResponse, packSummary, planPack } from "@/lib/creative/pack";
+import { DEMO_LANGUAGES, insertDemoLanguages, MACHINE_TRANSLATION, WRITTEN_FOR_DEMO } from "@/lib/creative/languages";
+import {
+  clearPackFitCache,
+  CSV_COLUMNS,
+  NOT_SIGNED_OFF_PACK,
+  NOTHING_PICKED_PACK,
+  PACK_BUSY,
+  packResponse,
+  packSummary,
+  packTooLarge,
+  planPack,
+} from "@/lib/creative/pack";
 import { SIZES, type SizeId } from "@/lib/creative/render/sizes";
 import { renderAd } from "@/lib/creative/render/render";
 import { loadParts, renderInputFor, type KitSnapshot, type LayoutId } from "@/lib/creative/variants";
@@ -60,6 +73,7 @@ let ids: {
   nothingPicked: string;
   hostile: string;
   theirs: string;
+  upscaled: string;
   social1: string;
   social2: string;
   display1: string;
@@ -68,10 +82,11 @@ let ids: {
   oldVersion: string;
 };
 
-async function brandFor(m: Member, slug: string) {
+/** A Quillmoor brand with its demo languages; `simulated` as the demo loader marks its brands (is_simulated). */
+async function brandFor(m: Member, slug: string, simulated: boolean) {
   return asUser(m.userId, async (tx) => {
-    const [br] = await tx`insert into public.brands (workspace_id, name, slug, legal_lines, created_by)
-      values (${m.workspaceId}, ${QUILLMOOR.kit.name}, ${slug}, ${QUILLMOOR.kit.legalLines}, ${m.userId}) returning id`;
+    const [br] = await tx`insert into public.brands (workspace_id, name, slug, legal_lines, created_by, is_simulated)
+      values (${m.workspaceId}, ${QUILLMOOR.kit.name}, ${slug}, ${QUILLMOOR.kit.legalLines}, ${m.userId}, ${simulated}) returning id`;
     await insertDemoLanguages(tx, m, br.id as string, "quillmoor");
     return br.id as string;
   });
@@ -140,8 +155,9 @@ beforeAll(async () => {
   a = await createMember();
   b = await createMember();
   const pic = await pictures();
-  const brandA = await brandFor(a, "quillmoor-a");
-  const brandB = await brandFor(b, "quillmoor-b");
+  // A's brand is a simulated demo brand (as the demo loader makes it, slug "quillmoor"); B's is a person's own brand.
+  const brandA = await brandFor(a, "quillmoor", true);
+  const brandB = await brandFor(b, "quillmoor-b", false);
 
   // The main campaign: version 2 signed off. Two picked social ads on one set of words (three translations), one picked
   // display ad (French and German only; its leaderboard can't hold Quillmoor's legal lines), one unpicked, one picked
@@ -180,7 +196,13 @@ beforeAll(async () => {
   const t = builder(b, brandB, theirs);
   await t.ad(1, await t.image(pic.sim, true, "x"), await t.words(1, "paid social", EN), "full-bleed", true);
 
-  ids = { main, draft, nothingPicked, hostile, theirs, social1, social2, display1, unpicked, discarded, oldVersion };
+  // A picked ad on a 1K picture (drawn before Sprint 7), English only: enlarged to fill the taller sizes.
+  const upscaled = await campaign(a, brandA, 1);
+  const u = builder(a, brandA, upscaled);
+  const oneK = await toWebp(await drawMockImage({ prompt: "pack one k", palette: QUILLMOOR.kit.palette.map((p) => p.hex), size: "1K" }));
+  await u.ad(1, await u.image(oneK, true, "A 1K picture"), await u.words(1, "paid social", EN), "full-bleed", true);
+
+  ids = { main, draft, nothingPicked, hostile, theirs, upscaled, social1, social2, display1, unpicked, discarded, oldVersion };
 }, 120_000);
 beforeEach(() => {
   clearSizeCache();
@@ -201,7 +223,9 @@ type Manifest = {
     body: string;
     button: string;
     legalLines: string[];
+    legalLinesWrittenForDemo: boolean;
     altText: string;
+    picture: { source: { width: number; height: number }; upscale: number; note: string | null } | null;
     checks: { contrast: { headline: number; button: number }; fit: { passed: boolean }; legalLinesPresent: boolean };
     provenance: { picture: string; words: string; machineTranslation: string | null };
     labels: string[];
@@ -419,7 +443,10 @@ describe("C7-3 the launch pack", () => {
     for (const id of ["not-an-id", `${ids.main}x`, "00000000-0000-0000-0000-000000000000", "../../etc/passwd", "1' or '1'='1", ""]) await notFound(a.userId, id);
     expect(await planPack(b.userId, ids.main)).toBeNull();
     // Their own campaign answers in B's workspace, so the 404s are about access.
-    expect((await packResponse(b.userId, ids.theirs)).status).toBe(200);
+    const own = await packResponse(b.userId, ids.theirs);
+    expect(own.status).toBe(200);
+    // Not read here: cancelled, as a closed tab is, which frees the one-pack-at-a-time slot (review fix 2).
+    await own.body!.cancel();
   });
 
   it("#7 hostile: words like ../../x can't leave the zip's folders, and the CSV defuses formulas", async () => {
@@ -434,5 +461,99 @@ describe("C7-3 the launch pack", () => {
     }
     const manifest = JSON.parse(strFromU8(files["manifest.json"])) as Manifest;
     expect(manifest.files[0].headline).toBe("../../x/..\\evil:*?<>|");
+  });
+  it("review fix 5 (rule 1, Q4): legal lines written for the demo are marked in both manifests and the README", async () => {
+    const { files } = await mainZip();
+    const manifest = JSON.parse(strFromU8(files["manifest.json"])) as Manifest;
+    for (const f of manifest.files) expect(f.legalLinesWrittenForDemo, f.file).toBe(f.language.tag !== "en-GB");
+    expect(manifest.pack.labels.legalLinesWrittenForDemo).toBe(WRITTEN_FOR_DEMO);
+    const csv = readCsv(strFromU8(files["manifest.csv"]).replace(/^\uFEFF/, ""));
+    const col = (name: (typeof CSV_COLUMNS)[number]) => CSV_COLUMNS.indexOf(name);
+    for (const r of csv.slice(1)) {
+      const expected = r[col("status")] === "left out" ? "" : r[col("language")] === "en-GB" ? "no" : "yes";
+      expect(r[col("legal_lines_written_for_demo")], r[col("file")]).toBe(expected);
+    }
+    const readme = strFromU8(files["README.txt"]);
+    expect(readme).toContain(`- Legal lines written for the demo: 30 files have French, German and Spanish legal lines that say so in the manifests. ${WRITTEN_FOR_DEMO}`);
+  });
+
+  it("review fix 6: the README says the brand is fictional only for a simulated demo brand, and the legal lines only where the brand has them", async () => {
+    const { files } = await mainZip();
+    const readme = strFromU8(files["README.txt"]);
+    expect(readme).toContain("each of which passed its checks (contrast, fit, and the legal lines where the brand has them)");
+    expect(readme).toContain("Studio is a working title. The brand in this pack is fictional.");
+    // B's brand is a person's own (not a simulated demo brand): no claim either way about it.
+    const theirs = unzipSync(new Uint8Array(await (await packResponse(b.userId, ids.theirs)).arrayBuffer()));
+    const theirReadme = strFromU8(theirs["README.txt"]);
+    expect(theirReadme).toContain("Studio is a working title.");
+    expect(theirReadme).not.toContain("fictional");
+  });
+
+  it("review fix 7: each file records its picture's size and upscale factor, and the README names the upscaled files", async () => {
+    const { files } = await mainZip();
+    const manifest = JSON.parse(strFromU8(files["manifest.json"])) as Manifest;
+    // The 2K pictures are never enlarged more than 1.1 times.
+    for (const f of manifest.files) {
+      expect(f.picture, f.file).not.toBeNull();
+      expect(f.picture!.source, f.file).toEqual({ width: 2048, height: 2048 });
+      expect(f.picture!.note, f.file).toBeNull();
+    }
+    expect(strFromU8(files["README.txt"])).toContain("No picture is enlarged more than 1.1 times.");
+
+    const res = await packResponse(a.userId, ids.upscaled);
+    const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
+    const m = JSON.parse(strFromU8(zip["manifest.json"])) as Manifest;
+    expect(m.files.map((f) => f.size.id).sort()).toEqual([...SIZE_LIST("paid social")].sort());
+    const story = m.files.find((f) => f.size.id === "1080x1920")!;
+    expect(story.picture).toEqual({ source: { width: 1024, height: 1024 }, upscale: 1.88, note: "Upscaled from a 1K picture" });
+    // The square fills 1080 from 1024: 1.05 times, too little to see, so no note (as in the Sizes view).
+    const square = m.files.find((f) => f.size.id === "1080x1080")!;
+    expect(square.picture).toMatchObject({ source: { width: 1024, height: 1024 }, note: null });
+    expect(square.picture!.upscale).toBeCloseTo(1.05, 2);
+    const csv = readCsv(strFromU8(zip["manifest.csv"]).replace(/^\uFEFF/, ""));
+    const col = (name: (typeof CSV_COLUMNS)[number]) => CSV_COLUMNS.indexOf(name);
+    const row = csv.find((r) => r[col("file")] === story.file)!;
+    expect([row[col("picture_source_size")], row[col("picture_upscale")]]).toEqual(["1024x1024", "1.88"]);
+    const upscaledFiles = m.files.filter((f) => f.picture?.note).length;
+    expect(upscaledFiles).toBeGreaterThanOrEqual(2);
+    expect(strFromU8(zip["README.txt"])).toContain(
+      `- Upscaled from a 1K picture: ${upscaledFiles} files enlarge their pictures more than 1.1 times to fill the size, so they may look soft.`,
+    );
+  });
+
+  it("review fix 2: a pack over the ceiling is refused with the reason, in the gallery and at the address, and no zip is drawn", async () => {
+    const reason = packTooLarge(4, 3);
+    expect(reason).toBe("This pack would have 4 files; the most one download can draw is 3. Pick fewer ads.");
+    const res = await packResponse(a.userId, ids.hostile, new Date(), { maxFiles: 3 });
+    expect(res.status).toBe(409);
+    expect(res.headers.get("content-type")).toBe("text/plain; charset=utf-8");
+    expect(await res.text()).toBe(reason);
+    expect(packSummary((await planPack(a.userId, ids.hostile))!, 3)).toEqual({ allowed: false, reason });
+    // At the ceiling itself, the pack is allowed.
+    expect(packSummary((await planPack(a.userId, ids.hostile))!, 4).allowed).toBe(true);
+  });
+
+  it("review fix 2: one pack at a time per instance; the slot is freed when the zip ends or is cancelled", async () => {
+    const first = await packResponse(a.userId, ids.hostile);
+    expect(first.status).toBe(200);
+    for (const [who, id] of [[a.userId, ids.hostile], [b.userId, ids.theirs]] as const) {
+      const busy = await packResponse(who, id);
+      expect(busy.status).toBe(429);
+      expect(busy.headers.get("retry-after")).toBe("60");
+      expect(await busy.text()).toBe(PACK_BUSY);
+    }
+    // Refusals and 404s don't wait for the slot.
+    expect((await packResponse(a.userId, ids.draft)).status).toBe(409);
+    expect((await packResponse(b.userId, ids.main)).status).toBe(404);
+    // Read to the end: the slot is free again.
+    expect(Object.keys(unzipSync(new Uint8Array(await first.arrayBuffer())))).toHaveLength(7);
+    const second = await packResponse(a.userId, ids.hostile);
+    expect(second.status).toBe(200);
+    expect((await packResponse(a.userId, ids.hostile)).status).toBe(429);
+    // Cancelled part-way (a closed tab): free again.
+    await second.body!.cancel();
+    const third = await packResponse(a.userId, ids.hostile);
+    expect(third.status).toBe(200);
+    await third.arrayBuffer();
   });
 });

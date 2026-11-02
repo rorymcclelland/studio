@@ -130,4 +130,8 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   const readme = strFromU8(entries["README.txt"]);
   expect(readme).toContain("Simulated images: 64 files");
   expect(readme).toContain("Machine translation: 48 files");
+  // Review fixes 5 and 6: the demo's legal lines are marked, and the demo brand is said to be fictional.
+  expect(readme).toContain("Legal lines written for the demo: 48 files");
+  expect(readme).toContain("The brand in this pack is fictional.");
+  for (const f of manifest.files) expect(f.legalLinesWrittenForDemo, f.file).toBe(f.language.tag !== "en-GB");
 });
