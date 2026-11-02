@@ -7,6 +7,7 @@
 // (every migration, this one included).
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { listBrands } from "@/lib/brands/repo";
+import { CopyError, restoreCopySet, saveCopyEdit, saveCopyEditIn, startNewWords, TRANSLATION_NOT_EDITABLE } from "@/lib/creative/copy";
 import {
   addDemoLanguages,
   DEMO_LANGUAGES,
@@ -143,6 +144,22 @@ describe("C7-2 brand languages", () => {
     expect((await listBrandLanguages(a.userId, fern)).map((l) => [l.lang, l.writtenForDemo])).toEqual([["fr-FR", true], ["de-DE", false], ["es-ES", true]]);
   });
 
+  it("review fix 4: authenticated has only the privileges it needs on brand_languages, and anon none", async () => {
+    const sql = getSql();
+    const privileges = ["SELECT", "INSERT", "UPDATE", "DELETE", "TRUNCATE", "REFERENCES", "TRIGGER"];
+    const held = async (role: string) => {
+      const out: string[] = [];
+      for (const p of privileges) {
+        const [{ ok }] = await sql`select has_table_privilege(${role}, 'public.brand_languages', ${p}) as ok`;
+        if (ok) out.push(p);
+      }
+      return out;
+    };
+    // Saving a brand's languages reads, adds, updates and removes rows; nothing else.
+    expect(await held("authenticated")).toEqual(["SELECT", "INSERT", "UPDATE", "DELETE"]);
+    expect(await held("anon")).toEqual([]);
+  });
+
   it("#5 a language without legal lines is refused while the English kit has some", () => {
     const de = { lang: "de-DE" as const, name: "German", legalLines: [], bannedTerms: [], writtenForDemo: false, updatedAt: new Date() };
     expect(languageRefusal(["Rates vary."], de, "de-DE")).toMatch(/no German legal lines/);
@@ -206,5 +223,43 @@ describe("C7-2 copy sets in other languages", () => {
           values (${a.workspaceId}, ${c.campaignId}, 1, ${img}, ${t.id}, 'card', '{}', '{}', 'composed', ${a.userId})`;
       }),
     ).rejects.toThrow(/must be the English set/);
+  });
+});
+
+describe("review fix 3: the copy-list actions are for English words only", () => {
+  let c: Awaited<ReturnType<typeof campaignWithSets>>;
+  const noSend = async () => {};
+  beforeAll(async () => {
+    c = await campaignWithSets(a, quill);
+    // Signed off at version 1, so the English set could be edited: the refusal is about the language, not the sign-off.
+    await asUser(a.userId, (tx) => tx`update public.campaigns set status = 'approved', approved_version = 1, approved_at = now(), approved_by = ${a.userId} where id = ${c.campaignId}`);
+  });
+
+  it("a translation's id can't be hand-edited or sent for new words", async () => {
+    const [fr] = await translation(a, c.campaignId, c.social.id, "fr-FR");
+    const words = { headline: "Voyez où va votre argent", body: "Arrondissez vos dépenses.", cta: "Obtenir l'appli" };
+    await expect(saveCopyEdit(a, fr.id, words)).rejects.toThrow(TRANSLATION_NOT_EDITABLE);
+    await expect(asUser(a.userId, (tx) => saveCopyEditIn(tx, a, fr.id, words))).rejects.toThrow(CopyError);
+    await expect(startNewWords(a, fr.id, noSend)).rejects.toThrow(TRANSLATION_NOT_EDITABLE);
+    expect(TRANSLATION_NOT_EDITABLE).toBe("Translations can't be edited or rewritten; discard it and translate again.");
+    // Nothing was written: still one French translation, the same row, current.
+    const rows = await asUser(a.userId, (tx) => tx`select id, discarded_at from public.copy_sets where translated_from = ${c.social.id}`);
+    expect(rows.map((r) => [r.id, r.discarded_at])).toEqual([[fr.id, null]]);
+    const runs = await asUser(a.userId, (tx) => tx`select id from public.agent_runs where input ->> 'setId' = ${fr.id}`);
+    expect(runs).toHaveLength(0);
+  });
+
+  it("restoring a translation while its language has a current one is a plain refusal, not a database error", async () => {
+    const [old] = await asUser(a.userId, (tx) => tx`select id from public.copy_sets where translated_from = ${c.social.id} and lang = 'fr-FR' and discarded_at is null`);
+    await asUser(a.userId, (tx) => tx`update public.copy_sets set discarded_at = now() where id = ${old.id}`);
+    const [current] = await translation(a, c.campaignId, c.social.id, "fr-FR");
+    const err = await restoreCopySet(a, old.id).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(CopyError);
+    expect((err as Error).message).toBe("There is already a current French translation of these words. Discard it first to restore this one.");
+    // With the current one discarded, the old one comes back.
+    await asUser(a.userId, (tx) => tx`update public.copy_sets set discarded_at = now() where id = ${current.id}`);
+    await restoreCopySet(a, old.id);
+    const [now] = await asUser(a.userId, (tx) => tx`select id from public.copy_sets where translated_from = ${c.social.id} and lang = 'fr-FR' and discarded_at is null`);
+    expect(now.id).toBe(old.id);
   });
 });
