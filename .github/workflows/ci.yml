@@ -55,7 +55,9 @@ jobs:
       ALLOWED_EMAILS: dev@example.test
       MODEL_PROVIDER_OVERRIDE: mock
       INNGEST_DEV: "1"
-      DAILY_CAP_PENCE: "100"
+      # The mock model costs nothing real; the whole e2e run shares one day's cap,
+      # and with 2K pictures (C7-1) its Make creative runs pass £1 before market.spec.
+      DAILY_CAP_PENCE: "1000"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
