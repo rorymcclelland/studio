@@ -13,8 +13,10 @@
 // ran in this run and carries the case's annotation; a case whose browser test
 // didn't run says Not run. A CI check shows a result only if the run recorded
 // one (vitest.json); otherwise it is named and says so. A hand check is never
-// shown as passed. The recordings use the mock model: pictures and words in
-// them are simulated, and the page says so.
+// shown as passed, and a case Rory withdrew says Withdrawn with the reason. A
+// browser test's measurements (annotations of type "measure") are shown with
+// it. The recordings use the mock model: pictures and words in them are
+// simulated, and the page says so.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
@@ -32,6 +34,8 @@ export function outcomes(report) {
       test.status === "expected" ? "passed" : test.status === "flaky" ? "passed-on-retry" : test.status === "skipped" ? "skipped" : "failed";
     const video = last?.attachments?.find((a) => a.name === "video" && a.path)?.path ?? null;
     const failure = (test.results ?? []).filter((r) => FAILED.has(r.status)).at(-1);
+    // A measurement the test recorded ({ type: "measure", description }), from its last attempt.
+    const measures = [...new Set([...(test.annotations ?? []), ...(last?.annotations ?? [])].filter((a) => a.type === "measure" && a.description).map((a) => a.description))];
     out.push({
       file: (spec.file ?? "").replace(/^.*\//, ""),
       title: spec.title,
@@ -41,6 +45,7 @@ export function outcomes(report) {
       durationMs: last?.duration ?? null,
       video,
       steps: (last?.steps ?? []).map((s) => ({ title: s.title, failed: Boolean(s.error) })),
+      measures,
       error: failure ? stripAnsi(failure.error?.message ?? failure.errors?.[0]?.message ?? "").split("\n").slice(0, 6).join("\n") : null,
     });
   }
@@ -65,11 +70,14 @@ export function ciResult(check, vitest) {
  * A case's status in this run:
  * - passed / failed / not-run, from its browser tests (every one must have run and passed);
  * - ci-passed / ci-failed / ci, from its CI checks when it has no browser test;
- * - hand, when it has only hand checks.
+ * - hand, when it has only hand checks;
+ * - withdrawn, when Rory withdrew it by his decision (only withdrawn checks).
  */
 export function caseStatus(c, tests, vitest) {
   const browser = c.checks.filter((x) => x.kind === "browser");
   const ci = c.checks.filter((x) => x.kind === "ci");
+  const hand = c.checks.filter((x) => x.kind === "hand");
+  const withdrawn = c.checks.filter((x) => x.kind === "withdrawn");
   const found = browser.map((x) => tests.find((t) => t.file === x.spec && t.title === x.title && t.cases.includes(c.id)) ?? null);
   const ciResults = ci.map((x) => ciResult(x, vitest));
   let status;
@@ -81,8 +89,9 @@ export function caseStatus(c, tests, vitest) {
     if (ciResults.some((r) => r === "failed")) status = "ci-failed";
     else if (ciResults.every((r) => r === "passed")) status = "ci-passed";
     else status = "ci";
-  } else status = "hand";
-  return { status, browser: browser.map((check, i) => ({ check, test: found[i] })), ci: ci.map((check, i) => ({ check, result: ciResults[i] })), hand: c.checks.filter((x) => x.kind === "hand") };
+  } else if (hand.length > 0) status = "hand";
+  else status = withdrawn.length > 0 ? "withdrawn" : "hand";
+  return { status, browser: browser.map((check, i) => ({ check, test: found[i] })), ci: ci.map((check, i) => ({ check, result: ciResults[i] })), hand, withdrawn };
 }
 
 export const LABEL = {
@@ -94,6 +103,7 @@ export const LABEL = {
   "ci-failed": "Failed in CI",
   ci: "CI check",
   hand: "Hand check",
+  withdrawn: "Withdrawn",
 };
 
 /** The sprint goal and demo from the refinement's "## Sprint goal" section, as plain paragraphs. */
@@ -112,7 +122,7 @@ const inline = (s) => esc(s).replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>").re
 const mdCell = (s) => String(s ?? "").replace(/\|/g, "\\|").replace(/\n+/g, " ");
 
 function totals(rows) {
-  const t = { cases: rows.length, passed: 0, failed: 0, notRun: 0, ciPassed: 0, ciFailed: 0, ciUnread: 0, hand: 0 };
+  const t = { cases: rows.length, passed: 0, failed: 0, notRun: 0, ciPassed: 0, ciFailed: 0, ciUnread: 0, hand: 0, withdrawn: 0 };
   for (const { s } of rows) {
     if (s.status === "passed" || s.status === "passed-on-retry") t.passed++;
     else if (s.status === "failed") t.failed++;
@@ -120,6 +130,7 @@ function totals(rows) {
     else if (s.status === "ci-passed") t.ciPassed++;
     else if (s.status === "ci-failed") t.ciFailed++;
     else if (s.status === "ci") t.ciUnread++;
+    else if (s.status === "withdrawn") t.withdrawn++;
     else t.hand++;
   }
   return t;
@@ -163,6 +174,7 @@ export function buildDemo({ sprint, refinement, stories, cases, report, vitest, 
     `${t.notRun} not run`,
     ciRead ? `${t.ciPassed} passed ${where}, ${t.ciFailed} failed ${where}${t.ciUnread ? `, ${t.ciUnread} CI checks without a result` : ""}` : `${t.ciPassed + t.ciFailed + t.ciUnread} CI checks (no results in this run)`,
     `${t.hand} by hand`,
+    ...(t.withdrawn ? [`${t.withdrawn} withdrawn`] : []),
   ].join(", ");
 
   // ---- Markdown ----
@@ -186,12 +198,18 @@ export function buildDemo({ sprint, refinement, stories, cases, report, vitest, 
     md.push(`## ${story.id} ${story.title}`, "", "| Case | What | Result | How it is checked |", "| --- | --- | --- | --- |");
     for (const { c, s } of list) {
       const how = [
-        ...s.browser.map((b) => `Browser: ${b.check.spec}${b.test ? "" : " (did not run)"}${b.check.note ? `. ${b.check.note}` : ""}`),
+        ...s.browser.map(
+          (b) =>
+            `Browser: ${b.check.spec}${b.test ? "" : " (did not run)"}${b.check.note ? `. ${b.check.note}` : ""}${
+              b.test?.measures?.length ? `${b.check.note ? "" : "."} Measured: ${b.test.measures.join("; ")}.` : ""
+            }`,
+        ),
         ...s.ci.map((x) => {
           const l = ciLine(x);
           return `CI: ${l.where} (${l.result})`;
         }),
         ...s.hand.map((h) => `By hand: ${h.why}`),
+        ...s.withdrawn.map((w) => `Withdrawn: ${w.why}`),
       ].join("<br>");
       md.push(`| ${c.id} | ${mdCell(c.words)} | ${label(s.status)} | ${mdCell(how)} |`);
     }
@@ -208,7 +226,9 @@ export function buildDemo({ sprint, refinement, stories, cases, report, vitest, 
         tst
           ? ` <span class="res">${esc(LABEL[tst.status === "skipped" ? "not-run" : tst.status])}${tst.durationMs != null ? `, ${Math.round(tst.durationMs / 1000)} s` : ""}</span>`
           : ` <span class="res">did not run in this build</span>`
-      }${b.check.note ? `<br><span class="note">${esc(b.check.note)}</span>` : ""}${tst?.error ? `<pre class="err">${esc(tst.error)}</pre>` : ""}${
+      }${b.check.note ? `<br><span class="note">${esc(b.check.note)}</span>` : ""}${
+        tst?.measures?.length ? `<br><span class="measure"><span class="k">Measured:</span> ${tst.measures.map(esc).join("; ")}</span>` : ""
+      }${tst?.error ? `<pre class="err">${esc(tst.error)}</pre>` : ""}${
         tst?.steps?.length
           ? `<details class="steps"><summary>Steps (${tst.steps.length})</summary><ol>${tst.steps.map((st) => `<li${st.failed ? ' class="bad"' : ""}>${esc(st.title)}${st.failed ? " (failed here)" : ""}</li>`).join("")}</ol></details>`
           : ""
@@ -223,6 +243,7 @@ export function buildDemo({ sprint, refinement, stories, cases, report, vitest, 
       parts.push(`<li><span class="k">CI check</span> <span class="src">${esc(l.where)}</span> <span class="res">${esc(l.result)}</span>${x.check.note ? `<br><span class="note">${esc(x.check.note)}</span>` : ""}</li>`);
     }
     for (const h of s.hand) parts.push(`<li><span class="k">By hand</span> ${esc(h.why)}</li>`);
+    for (const w of s.withdrawn) parts.push(`<li><span class="k">Withdrawn</span> ${esc(w.why)}</li>`);
     return `<li class="case" id="${esc(c.id)}"><div class="head"><span class="id">${esc(c.id)}</span>${pill(s.status)}</div><p class="words">${esc(c.words)}</p><ul class="checks">${parts.join("")}</ul></li>`;
   };
 
@@ -232,7 +253,7 @@ export function buildDemo({ sprint, refinement, stories, cases, report, vitest, 
       const list = rows.filter((r) => r.c.story === st.id);
       if (!list.length) return "";
       const p = totals(list);
-      const counts = [p.passed && `${p.passed} passed`, p.failed && `${p.failed} failed`, p.notRun && `${p.notRun} not run`, p.ciPassed && `${p.ciPassed} passed ${where}`, p.ciFailed && `${p.ciFailed} failed ${where}`, p.ciUnread && `${p.ciUnread} CI`, p.hand && `${p.hand} by hand`].filter(Boolean).join(", ");
+      const counts = [p.passed && `${p.passed} passed`, p.failed && `${p.failed} failed`, p.notRun && `${p.notRun} not run`, p.ciPassed && `${p.ciPassed} passed ${where}`, p.ciFailed && `${p.ciFailed} failed ${where}`, p.ciUnread && `${p.ciUnread} CI`, p.hand && `${p.hand} by hand`, p.withdrawn && `${p.withdrawn} withdrawn`].filter(Boolean).join(", ");
       return `<section class="story" aria-labelledby="s-${esc(st.id)}"><h2 id="s-${esc(st.id)}">${esc(st.id)} ${esc(st.title)}</h2><p class="sub">${esc(counts)}</p><ol class="cases">${list.map(caseHtml).join("")}</ol></section>`;
     })
     .join("\n");
@@ -251,7 +272,7 @@ export function buildDemo({ sprint, refinement, stories, cases, report, vitest, 
 <title>Studio, Sprint ${sprint} demo</title>
 <style>
 :root{color-scheme:light;--ink:#1c1b22;--ink2:#4a4857;--line:#d9d6e3;--bg:#f7f6fb;--surface:#fff;--primary:#4b3fb0;
---good:#13603a;--good-bg:#e3f4ea;--bad:#a1162b;--bad-bg:#fbe5e8;--wait:#6a4a00;--wait-bg:#fff2cc;--ci:#1f4f8a;--ci-bg:#e3eefb;--hand:#5a3a78;--hand-bg:#f0e7f8}
+--good:#13603a;--good-bg:#e3f4ea;--bad:#a1162b;--bad-bg:#fbe5e8;--wait:#6a4a00;--wait-bg:#fff2cc;--ci:#1f4f8a;--ci-bg:#e3eefb;--hand:#5a3a78;--hand-bg:#f0e7f8;--gone:#3f3d4a;--gone-bg:#ebeaef}
 *{box-sizing:border-box}
 body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
 main{max-width:72rem;margin:0 auto;padding:1.25rem}
@@ -276,6 +297,8 @@ ol.cases{list-style:none;margin:0;padding:0;display:grid;gap:.75rem}
 .pill.not-run{background:var(--wait-bg);color:var(--wait)}
 .pill.ci{background:var(--ci-bg);color:var(--ci)}
 .pill.hand{background:var(--hand-bg);color:var(--hand)}
+.pill.withdrawn{background:var(--gone-bg);color:var(--gone)}
+.measure{font-size:.925rem}
 ul.checks{margin:0;padding-left:1.1rem;display:grid;gap:.4rem;color:var(--ink)}
 .k{font-weight:700}
 .res{color:var(--ink2)}
@@ -299,12 +322,12 @@ video{display:block;width:100%;max-width:960px;aspect-ratio:16/9;background:#000
 <p class="meta"><span>${runLine}</span><span>Commit ${commitHtml}${run?.branch ? ` on <code>${esc(run.branch)}</code>` : ""}</span><span>${esc(dateLabel(run?.date))}</span>${run?.checksJob ? `<span>First CI job: ${esc(run.checksJob)}</span>` : ""}</p>
 ${run?.note ? `<p class="err">${esc(run.note)}</p>` : ""}
 <ul class="totals" aria-label="Totals">
-<li>${t.cases} cases</li><li>${t.passed} passed</li><li>${t.failed} failed</li><li>${t.notRun} not run</li><li>${ciRead ? `${t.ciPassed} passed ${where}${t.ciFailed ? `, ${t.ciFailed} failed ${where}` : ""}${t.ciUnread ? `, ${t.ciUnread} CI without a result` : ""}` : `${t.ciPassed + t.ciFailed + t.ciUnread} CI checks, no results read`}</li><li>${t.hand} by hand</li>
+<li>${t.cases} cases</li><li>${t.passed} passed</li><li>${t.failed} failed</li><li>${t.notRun} not run</li><li>${ciRead ? `${t.ciPassed} passed ${where}${t.ciFailed ? `, ${t.ciFailed} failed ${where}` : ""}${t.ciUnread ? `, ${t.ciUnread} CI without a result` : ""}` : `${t.ciPassed + t.ciFailed + t.ciUnread} CI checks, no results read`}</li><li>${t.hand} by hand</li>${t.withdrawn ? `<li>${t.withdrawn} withdrawn</li>` : ""}
 </ul>
 </header>
 ${goal.length ? `<section class="card" aria-labelledby="goal"><h2 id="goal">Sprint goal</h2>${goal.map((p) => `<p>${inline(p)}</p>`).join("")}</section>` : ""}
 <section class="card honest" aria-label="How to read this page">
-<p><strong>Passed</strong> and <strong>Failed</strong> come only from a browser test that ran in this build and is tagged with the case. <strong>Not run</strong> means no such test ran. <strong>CI check</strong> names the unit, database or agent test that covers the case${ciRead ? ", with its result in this run" : "; this run's results for those weren't available, so none is claimed"}. <strong>Hand check</strong> needs a person, with the reason.</p>
+<p><strong>Passed</strong> and <strong>Failed</strong> come only from a browser test that ran in this build and is tagged with the case. <strong>Not run</strong> means no such test ran. <strong>CI check</strong> names the unit, database or agent test that covers the case${ciRead ? ", with its result in this run" : "; this run's results for those weren't available, so none is claimed"}. <strong>Hand check</strong> needs a person, with the reason. <strong>Withdrawn</strong> is a case Rory withdrew by his decision, with the reason; it is not counted as passed. <strong>Measured</strong> is a time or size a browser test recorded in this run.</p>
 <p>The recordings run against the mock model: every picture and every word the AI would write is simulated, and the brands are fictional. Anything that needs real AI output is a hand check on production after the deploy.</p>
 </section>
 ${storiesHtml}

@@ -4,7 +4,9 @@
 // demo-brands.setup.ts, which loads the demo brands these tests use.
 //
 // Fernhollow is only read here (design-system.spec.ts compares its screens
-// between visits); every test that saves edits Quillmoor.
+// between visits); every test that saves edits Quillmoor. F-26
+// (creative.spec.ts) reorders Fernhollow's palette for a moment, and not
+// Quillmoor's, because S2-3 #2 checks that Quillmoor's palette is unchanged.
 //
 // Pages left with Cache Components stay in the document, hidden, so plain
 // locators below are filtered to visible elements.

@@ -165,6 +165,36 @@ describe("the demo page", () => {
   });
 });
 
+describe("the demo page: measurements and withdrawn cases", () => {
+  const withdrawn: Case = {
+    id: "X-1.12",
+    sprint: 99,
+    story: "X-1",
+    words: "Case 12 in a few words.",
+    checks: [{ kind: "withdrawn", why: "Withdrawn by Rory's decision on 2 November 2026." }],
+  };
+  const { html, markdown } = buildDemo({ sprint: 99, refinement, stories, cases: [...cases, withdrawn], report, vitest, run });
+
+  it("a case Rory withdrew shows Withdrawn with the reason, never Passed or a hand check still to do", () => {
+    expect(caseStatus(withdrawn, outcomes(report), vitest).status).toBe("withdrawn");
+    expect(html).toMatch(/id="X-1\.12"><div class="head"><span class="id">X-1\.12<\/span><span class="pill withdrawn">Withdrawn<\/span>/);
+    expect(html).toContain('<span class="k">Withdrawn</span> Withdrawn by Rory&#39;s decision on 2 November 2026.');
+    expect(html).not.toMatch(/id="X-1\.12">[\s\S]*?By hand[\s\S]*?<\/li><li class="case"/);
+    expect(html).toContain("<li>1 by hand</li><li>1 withdrawn</li>");
+    expect(markdown).toContain("| X-1.12 | Case 12 in a few words. | Withdrawn | Withdrawn: Withdrawn by Rory's decision on 2 November 2026. |");
+    expect(markdown).toContain("1 by hand, 1 withdrawn.");
+    // A sprint with nothing withdrawn doesn't mention it in its totals.
+    expect(buildDemo({ sprint: 99, refinement, stories, cases, report, vitest, run }).html).not.toContain("withdrawn</li>");
+  });
+
+  it("shows a browser test's measurements (annotations of type measure), escaped, with the test", () => {
+    expect(outcomes(report).find((t) => t.title.startsWith("X-1 #1"))!.measures).toEqual(["64-ad pack: 9.8 s & 7.4 MB"]);
+    expect(outcomes(report).find((t) => t.title.startsWith("X-1 #2"))!.measures).toEqual([]);
+    expect(html).toMatch(/id="X-1\.1">[\s\S]*?<span class="measure"><span class="k">Measured:<\/span> 64-ad pack: 9\.8 s &amp; 7\.4 MB<\/span>/);
+    expect(markdown).toContain("| X-1.1 | Case 1 in a few words. | Passed | Browser: sample.spec.ts. Measured: 64-ad pack: 9.8 s & 7.4 MB. |");
+  });
+});
+
 describe("gathering a run's results", () => {
   it("keeps the last attempt's main recording of tagged tests only, made relative; every other path is dropped", () => {
     const raw = {

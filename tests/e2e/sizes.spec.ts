@@ -14,6 +14,7 @@ import {
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  saveShot,
   settle,
   signIn,
   signOffVersion,
@@ -42,7 +43,7 @@ async function checkWidths(page: Page, what: string) {
     await settle(page);
     await expectNoHorizontalScroll(page, `${what} at ${width}px`);
     expect(await contrastViolations(page), `${what} at ${width}px`).toEqual([]);
-    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/${what.replace(/\W+/g, "-")}-${width}.png`, fullPage: true });
+    await saveShot(page, `${what}-${width}`, { fullPage: true });
   }
   await page.setViewportSize({ width: 1280, height: 720 });
 }

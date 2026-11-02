@@ -8,6 +8,8 @@
 // - ci: a Vitest test (file, and a test or describe title in it) or another
 //   CI job. The demo page shows its result only if the run recorded one.
 // - hand: checked by a person, with the reason it can't be automated.
+// - withdrawn: Rory withdrew the case by his decision, with the reason; the
+//   demo page shows "Withdrawn", never Passed or a hand check still to do.
 //
 // A case may have several checks: a browser test for what a person sees, a
 // Vitest test for the parts the browser can't reach (another workspace, a
@@ -46,7 +48,13 @@ export type CiCheck =
 
 export type HandCheck = { kind: "hand"; why: string };
 
-export type Check = BrowserCheck | CiCheck | HandCheck;
+/**
+ * A case Rory has withdrawn by his decision: nothing is left to check, and the
+ * demo page says "Withdrawn" with the reason, never Passed or a pending hand check.
+ */
+export type WithdrawnCheck = { kind: "withdrawn"; why: string };
+
+export type Check = BrowserCheck | CiCheck | HandCheck | WithdrawnCheck;
 
 export type Story = { sprint: number; id: string; title: string };
 
@@ -57,7 +65,7 @@ export type Case = {
   story: string;
   /** The case in a few words. */
   words: string;
-  /** In order of weight: browser tests first, then CI, then by hand. */
+  /** In order of weight: browser tests first, then CI, then by hand (or withdrawn). */
   checks: Check[];
 };
 
@@ -78,6 +86,7 @@ const LANGUAGES = "C7-2: the demo brand's languages, Translate on a picked ad, m
 const PACK = "C7-3: the launch pack of four picked social ads in four languages downloads as one zip of 64 ads with its manifests";
 const AUDIENCES = "F-27 #1 and #2: a brief with two audiences gets 24 social ads grouped by audience, and New words on the second redraws only its ads";
 const REDRAW = "F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo";
+const NO_GERMAN_LEGAL = "C7-2 #5: a brand with no German legal lines leaves German out, and the Languages bar says why";
 
 const AD_SIZES = "tests/db/ad-sizes.test.ts";
 const RENDER_SIZES = "tests/lib/render-sizes.test.ts";
@@ -86,7 +95,8 @@ const PACK_DB = "tests/db/pack.test.ts";
 const CREATIVE = "tests/agents/creative.test.ts";
 
 const REAL_AI =
-  "CI runs the mock model and has no real keys, so this needs real model output: checked by hand on production after the deploy (test pack).";
+  "CI runs the mock model and has no real keys, so this needs real model output: checked by hand on production after the deploy";
+const HAND_PACK = "docs/testing/sprint-7-test-pack.md";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -96,7 +106,12 @@ export const CASES: Case[] = [
     story: "C7-1",
     words: "A picked paid-social ad renders in all four social sizes, keeping every part, passing contrast and fit.",
     checks: [
-      { kind: "browser", spec: SIZES_SPEC, title: SIZES_SOCIAL_DISPLAY },
+      {
+        kind: "browser",
+        spec: SIZES_SPEC,
+        title: SIZES_SOCIAL_DISPLAY,
+        note: "Shows each size drawn full size with its contrast, fit and legal-line checks; that every size keeps the same headline, body, button and logo is the CI test.",
+      },
       { kind: "ci", file: RENDER_SIZES, test: "C7-1 #1: a paid-social ad renders in all four social sizes with every part, passing contrast and fit" },
       { kind: "ci", file: AD_SIZES, test: "#1 a paid-social ad is served in each social size, each with its own ETag (the square's is the ad's own)" },
     ],
@@ -119,7 +134,7 @@ export const CASES: Case[] = [
     words: "Full bleed at 9:16 crops around the picture's subject, never stretches; split and card keep the square picture whole.",
     checks: [
       { kind: "ci", file: RENDER_SIZES, test: "C7-1 #3: the picture is fitted, never stretched", note: "On a made-up picture with one clear subject." },
-      { kind: "hand", why: `How well the crop keeps the subject of real 2K pictures. ${REAL_AI}` },
+      { kind: "hand", why: `How well the crop keeps the subject of real 2K pictures. ${REAL_AI} (hand check HC-1 in ${HAND_PACK}).` },
     ],
   },
   {
@@ -178,9 +193,14 @@ export const CASES: Case[] = [
     story: "C7-2",
     words: "Translating a paid-social set into French, German and Spanish makes three linked sets, within limits, with each language's legal lines.",
     checks: [
-      { kind: "browser", spec: "languages.spec.ts", title: LANGUAGES, note: "Shows the three translations and the German legal lines; the limits and links are the CI test." },
+      {
+        kind: "browser",
+        spec: "languages.spec.ts",
+        title: LANGUAGES,
+        note: "Shows the three translations, the German translation's own legal lines in the ad's details, and every German size drawing all of them; the channel limits and the link to the English set are the CI test.",
+      },
       { kind: "ci", file: LOCALISE, test: "#1 translating a paid-social set into French, German and Spanish makes three sets linked to the English one, within the limits, with the kit's legal lines for each language" },
-      { kind: "hand", why: `Translation quality and tone. ${REAL_AI}` },
+      { kind: "hand", why: `Translation quality and tone. ${REAL_AI} (hand check HC-3 in ${HAND_PACK}).` },
     ],
   },
   {
@@ -189,7 +209,12 @@ export const CASES: Case[] = [
     story: "C7-2",
     words: "Each translated ad renders in every size of its channel and passes fit and contrast, or is left out with the reason.",
     checks: [
-      { kind: "browser", spec: "languages.spec.ts", title: LANGUAGES },
+      {
+        kind: "browser",
+        spec: "languages.spec.ts",
+        title: LANGUAGES,
+        note: "The German ad: all four social sizes drawn at full size, each with its fit, contrast and legal-line checks. A size left out with its reason, and the display banners, are the CI test.",
+      },
       { kind: "ci", file: LOCALISE, test: "#2 each translated ad renders in every size of its channel and passes fit and contrast, or is left out with the reason" },
     ],
   },
@@ -199,8 +224,18 @@ export const CASES: Case[] = [
     story: "C7-2",
     words: "A German headline that overflows 4:5 gets one repair and then fits; one that still overflows is left out of that size only.",
     checks: [
-      { kind: "ci", file: LOCALISE, test: "#3 a German headline too long for a size gets one repair naming the field and size, and then fits" },
-      { kind: "ci", file: LOCALISE, test: "#3 words that still overflow after the repair are left out of that size only, with the reason" },
+      {
+        kind: "ci",
+        file: LOCALISE,
+        test: "#3 a German headline too long for a size gets one repair naming the field and size, and then fits",
+        note: "On the 1:1 square, not the agreed 4:5: C7-1's layout fallback draws a 4:5 that overflows the ad's own layout in Card instead, so a German word can't overflow 4:5. The repair works the same for any size.",
+      },
+      {
+        kind: "ci",
+        file: LOCALISE,
+        test: "#3 words that still overflow after the repair are left out of that size only, with the reason",
+        note: "The size left out is the one size a long German body can't fit (found by the test), not necessarily 4:5, for the same reason: the layout fallback lets 4:5 draw in Card.",
+      },
     ],
   },
   {
@@ -215,7 +250,15 @@ export const CASES: Case[] = [
     sprint: 7,
     story: "C7-2",
     words: "A brand with no German legal lines can't translate into German; the button explains why.",
-    checks: [{ kind: "ci", file: LOCALISE, test: "#5 a brand with no German legal lines can't translate into German: the button explains why" }],
+    checks: [
+      {
+        kind: "browser",
+        spec: "languages.spec.ts",
+        title: NO_GERMAN_LEGAL,
+        note: "On Fernhollow, which no other browser test translates: its German legal lines are cleared on the Languages page and put back afterwards. A brand whose only language is refused is the CI test.",
+      },
+      { kind: "ci", file: LOCALISE, test: "#5 a brand with no German legal lines can't translate into German: the button explains why" },
+    ],
   },
   {
     id: "C7-2.6",
@@ -244,9 +287,21 @@ export const CASES: Case[] = [
     story: "C7-2",
     words: "The mock model returns fixed translations, labelled simulated, so previews spend nothing.",
     checks: [
-      { kind: "browser", spec: "languages.spec.ts", title: LANGUAGES, note: "Shows the \"(simulated)\" label; that nothing is spent is the CI test." },
-      { kind: "ci", file: LOCALISE, test: "#8 the mock model returns fixed translations, labelled simulated, so previews spend nothing real" },
+      { kind: "browser", spec: "languages.spec.ts", title: LANGUAGES, note: "Shows the \"(simulated)\" label; the rest is the CI test." },
+      {
+        kind: "ci",
+        file: LOCALISE,
+        test: "#8 the mock model returns fixed translations, labelled simulated, so previews spend nothing real",
+        note: "Checks that no real provider is resolved or called (no keys, no network request) and that the translations are stored as simulated. The mock's runs still carry a notional test price (mock:mock-model in src/config/prices.ts), counted in the cap and the ledger so the arithmetic is tested; no real money is spent.",
+      },
     ],
+  },
+  {
+    id: "C7-2.Q4",
+    sprint: 7,
+    story: "C7-2",
+    words: "Rory reviews the French, German and Spanish legal lines Claude wrote for the demo brands (answer to Q4).",
+    checks: [{ kind: "hand", why: `Rory reviews the demo legal lines Claude wrote (answer to Q4); hand check HC-2 in ${HAND_PACK}.` }],
   },
 
   // C7-3 Launch pack
@@ -266,7 +321,12 @@ export const CASES: Case[] = [
     story: "C7-3",
     words: "The manifest lists every file with its words, checks and provenance, and every left-out size or language with its reason.",
     checks: [
-      { kind: "browser", spec: "launch-pack.spec.ts", title: PACK, note: "Nothing is left out in the demo pack; a left-out size with its reason is the CI test." },
+      {
+        kind: "browser",
+        spec: "launch-pack.spec.ts",
+        title: PACK,
+        note: "Checks that every file is listed with its headline, fit and labels. The body, button, legal lines, contrast and provenance fields, and a left-out size with its reason (nothing is left out in the demo pack), are the CI test.",
+      },
       { kind: "ci", file: PACK_DB, test: "#2 the manifests list every file with its words, checks and provenance, and every left-out size or language with its reason" },
     ],
   },
@@ -292,7 +352,14 @@ export const CASES: Case[] = [
     sprint: 7,
     story: "C7-3",
     words: "A 60-file pack downloads completely (time and size measured).",
-    checks: [{ kind: "browser", spec: "launch-pack.spec.ts", title: PACK, note: "64 ads; the time and size are printed in the test's output." }],
+    checks: [
+      {
+        kind: "browser",
+        spec: "launch-pack.spec.ts",
+        title: PACK,
+        note: "64 ads. The time from click to complete download and the zip's size are shown as the test's measurement; the test fails above 120 s or 50 MB.",
+      },
+    ],
   },
   {
     id: "C7-3.6",
@@ -349,7 +416,15 @@ export const CASES: Case[] = [
     sprint: 7,
     story: "F-27",
     words: "The cost shown before Make creative is unchanged.",
-    checks: [{ kind: "ci", file: CREATIVE, test: "#4 the cost shown before Make creative is the same as for one audience (pictures are shared, the words are one Copy run)" }],
+    checks: [
+      {
+        kind: "browser",
+        spec: "several-audiences.spec.ts",
+        title: AUDIENCES,
+        note: "Compares the Make creative button's cost with one audience signed off and then with two.",
+      },
+      { kind: "ci", file: CREATIVE, test: "#4 the cost shown before Make creative is the same as for one audience (pictures are shared, the words are one Copy run)" },
+    ],
   },
 
   // F-26 Redraw with the current kit
@@ -359,7 +434,12 @@ export const CASES: Case[] = [
     story: "F-26",
     words: "After a palette change the button appears on older ads; redrawing makes new ads in the new colours and discards the old.",
     checks: [
-      { kind: "browser", spec: "creative.spec.ts", title: REDRAW },
+      {
+        kind: "browser",
+        spec: "creative.spec.ts",
+        title: REDRAW,
+        note: "The palette is changed in the brand editor, and the older-kit badges go once the ads are redrawn; that the redrawn ads are drawn in the new colours is the CI test.",
+      },
       {
         kind: "ci",
         file: CREATIVE,
@@ -410,8 +490,8 @@ export const CASES: Case[] = [
     words: "The upstream issue is filed, linked from decision 0016.",
     checks: [
       {
-        kind: "hand",
-        why: "Not code. Rory decided on 2 November not to post it (postgres.js 4.0.0 rewrote that code and similar issues are closed); trying 4.0.0 is F-31 in the backlog.",
+        kind: "withdrawn",
+        why: "Withdrawn by Rory's decision on 2 November 2026: the issue is not posted (postgres.js 4.0.0 rewrote that code and similar issues are closed); trying 4.0.0 is F-31 in the backlog. Recorded in decision 0016.",
       },
     ],
   },
@@ -447,9 +527,10 @@ export const CASES: Case[] = [
   },
 ];
 
-/** The kind a case is counted under: browser if any browser test shows it, else ci, else hand. */
+/** The kind a case is counted under: browser if any browser test shows it, else ci, else hand, else withdrawn. */
 export function caseKind(c: Case): Check["kind"] {
   if (c.checks.some((x) => x.kind === "browser")) return "browser";
   if (c.checks.some((x) => x.kind === "ci")) return "ci";
-  return "hand";
+  if (c.checks.some((x) => x.kind === "hand")) return "hand";
+  return "withdrawn";
 }

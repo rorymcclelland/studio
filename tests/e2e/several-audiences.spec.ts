@@ -1,13 +1,14 @@
 // F-27 Several audiences through the UI, with the mock models: a Quillmoor
-// brief given a second audience by hand and signed off gets 24 paid-social ads,
-// 12 for each audience, grouped under a heading per audience (test case 1);
-// New words on one of the second audience's ads waits beside the four ads on
-// those words only, and keeping them redraws only those four (test case 2).
-// Test cases 3 and 4 (no named audience; the cost before Make creative) are in
-// tests/agents/creative.test.ts. Each page at 375 px and 1440 px: nothing
+// brief signed off with one audience shows a cost on Make creative; given a
+// second audience by hand and signed off again, the cost is unchanged (test
+// case 4); it gets 24 paid-social ads, 12 for each audience, grouped under a
+// heading per audience (test case 1); New words on one of the second
+// audience's ads waits beside the four ads on those words only, and keeping
+// them redraws only those four (test case 2). Test case 3 (no named audience)
+// is in tests/agents/creative.test.ts. Each page at 375 px and 1440 px: nothing
 // scrolls sideways, AA contrast. The pictures and words are the mock model's.
 import { expect, test, type Page } from "@playwright/test";
-import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
+import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
 
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
 const groups = (page: Page) => page.locator("[data-audience-group]");
@@ -20,7 +21,7 @@ async function checkWidths(page: Page, what: string) {
     await settle(page);
     await expectNoHorizontalScroll(page, `${what} at ${width}px`);
     expect(await contrastViolations(page), `${what} at ${width}px`).toEqual([]);
-    if (process.env.SHOTS_DIR) await page.screenshot({ path: `${process.env.SHOTS_DIR}/${what.replace(/\W+/g, "-")}-${width}.png` });
+    await saveShot(page, `${what}-${width}`);
   }
   await page.setViewportSize({ width: 1280, height: 720 });
 }
@@ -35,15 +36,26 @@ test(
     annotation: [
       { type: "case", description: "F-27.1" },
       { type: "case", description: "F-27.2" },
+      { type: "case", description: "F-27.4" },
     ],
   },
   async ({ page }) => {
     test.setTimeout(600_000);
     let titles: string[] = [];
+    let oneAudienceCost = "";
+    const makeButton = () => page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ });
 
     await step(page, "Write a Quillmoor brief with the mock Brief agent (one audience)", async () => {
       await newCampaign(page, "Quillmoor Money", "Bring lapsed savers and new savers to the Plus plan this spring");
       await expect(page.locator("[data-section=audiences]").filter({ visible: true }).locator("[data-audience]")).toHaveCount(1);
+    });
+
+    await step(page, "F-27.4: sign version 1 off and note the cost on Make creative with one audience", async () => {
+      await signOffVersion(page, 1);
+      await page.reload();
+      await settle(page);
+      oneAudienceCost = ((await makeButton().textContent()) ?? "").replace(/\s+/g, " ").trim();
+      expect(oneAudienceCost).toMatch(/^Make creative ?\((about \d+p|under 1p), at most \d+p\)$/);
     });
 
     await step(page, "Add a second audience to the brief and sign version 2 off", async () => {
@@ -63,6 +75,13 @@ test(
       const shown = page.locator("[data-section=audiences]").filter({ visible: true }).locator("[data-audience]");
       await expect(shown).toHaveCount(2);
       await signOffVersion(page, 2);
+    });
+
+    await step(page, "F-27.4: with two audiences, the cost on Make creative is unchanged (pictures are shared, the words are one Copy run)", async () => {
+      await page.reload();
+      await settle(page);
+      const twoAudienceCost = ((await makeButton().textContent()) ?? "").replace(/\s+/g, " ").trim();
+      expect(twoAudienceCost).toBe(oneAudienceCost);
     });
 
     await step(page, "F-27.1: Make creative gives 24 paid-social ads, 12 under each audience's heading", async () => {

@@ -5,11 +5,23 @@
 // is refused inline and saves nothing, and Pick and Discard survive a reload
 // with an undo. The grid is one column at 375 px and four at 1440 px, with AA
 // contrast. Plus S5-3 #6: a layout switch draws the ad in another layout.
-// F-26: after a palette change the ads say they were made with an older kit,
-// and Redraw with current kit (one ad, or all) redraws them, with undo.
+// F-26: on a Fernhollow campaign, after a palette change in the brand editor
+// the ads say they were made with an older kit, and Redraw with current kit
+// (one ad, or all) redraws them, with undo; the palette is put back in the
+// editor. That the redrawn ads are in the new colours is tested in
+// tests/agents/creative.test.ts.
 import { expect, test, type Locator, type Page } from "@playwright/test";
-import postgres from "postgres";
-import { caption, contrastViolations, demoBrandId, expectNoHorizontalScroll, settle, signIn, untilShown } from "./helpers";
+import {
+  caption,
+  contrastViolations,
+  demoBrandId,
+  expectNoHorizontalScroll,
+  makeCreative,
+  newCampaign,
+  settle,
+  signIn,
+  signOffVersion,
+} from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan in January";
 
@@ -238,32 +250,60 @@ test("S5-4 #6: every action on an ad is reachable by keyboard at 375 px", async 
   await expect(edit).toBeFocused();
 });
 
-test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", { annotation: [{ type: "case", description: "F-26.1" }, { type: "case", description: "F-26.2" }, { type: "case", description: "F-26.3" }, { type: "case", description: "F-26.4" }] }, async ({ page }) => {
-  test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to change the brand's palette");
-  test.setTimeout(600_000);
-  const quill = await demoBrandId(page, "Quillmoor Money");
-  await newQuillmoorCampaign(page);
-  const panel = visible(page, "[data-signoff-panel]");
-  await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
-  await panel.getByRole("button", { name: "Approve version 1" }).click();
-  await expect(toast(page, "Version 1 signed off.")).toBeVisible();
-  // Read the signed-off page afresh: this spec is about redrawing, not the sign-off panel's refresh.
-  await page.reload();
+type Colour = { name: string; hex: string };
+const hexFields = (page: Page) => page.getByRole("textbox", { name: /^Colour \d+ hex value$/ });
+
+/** The brand's palette, read from its brand editor. */
+async function paletteInEditor(page: Page, brandId: string): Promise<Colour[]> {
+  await page.goto(`/brands/${brandId}/edit`);
   await settle(page);
-  await creative(page).getByRole("button", { name: /^Make creative/ }).click();
-  await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
+  const n = await hexFields(page).count();
+  const colours: Colour[] = [];
+  for (let i = 1; i <= n; i++) {
+    colours.push({
+      name: await page.getByLabel(`Colour ${i} name`, { exact: true }).inputValue(),
+      hex: await page.getByLabel(`Colour ${i} hex value`, { exact: true }).inputValue(),
+    });
+  }
+  return colours;
+}
+
+/** Saves a palette of the same length through the brand editor, as a person would. */
+async function savePaletteInEditor(page: Page, brandId: string, brandName: string, colours: Colour[]) {
+  await page.goto(`/brands/${brandId}/edit`);
+  await settle(page);
+  await expect(hexFields(page)).toHaveCount(colours.length);
+  for (const [i, c] of colours.entries()) {
+    await page.getByLabel(`Colour ${i + 1} name`, { exact: true }).fill(c.name);
+    await page.getByLabel(`Colour ${i + 1} hex value`, { exact: true }).fill(c.hex);
+  }
+  await page.getByRole("button", { name: "Save brand kit" }).click();
+  await expect(toast(page, `Brand kit saved for ${brandName}.`)).toBeVisible({ timeout: 30_000 });
+}
+
+// On Fernhollow: brands.spec.ts saves Quillmoor's kit (and checks its palette is unchanged by a refused save),
+// and no other spec reads Fernhollow's palette, so changing it for a moment here touches no other test.
+test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", { annotation: [{ type: "case", description: "F-26.1" }, { type: "case", description: "F-26.2" }, { type: "case", description: "F-26.3" }, { type: "case", description: "F-26.4" }] }, async ({ page }) => {
+  test.setTimeout(600_000);
+  const brandName = "Fernhollow Outfitters";
+  const brandId = await demoBrandId(page, brandName);
+  await newCampaign(page, brandName, "Bring lapsed customers back for the winter range, redrawn with the current kit");
+  const campaignPath = new URL(page.url()).pathname;
+  await signOffVersion(page, 1);
+  // Read the signed-off page afresh: this spec is about redrawing, not the sign-off panel's refresh.
+  await makeCreative(page, 12);
   // #3: on the current kit, no ad offers a redraw.
   await caption(page, "F-26.3: every ad is on the current kit, so none offers a redraw");
   await expect(page.locator("[data-older-kit]")).toHaveCount(0);
   await expect(creative(page).getByRole("button", { name: /^Redraw/ })).toHaveCount(0);
 
-  const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
-  const [{ palette }] = await sql`select palette from public.brands where id = ${quill}`;
+  const palette = await paletteInEditor(page, brandId);
+  expect(palette.length, "a palette with colours to reorder").toBeGreaterThan(1);
   try {
-    await caption(page, "The brand's palette changes: every ad says it was made with an older kit");
+    await caption(page, "The brand's palette changes in the brand editor: every ad says it was made with an older kit");
     // A palette change (the same colours in another order changes which panel colour each layout prefers).
-    await sql`update public.brands set palette = ${sql.json([...(palette as unknown[])].reverse() as never)} where id = ${quill}`;
-    await page.reload();
+    await savePaletteInEditor(page, brandId, brandName, [...palette].reverse());
+    await page.goto(campaignPath);
     await settle(page);
     const bar = page.locator("[data-older-kit]");
     await expect(bar).toContainText("All 12 ads were made with an older kit.");
@@ -310,7 +350,8 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await expect(ads(page)).toHaveCount(12);
     await expectAdsDrawn(page);
   } finally {
-    await sql`update public.brands set palette = ${sql.json(palette as never)} where id = ${quill}`;
-    await sql.end();
+    await caption(page, "Put the brand's palette back in the brand editor");
+    await savePaletteInEditor(page, brandId, brandName, palette);
+    expect(await paletteInEditor(page, brandId)).toEqual(palette);
   }
 });

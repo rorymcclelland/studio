@@ -21,8 +21,11 @@ import {
 const WIDTHS = [375, 1440];
 
 let awaitingRun = "";
-// Fernhollow is only read by the e2e specs, never edited, so these screens
-// look the same on every visit (brands.spec.ts edits Quillmoor).
+// Fernhollow's kit text is only read by the e2e specs (brands.spec.ts edits
+// Quillmoor), so these screens look the same on every visit. Two specs change
+// Fernhollow for a moment and put it back: F-26 (creative.spec.ts) reorders its
+// palette, and C7-2 #5 (languages.spec.ts) clears its German legal lines;
+// neither changes what these layout and contrast checks see.
 let fernhollow = "";
 
 type Screen = { name: string; path: () => string; signedIn: boolean };

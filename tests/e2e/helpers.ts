@@ -57,6 +57,16 @@ export async function caption(page: Page, text: string) {
   await page.evaluate(drawCaption, text).catch(() => undefined);
 }
 
+/**
+ * Saves a screenshot to SHOTS_DIR, when it is set, as <name>.png. The
+ * recording's caption strip is hidden while it is taken, so it never covers
+ * the bottom of the page in a screenshot.
+ */
+export async function saveShot(page: Page, name: string, options: { fullPage?: boolean } = {}) {
+  if (!process.env.SHOTS_DIR) return;
+  await page.screenshot({ path: `${process.env.SHOTS_DIR}/${name.replace(/\W+/g, "-")}.png`, ...options, style: "e2e-caption { display: none !important; }" });
+}
+
 /** A test step with a plain-English name: in the report, and as the recording's caption. */
 export async function step<T>(page: Page, title: string, body: () => Promise<T>): Promise<T> {
   return test.step(title, async () => {

@@ -19,6 +19,7 @@
                   "status": "passed",
                   "duration": 12400,
                   "steps": [{ "title": "Open the thing" }, { "title": "See it <works>" }],
+                  "annotations": [{ "type": "measure", "description": "64-ad pack: 9.8 s & 7.4 MB" }, { "type": "case", "description": "X-1.1" }],
                   "attachments": [{ "name": "video", "contentType": "video/webm", "path": "videos/sample-1.webm" }]
                 }
               ]

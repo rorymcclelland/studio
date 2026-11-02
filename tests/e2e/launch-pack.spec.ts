@@ -5,12 +5,13 @@
 // (64 ads: four ads × four social sizes × four languages); Build launch pack
 // downloads one zip, which is unzipped and checked entry by entry (test cases
 // 1, 2, 5 and 6). The time from click to a complete download and the zip's size
-// are printed (test case 5's measurement). Each page at 375 px and 1440 px:
+// are recorded as the test's "measure" annotation, shown on the demo page, and
+// must be under 120 s and 50 MB (test case 5). Each page at 375 px and 1440 px:
 // nothing scrolls sideways, AA contrast. SHOTS_DIR=<folder> saves screenshots.
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { caption, contrastViolations, expectNoHorizontalScroll, settle, signIn, untilShown } from "./helpers";
+import { caption, contrastViolations, expectNoHorizontalScroll, saveShot, settle, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -26,7 +27,7 @@ async function checkWidths(page: Page, what: string) {
     expect(await contrastViolations(page), `${what} at ${width}px`).toEqual([]);
     if (process.env.SHOTS_DIR) {
       await pack(page).scrollIntoViewIfNeeded();
-      await page.screenshot({ path: `${process.env.SHOTS_DIR}/${what.replace(/\W+/g, "-")}-${width}.png` });
+      await saveShot(page, `${what}-${width}`);
     }
   }
   await page.setViewportSize({ width: 1280, height: 900 });
@@ -109,7 +110,12 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   const path = await file.path();
   const seconds = (Date.now() - started) / 1000;
   const bytes = await readFile(path);
-  console.log(`[pack] 64-ad demo pack: ${seconds.toFixed(1)} s, ${(bytes.length / 1e6).toFixed(1)} MB`);
+  // The measurement (test case 5) goes on the demo page as this test's annotation, and has generous limits.
+  const measured = `64-ad demo pack: ${seconds.toFixed(1)} s from click to complete download, ${(bytes.length / 1e6).toFixed(1)} MB`;
+  test.info().annotations.push({ type: "measure", description: measured });
+  console.log(`[pack] ${measured}`);
+  expect(seconds, measured).toBeLessThan(120);
+  expect(bytes.length, measured).toBeLessThan(50e6);
 
   // #1, #2, #6: the zip's entries, both manifests and the README.
   const entries = unzipSync(new Uint8Array(bytes));

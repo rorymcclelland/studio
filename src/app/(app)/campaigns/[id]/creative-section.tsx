@@ -266,6 +266,7 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
       aria-labelledby={titleId}
       data-ad={v.id}
       data-channel={v.channel}
+      data-words={v.words.setId}
       data-picked={v.picked ? "" : undefined}
       className={cx("flex min-w-0 flex-col gap-3 rounded-card border-2 bg-surface p-3 sm:p-4", v.picked ? "border-primary" : "border-transparent")}
     >
