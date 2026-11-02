@@ -24,6 +24,9 @@ export const AGENT_MODELS = {
   // production run and the reply was cut off mid-JSON (27 Oct 2026).
   imagery: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 4000 },
   imageCheck: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 200 },
+  // C7-2 (Sprint 7, Q5): Sonnet, not Haiku, as the Copy agent: tone matters in another
+  // language, and one set is about 1 to 2p a language. One set's three fields fit in 600 tokens.
+  localise: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 600 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

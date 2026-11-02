@@ -28,6 +28,10 @@ import {
   type VariantOrigin,
 } from "./variants";
 import { renderAd } from "./render/render";
+import { translationBadge } from "./ad-sizes";
+import { LANG_NAMES, SUPPORTED_LANGS, type Lang } from "./languages";
+import { sizesFor } from "./render/sizes";
+import { languageOptions, translateCost, type LanguageOption } from "./translate";
 
 // S5-4: what the Creative section of a campaign shows and does. The gallery
 // reads through getCreative(); every action is a mark (pick, discard), a
@@ -97,12 +101,33 @@ export type VariantView = {
   busy: { picture: string | null; words: string | null };
   /** For discarded ads: whether Restore works, and why not. */
   restore: { allowed: boolean; reason: string | null };
+  /**
+   * C7-2: the ad in the brand's other languages: its words' current
+   * translations, each drawn on request from this ad (the first size of its
+   * channel as the thumbnail) and badged "Machine translation" (rule 1).
+   */
+  translations: {
+    lang: Lang;
+    name: string;
+    setId: string;
+    src: string;
+    sizesHref: string;
+    headline: string;
+    body: string;
+    cta: string;
+    legalLines: string[];
+    simulated: boolean;
+    badge: { label: string; detail: string };
+    runId: string | null;
+  }[];
+  /** C7-2: Translate on this ad: the translations still to write (allowed languages without one), its cost, or why not. */
+  translate: { todo: number; estimate: string; reason: string | null };
 };
 
 export type CreativeRunView = {
   runId: string;
   href: string;
-  kind: "make" | "picture" | "words" | "imagery" | "copy";
+  kind: "make" | "picture" | "words" | "imagery" | "copy" | "translate";
   label: string | null;
   status: string;
   error: string | null;
@@ -145,6 +170,19 @@ export type CreativeView = {
   totalCostPence: number;
   /** Any ad's picture is simulated (mock model): the section says so. */
   simulated: boolean;
+  /**
+   * C7-2: Translate. The brand's languages (each allowed, or refused with the
+   * reason), the languages it hasn't chosen, the picked ads' translations still
+   * to write with their cost, and a translation in progress.
+   */
+  translate: {
+    languages: LanguageOption[];
+    unchosen: Lang[];
+    picked: { todo: number; estimate: string; reason: string | null };
+    runningRunId: string | null;
+    /** Any translation on the page was written by the mock model. */
+    simulated: boolean;
+  };
 };
 
 const TEXT_CHANNELS = ["search", "email", "app push"];
@@ -183,7 +221,17 @@ function badgesFor(checks: RenderChecks, simulated: boolean, olderKit = false): 
 }
 
 const kindOf = (agent: string, input: Record<string, unknown>): CreativeRunView["kind"] =>
-  agent === "creative" ? (input.mode === "picture" ? "picture" : "make") : agent === "copy" ? (input.mode === "replace" ? "words" : "copy") : "imagery";
+  agent === "creative"
+    ? input.mode === "picture"
+      ? "picture"
+      : "make"
+    : agent === "copy"
+      ? input.mode === "replace"
+        ? "words"
+        : "copy"
+      : agent === "localise"
+        ? "translate"
+        : "imagery";
 
 /** Everything the Creative section needs for a campaign, or null if it isn't in the user's workspace. */
 export async function getCreative(userId: string, campaignId: string): Promise<CreativeView | null> {
@@ -209,19 +257,65 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
 
     const busyRuns = await tx`
       select id, agent, input from public.agent_runs
-      where status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId} and agent in ('creative', 'copy')`;
+      where status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId} and agent in ('creative', 'copy', 'localise')`;
     const pictureBusy = new Map<string, string>();
     const wordsBusy = new Map<string, string>();
     let makeRunning: string | null = null;
+    let translating: string | null = null;
     for (const r of busyRuns) {
       if (r.agent === "creative" && r.input.mode === "picture") pictureBusy.set(r.input.variantId, r.id);
       else if (r.agent === "creative") makeRunning = r.id;
       else if (r.agent === "copy" && r.input.mode === "replace") wordsBusy.set(r.input.setId, r.id);
+      else if (r.agent === "localise") translating = r.id;
     }
+    // C7-2: the current translations of this version's words, and the brand's languages.
+    const translatedRows = version
+      ? await tx`
+          select id, translated_from, lang, set, legal_lines, simulated, run_id from public.copy_sets
+          where campaign_id = ${campaignId} and brief_version = ${version} and translated_from is not null and discarded_at is null
+          order by created_at`
+      : [];
+    const { options: languages, unchosen } = await languageOptions(tx, c.brand_id);
+    const allowedLangs = languages.filter((l) => l.allowed).map((l) => l.lang);
+    const languageRefusalText =
+      languages.length === 0
+        ? "The brand has no languages yet. Choose them, with their legal lines, on the brand's Languages page."
+        : allowedLangs.length === 0
+          ? languages.map((l) => l.reason).join(" ")
+          : null;
     const pending = new Map(copy.sets.filter((s) => s.replaces).map((s) => [s.replaces as string, s]));
     // The current ad on each picture and words pair (one at most: ad_variants_current_once).
     const currentPairs = new Map(rows.filter((r) => !r.discarded_at).map((r) => [`${r.image_asset_id}:${r.copy_set_id}`, r]));
     const kit = await kitSnapshot(tx, c.brand_id);
+
+    const translationsOf = (variantId: string, setId: string, channel: string): Pick<VariantView, "translations" | "translate"> => {
+      const mine = translatedRows
+        .filter((t) => t.translated_from === setId)
+        .sort((x, y) => SUPPORTED_LANGS.indexOf(x.lang as Lang) - SUPPORTED_LANGS.indexOf(y.lang as Lang));
+      const first = sizesFor(channel)[0]?.id ?? "1080x1080";
+      const translations = mine.map((t) => {
+        const w = t.set as AdWords;
+        const shown = (x: string) => x.split("\u00AD").join("");
+        const badge = translationBadge(t.simulated === true);
+        return {
+          lang: t.lang as Lang,
+          name: LANG_NAMES[t.lang as Lang] ?? (t.lang as string),
+          setId: t.id as string,
+          src: `/ads/${variantId}/${first}.png?lang=${t.lang}`,
+          sizesHref: `/campaigns/${campaignId}/ads/${variantId}/sizes?lang=${t.lang}`,
+          headline: shown(w.headline),
+          body: shown(w.body),
+          cta: shown(w.cta),
+          legalLines: t.legal_lines as string[],
+          simulated: t.simulated === true,
+          badge: { label: badge.label, detail: badge.detail },
+          runId: (t.run_id as string | null) ?? null,
+        };
+      });
+      const todo = allowedLangs.filter((l) => !mine.some((t) => t.lang === l)).length;
+      const reason = languageRefusalText ?? (todo === 0 ? `Already in ${allowedLangs.map((l) => LANG_NAMES[l]).join(", ").replace(/, ([^,]*)$/, " and $1")}.` : null);
+      return { translations, translate: { todo, estimate: translateCost(todo).label, reason } };
+    };
 
     const views: VariantView[] = rows.map((r) => {
       const words = r.set as AdWords;
@@ -282,6 +376,7 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
           : null,
         busy: { picture: pictureBusy.get(r.id) ?? null, words: wordsBusy.get(r.copy_set_id) ?? null },
         restore,
+        ...translationsOf(r.id as string, r.copy_set_id as string, r.channel as string),
       };
     });
     const unordered = views.filter((v) => !v.discardedAt && !v.image.discarded && !v.words.discarded);
@@ -309,7 +404,7 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
       select r.id, r.agent, r.label, r.status, r.error, r.input, r.created_at,
         coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::float8 as cost
       from public.agent_runs r
-      where r.agent in ('creative', 'imagery', 'copy') and r.input ->> 'campaignId' = ${campaignId}
+      where r.agent in ('creative', 'imagery', 'copy', 'localise') and r.input ->> 'campaignId' = ${campaignId}
       order by r.created_at desc limit 60`;
     const byParent = new Map<string, typeof runRows>();
     for (const r of runRows) {
@@ -354,8 +449,25 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
       runs,
       totalCostPence: runs.reduce((sum, r) => sum + r.costPence, 0),
       simulated: live.some((v) => v.simulated),
+      translate: {
+        languages,
+        unchosen,
+        picked: pickedTranslate(live, allowedLangs, languageRefusalText),
+        runningRunId: translating,
+        simulated: live.some((v) => v.translations.some((t) => t.simulated)),
+      },
     };
   });
+}
+
+/** C7-2: Translate on the whole pick: each picked ad's words (shared words counted once) into each allowed language not yet written. */
+function pickedTranslate(live: VariantView[], allowed: Lang[], refusal: string | null): CreativeView["translate"]["picked"] {
+  const picked = live.filter((v) => v.picked);
+  const sets = new Map(picked.map((v) => [v.words.setId, v]));
+  const todo = [...sets.values()].reduce((n, v) => n + allowed.filter((l) => !v.translations.some((t) => t.lang === l)).length, 0);
+  const reason =
+    picked.length === 0 ? "Pick ads first: Translate works on the picked ads." : refusal ?? (todo === 0 ? "Every picked ad is already translated into the brand's languages." : null);
+  return { todo, estimate: translateCost(todo).label, reason };
 }
 
 /** Starts Make creative for a campaign's signed-off brief. Refused (CreativeError, with the reason) for a draft, while it runs, or while the version has ads. */

@@ -12,6 +12,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import type { BriefActionState } from "../actions";
 import {
   discardAd,
+  discardAdTranslation,
   discardSet,
   editAdWords,
   editCopySet,
@@ -26,6 +27,8 @@ import {
   restoreAd,
   restoreSet,
   switchLayout,
+  translateAd,
+  translatePicked,
 } from "../creative-actions";
 import { ActionError } from "./brief-actions";
 import { useBriefAction } from "./use-brief-action";
@@ -217,6 +220,74 @@ export function AdControls(p: AdProps) {
         />
       </div>
       {p.usedIn > 1 && <p className="text-sm text-ink-2">Words used in {p.usedIn} ads: New words and Edit words change them all.</p>}
+      <ActionError error={error} />
+    </div>
+  );
+}
+
+/**
+ * C7-2: Translate, on one picked ad or on the whole pick, with its cost before
+ * the click (rule 3). Disabled with the reason when the brand's languages
+ * can't be used (no legal lines for one, say) or there is nothing to translate.
+ */
+export function TranslateButton({
+  campaignId,
+  variantId,
+  label,
+  estimate,
+  reason,
+  running,
+  align = "start",
+}: {
+  campaignId: string;
+  /** One ad; the whole pick when left out. */
+  variantId?: string;
+  label: string;
+  estimate: string;
+  reason: string | null;
+  running: boolean;
+  align?: "start" | "end";
+}) {
+  const { run, pending, error } = useBriefAction();
+  const reasonId = useId();
+  const blocked = !!reason || running;
+  return (
+    <div className={cx("flex min-w-0 flex-col gap-2", align === "end" ? "items-start sm:items-end" : "items-start")}>
+      <Button
+        type="button"
+        size="sm"
+        variant={variantId ? "quiet" : "primary"}
+        className="flex-wrap px-3"
+        disabled={pending || blocked}
+        aria-describedby={reason && !running ? reasonId : undefined}
+        onClick={() => run(() => (variantId ? translateAd(campaignId, variantId) : translatePicked(campaignId)))}
+      >
+        {pending ? "Starting…" : running ? "Translating…" : <Costed label={label} estimate={estimate} />}
+      </Button>
+      {reason && !running && (
+        <p id={reasonId} className={cx("max-w-sm text-sm text-ink-2 wrap-anywhere", align === "end" && "sm:text-right")} data-translate-reason="">
+          {reason}
+        </p>
+      )}
+      <ActionError error={error} />
+    </div>
+  );
+}
+
+/** C7-2: discards one translation of an ad's words (every ad on those words loses it); Translate can write it again. */
+export function DiscardTranslationButton({ campaignId, setId, what }: { campaignId: string; setId: string; what: string }) {
+  const { run, pending, error } = useBriefAction();
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-1">
+      <button
+        type="button"
+        disabled={pending}
+        aria-label={`Discard ${what}`}
+        onClick={() => run(() => discardAdTranslation(campaignId, setId))}
+        className="min-h-9 rounded-full text-sm font-semibold text-primary underline-offset-2 hover:underline disabled:opacity-50"
+      >
+        {pending ? "Discarding…" : "Discard"}
+      </button>
       <ActionError error={error} />
     </div>
   );

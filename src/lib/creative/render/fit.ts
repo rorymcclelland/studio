@@ -22,6 +22,8 @@ export function measureWidth(text: string, font: Font, size: number, letterSpaci
   let prev: ReturnType<Font["charToGlyph"]> | null = null;
   let chars = 0;
   for (const ch of Array.from(text)) {
+    // C7-2: a soft hyphen is a break point, invisible unless a line breaks there.
+    if (ch === SHY) continue;
     const glyph = font.charToGlyph(ch);
     units += glyph.advanceWidth ?? 0;
     if (prev) units += font.getKerningValue(prev, glyph) || 0;
@@ -31,22 +33,78 @@ export function measureWidth(text: string, font: Font, size: number, letterSpaci
   return units * scale + letterSpacingEm * size * chars;
 }
 
+/** C7-2: the soft hyphen (U+00AD). The Localise agent may mark break points in long words (German compounds) with it. */
+export const SHY = "\u00AD";
+
+/** Text as drawn when no line breaks inside a word: soft hyphens removed. */
+export function visibleText(text: string): string {
+  return (text ?? "").split(SHY).join("");
+}
+
+/**
+ * The longest start of a word, up to a soft hyphen, that fits in `room` with
+ * a visible hyphen after it; null if none does.
+ */
+function hyphenatedStart(word: string, font: Font, size: number, room: number, ls: number): { head: string; rest: string } | null {
+  const parts = word.split(SHY);
+  for (let n = parts.length - 1; n >= 1; n--) {
+    const head = `${parts.slice(0, n).join("")}-`;
+    if (measureWidth(head, font, size, ls) <= room) return { head, rest: parts.slice(n).join(SHY) };
+  }
+  return null;
+}
+
 /**
  * Greedy word wrap at spaces into lines no wider than maxWidth. Returns null if
  * a single word is wider than the box (it would have to be broken mid-word).
+ *
+ * C7-2: a word with soft hyphens that is wider than the box is broken at
+ * them, with a visible hyphen at the end of the line (still null if a piece
+ * is too wide). With `eager`, a word that doesn't fit the rest of a line is
+ * broken at a soft hyphen there, as a browser does, rather than moved whole to
+ * the next line. Text without soft hyphens wraps exactly as before.
  */
-export function wrapText(text: string, font: Font, size: number, maxWidth: number, letterSpacingEm = 0): string[] | null {
+export function wrapText(text: string, font: Font, size: number, maxWidth: number, letterSpacingEm = 0, opts: { eager?: boolean } = {}): string[] | null {
   const words = normaliseText(text).split(" ").filter(Boolean);
   const lines: string[] = [];
   let line = "";
-  for (const word of words) {
-    if (measureWidth(word, font, size, letterSpacingEm) > maxWidth) return null;
-    const candidate = line ? `${line} ${word}` : word;
-    if (measureWidth(candidate, font, size, letterSpacingEm) <= maxWidth) {
-      line = candidate;
-    } else {
-      lines.push(line);
-      line = word;
+  const width = (s: string) => measureWidth(s, font, size, letterSpacingEm);
+  for (const original of words) {
+    let word = original;
+    for (;;) {
+      const shown = visibleText(word);
+      const candidate = line ? `${line} ${shown}` : shown;
+      if (width(candidate) <= maxWidth) {
+        line = candidate;
+        break;
+      }
+      const hasShy = word.includes(SHY);
+      // Eager: fill the rest of this line with the word's start.
+      if (hasShy && opts.eager && line) {
+        const split = hyphenatedStart(word, font, size, maxWidth - width(`${line} `), letterSpacingEm);
+        if (split) {
+          lines.push(`${line} ${split.head}`);
+          line = "";
+          word = split.rest;
+          continue;
+        }
+      }
+      if (width(shown) <= maxWidth) {
+        // The whole word fits a line of its own.
+        lines.push(line);
+        line = shown;
+        break;
+      }
+      if (!hasShy) return null;
+      // Wider than the box: break it at its soft hyphens, from a fresh line.
+      if (line) {
+        lines.push(line);
+        line = "";
+      }
+      const split = hyphenatedStart(word, font, size, maxWidth, letterSpacingEm);
+      if (!split) return null;
+      lines.push(split.head);
+      word = split.rest;
     }
   }
   if (line) lines.push(line);
@@ -72,8 +130,11 @@ export function fitText(
   const clean = normaliseText(text);
   if (!clean) return { ok: false, reason: "empty" };
   if (sizes.length === 0) return { ok: false, reason: "no sizes to try" };
+  const hyphens = clean.includes(SHY);
   for (const size of sizes) {
-    const lines = wrapText(clean, font, size, maxWidth, letterSpacingEm);
+    let lines = wrapText(clean, font, size, maxWidth, letterSpacingEm);
+    // C7-2: soft hyphens may save a line at this size before a smaller size is tried.
+    if (hyphens && (!lines || lines.length > maxLines)) lines = wrapText(clean, font, size, maxWidth, letterSpacingEm, { eager: true });
     if (lines && lines.length <= maxLines) {
       return {
         ok: true,
@@ -94,7 +155,7 @@ export function fitText(
 export function missingGlyphs(text: string, font: Font): string[] {
   const missing: string[] = [];
   for (const ch of Array.from(text ?? "")) {
-    if (/\s/.test(ch) || missing.includes(ch)) continue;
+    if (/\s/.test(ch) || ch === SHY || missing.includes(ch)) continue;
     if (font.charToGlyphIndex(ch) === 0) missing.push(ch);
   }
   return missing;

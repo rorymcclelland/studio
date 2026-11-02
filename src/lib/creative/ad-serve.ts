@@ -1,5 +1,5 @@
 import { etagMatches } from "@/lib/http/etag";
-import { drawInSize, sizedVariant, sizeEtag, sizeFromPath } from "./ad-sizes";
+import { drawInSize, langFromQuery, sizedVariant, sizeEtag, sizeFromPath } from "./ad-sizes";
 import { drawableVariant, drawVariant } from "./variants";
 
 // S5-3: what /ads/[variantId] answers. Kept out of the route file so tests can
@@ -84,9 +84,16 @@ export async function adResponse(userId: string | null, segment: string, ifNoneM
  * refuses (the words or the legal lines don't fit it at a readable size) is a
  * 422 with the reason, which the Sizes view also shows.
  */
-export async function adSizeResponse(userId: string | null, variantSegment: string, sizeSegment: string, ifNoneMatch: string | null = null): Promise<Response> {
+export async function adSizeResponse(
+  userId: string | null,
+  variantSegment: string,
+  sizeSegment: string,
+  ifNoneMatch: string | null = null,
+  /** C7-2: ?lang=de-DE draws the ad with its current German words; an unsupported or missing translation is the same 404. */
+  langParam: string | null = null,
+): Promise<Response> {
   const size = sizeFromPath(sizeSegment);
-  const variant = size ? await sizedVariant(userId, variantIdFromPath(variantSegment), size) : null;
+  const variant = size ? await sizedVariant(userId, variantIdFromPath(variantSegment), size, langFromQuery(langParam)) : null;
   if (!variant || !userId || !size) return NOT_FOUND();
   const etag = sizeEtag(variant, size);
   const headers = {

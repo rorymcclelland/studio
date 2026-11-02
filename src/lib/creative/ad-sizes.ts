@@ -1,6 +1,8 @@
 import { asUser } from "@/lib/db/scoped";
-import type { RenderChecks } from "./render/render";
-import { renderAd } from "./render/render";
+import { ENGLISH, isLang, LANG_NAMES, MACHINE_TRANSLATION, type Lang } from "./languages";
+import type { LayoutId } from "./render/layouts";
+import type { RefusalPart, RenderChecks, RenderInput } from "./render/render";
+import { fitAd, renderAd } from "./render/render";
 import { isSizeId, layoutsToTry, sizesFor, SIZES, SQUARE, UPSCALE_NOTE_ABOVE, type DrawLayoutId, type SizeId, type SizeSpec } from "./render/sizes";
 import { adEtag, drawableVariant, loadParts, renderInputFor, type DrawableVariant, type VariantParts } from "./variants";
 
@@ -65,12 +67,61 @@ export function sizeEtag(v: DrawableVariant, size: SizeId): string {
   return size === SQUARE ? v.etag : adEtag({ ...v.etagParts, size });
 }
 
-/** The variant, if the user may see it and the size belongs to its channel; null otherwise (all answered 404 alike). */
-export async function sizedVariant(userId: string | null, variantId: string, size: SizeId | null): Promise<DrawableVariant | null> {
-  if (!userId || !size) return null;
+/** C7-2: the language from the address (?lang=de-DE): English when absent; null for anything unsupported (a 404). */
+export function langFromQuery(value: string | null | undefined): Lang | typeof ENGLISH | null {
+  if (value === null || value === undefined || value === "" || value === ENGLISH) return ENGLISH;
+  return isLang(value) ? value : null;
+}
+
+/**
+ * C7-2: an ad in another language: the English ad's picture, layout and kit
+ * with the current translation of its words (a copy set of its own, with the
+ * language's legal lines). Its ETag is made from the translated set, so each
+ * language revalidates on its own. Null when there is no current translation.
+ */
+export async function translatedVariant(userId: string, v: DrawableVariant, lang: Lang): Promise<(DrawableVariant & { lang: Lang; simulatedWords: boolean }) | null> {
+  const [t] = await asUser(userId, (tx) => tx`
+    select id, simulated from public.copy_sets
+    where translated_from = ${v.copySetId} and lang = ${lang} and discarded_at is null
+    order by created_at desc limit 1`);
+  if (!t) return null;
+  const etagParts = { ...v.etagParts, copySetId: t.id as string };
+  return { ...v, copySetId: t.id as string, etagParts, etag: adEtag(etagParts), lang, simulatedWords: t.simulated === true };
+}
+
+/** The variant, if the user may see it and the size belongs to its channel (and, C7-2, it has words in the language); null otherwise (all answered 404 alike). */
+export async function sizedVariant(userId: string | null, variantId: string, size: SizeId | null, lang: Lang | typeof ENGLISH | null = ENGLISH): Promise<DrawableVariant | null> {
+  if (!userId || !size || !lang) return null;
   const v = await drawableVariant(userId, variantId);
   if (!v || SIZES[size].channel !== v.channel) return null;
-  return v;
+  return lang === ENGLISH ? v : translatedVariant(userId, v, lang);
+}
+
+export type SizeFit = { size: SizeId; ok: true; layout: DrawLayoutId } | { size: SizeId; ok: false; refused: string; part: RefusalPart };
+
+/**
+ * C7-2: whether words fit each size of a channel for an ad, decided as
+ * drawInSize decides (the square in the ad's own layout; other sizes trying
+ * its layout first, then the size's others), without drawing. A refusal
+ * names the part of the ad's own layout (or the size's first) that didn't fit.
+ */
+export async function fitInSizes(base: Omit<RenderInput, "image" | "layout" | "size">, own: LayoutId, channel: string): Promise<SizeFit[]> {
+  const out: SizeFit[] = [];
+  for (const size of sizesFor(channel)) {
+    const layouts: DrawLayoutId[] = size.id === SQUARE ? [own] : layoutsToTry(size, own);
+    const refusals: { refused: string; part: RefusalPart }[] = [];
+    let fitted: DrawLayoutId | null = null;
+    for (const layout of layouts) {
+      const r = await fitAd({ ...base, layout, size: size.id });
+      if (r.ok) {
+        fitted = layout;
+        break;
+      }
+      refusals.push({ refused: r.refused, part: r.part });
+    }
+    out.push(fitted ? { size: size.id, ok: true, layout: fitted } : { size: size.id, ok: false, refused: [...new Set(refusals.map((r) => r.refused))].join("; "), part: refusals[0].part });
+  }
+  return out;
 }
 
 async function draw(parts: VariantParts, v: DrawableVariant, size: SizeSpec): Promise<SizeDrawing> {
@@ -113,14 +164,14 @@ export type SizeView = {
       layoutName: string;
       /** The ad's own layout couldn't hold the words in this size, so another drew it. */
       fellBack: boolean;
-      badges: { key: "contrast" | "fit" | "legal" | "logo" | "simulated" | "upscaled"; label: string; tone: "good" | "warn" | "info"; detail: string }[];
+      badges: { key: "contrast" | "fit" | "legal" | "logo" | "simulated" | "upscaled" | "translation"; label: string; tone: "good" | "warn" | "info"; detail: string }[];
     }
   | { ok: false; reason: string }
 );
 
 const LAYOUT_LABEL: Record<DrawLayoutId, string> = { "full-bleed": "Full bleed", split: "Split", card: "Card", banner: "Banner" };
 
-function badgesFor(checks: RenderChecks<DrawLayoutId>, size: SizeSpec): Extract<SizeView, { ok: true }>["badges"] {
+function badgesFor(checks: RenderChecks<DrawLayoutId>, size: SizeSpec, translation: { simulated: boolean } | null = null): Extract<SizeView, { ok: true }>["badges"] {
   const ratio = Math.min(checks.contrast.headline, checks.contrast.cta);
   const badges: Extract<SizeView, { ok: true }>["badges"] = [
     { key: "contrast", label: `Contrast ${ratio.toFixed(1)}:1`, tone: "good", detail: `Text ${checks.contrast.headline.toFixed(1)}:1 on its panel, button ${checks.contrast.cta.toFixed(1)}:1 (AA).` },
@@ -141,7 +192,16 @@ function badgesFor(checks: RenderChecks<DrawLayoutId>, size: SizeSpec): Extract<
       detail: `The picture is ${pic.source.width} × ${pic.source.height} and is enlarged ${pic.upscale.toFixed(2)} times to fill ${pic.box.width} × ${pic.box.height}, so it may look soft. Pictures drawn from Sprint 7 are 2K.`,
     });
   }
+  // Rule 1 (C7-2): every translated ad says it is a machine translation.
+  if (translation) badges.push(translationBadge(translation.simulated));
   return badges;
+}
+
+/** The "Machine translation" badge (rule 1), as the gallery and the Sizes view show it. */
+export function translationBadge(simulated: boolean): { key: "translation"; label: string; tone: "info"; detail: string } {
+  return simulated
+    ? { key: "translation", label: MACHINE_TRANSLATION.simulatedLabel, tone: "info", detail: `${MACHINE_TRANSLATION.simulatedDetail} ${MACHINE_TRANSLATION.detail}` }
+    : { key: "translation", label: MACHINE_TRANSLATION.label, tone: "info", detail: MACHINE_TRANSLATION.detail };
 }
 
 /**
@@ -151,13 +211,34 @@ function badgesFor(checks: RenderChecks<DrawLayoutId>, size: SizeSpec): Extract<
 export async function adSizes(
   userId: string,
   variantId: string,
-): Promise<{ variantId: string; campaignId: string; channel: string; headline: string; sizes: SizeView[] } | null> {
-  const v = await drawableVariant(userId, variantId);
-  if (!v) return null;
+  langParam: string | null = null,
+): Promise<{
+  variantId: string;
+  campaignId: string;
+  channel: string;
+  headline: string;
+  /** C7-2: the language shown, and the ad's languages (English first) for the switcher. */
+  lang: Lang | typeof ENGLISH;
+  langName: string;
+  languages: { lang: Lang | typeof ENGLISH; name: string }[];
+  machineTranslation: { label: string; detail: string } | null;
+  sizes: SizeView[];
+} | null> {
+  const lang = langFromQuery(langParam);
+  const english = await drawableVariant(userId, variantId);
+  if (!english || !lang) return null;
+  const translated = lang === ENGLISH ? null : await translatedVariant(userId, english, lang);
+  if (lang !== ENGLISH && !translated) return null;
+  const v = translated ?? english;
   const [row] = await asUser(userId, (tx) => tx`
-    select v.campaign_id, s.set ->> 'headline' as headline
-    from public.ad_variants v join public.copy_sets s on s.id = v.copy_set_id where v.id = ${v.id}`);
+    select v.campaign_id, (select s.set ->> 'headline' from public.copy_sets s where s.id = ${v.copySetId}) as headline,
+      (select coalesce(array_agg(t.lang order by t.lang), '{}') from public.copy_sets t
+        where t.translated_from = v.copy_set_id and t.discarded_at is null) as langs
+    from public.ad_variants v where v.id = ${v.id}`);
   if (!row) return null;
+  const have = new Set(row.langs as string[]);
+  const languages = [{ lang: ENGLISH as Lang | typeof ENGLISH, name: LANG_NAMES[ENGLISH] }, ...(Object.keys(LANG_NAMES) as Lang[]).filter((l) => have.has(l)).map((l) => ({ lang: l, name: LANG_NAMES[l] }))];
+  const badge = translated ? translationBadge(translated.simulatedWords) : null;
   const sizes = sizesFor(v.channel);
   let parts: VariantParts | null | undefined;
   const views: SizeView[] = [];
@@ -165,14 +246,24 @@ export async function adSizes(
     const key = sizeEtag(v, size.id);
     if (!cache.map.has(key) && parts === undefined) parts = await asUser(userId, (tx) => loadParts(tx, v.imageAssetId, v.copySetId, v.kit));
     const d = await drawInSize(userId, v, size.id, parts ?? null);
-    const base = { size: size.id, name: size.name, ratio: size.ratio, width: size.width, height: size.height, src: `/ads/${v.id}/${size.id}.png` };
+    const base = { size: size.id, name: size.name, ratio: size.ratio, width: size.width, height: size.height, src: `/ads/${v.id}/${size.id}.png${translated ? `?lang=${translated.lang}` : ""}` };
     views.push(
       d.ok
-        ? { ...base, ok: true, layout: d.layout, layoutName: LAYOUT_LABEL[d.layout], fellBack: d.layout !== v.layout && d.layout !== "banner", badges: badgesFor(d.checks, size) }
+        ? { ...base, ok: true, layout: d.layout, layoutName: LAYOUT_LABEL[d.layout], fellBack: d.layout !== v.layout && d.layout !== "banner", badges: badgesFor(d.checks, size, translated ? { simulated: translated.simulatedWords } : null) }
         : { ...base, ok: false, reason: sentence(d.refused) },
     );
   }
-  return { variantId: v.id, campaignId: row.campaign_id as string, channel: v.channel, headline: (row.headline as string) ?? "", sizes: views };
+  return {
+    variantId: v.id,
+    campaignId: row.campaign_id as string,
+    channel: v.channel,
+    headline: ((row.headline as string) ?? "").split("\u00AD").join(""),
+    lang,
+    langName: LANG_NAMES[lang],
+    languages,
+    machineTranslation: badge ? { label: badge.label, detail: badge.detail } : null,
+    sizes: views,
+  };
 }
 
 /** "the legal lines don't fit ..." as a sentence for people. */

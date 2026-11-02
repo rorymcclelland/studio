@@ -16,6 +16,13 @@ import { copyOrder } from "../../scripts/copy-data.mjs";
 const base = new URL(process.env.DATABASE_URL ?? "postgres://postgres@localhost:54329/campaign_studio_test");
 const MIGRATIONS = join(process.cwd(), "db/migrations");
 const LAST_SUPABASE_FILE = "20261028000005_sprint5_review_fixes.sql";
+/**
+ * The last file on Neon's production branch when the copy ran (Sprint 6). The
+ * copy was a one-off at the cutover and N-7a removes it, so later migrations
+ * that change the schema (C7-2 added brand_languages and copy_sets.lang) are
+ * not its concern: the target is built as production was then.
+ */
+const LAST_CUTOVER_FILE = "20261029000003_ensure_workspace_fast_path.sql";
 const made: string[] = [];
 const madeRoles: string[] = [];
 const dirs: string[] = [];
@@ -55,8 +62,18 @@ const migrate = (url: string, dir?: string) => {
   expect(r.code, r.err).toBe(0);
 };
 
+/** The migration files on production at the cutover, in a folder of their own (built once). */
+let cutoverDir: string | null = null;
+function cutoverEra(): string {
+  if (!cutoverDir) {
+    cutoverDir = mkdtempSync(join(tmpdir(), "cs-cutover-"));
+    dirs.push(cutoverDir);
+    for (const f of readdirSync(MIGRATIONS).filter((f) => f <= LAST_CUTOVER_FILE)) copyFileSync(join(MIGRATIONS, f), join(cutoverDir, f));
+  }
+  return cutoverDir;
+}
 const copy = (from: string, to: string, extra: string[] = []) =>
-  run("scripts/copy-data.mjs", ["--from", "COPY_FROM", "--to", "COPY_TO", ...extra], { COPY_FROM: from, COPY_TO: to });
+  run("scripts/copy-data.mjs", ["--from", "COPY_FROM", "--to", "COPY_TO", "--dir", cutoverEra(), ...extra], { COPY_FROM: from, COPY_TO: to });
 const check = (a: string, b: string) => run("scripts/check-copy.mjs", ["--a", "CHECK_A", "--b", "CHECK_B"], { CHECK_A: a, CHECK_B: b });
 
 /** A fixed uuid whose sort position is set by `tail` (so a child can sort before its parent). */
@@ -257,7 +274,7 @@ async function seed(sql: postgres.Sql) {
     values (${ID.av3}, ${ID.w1}, ${ID.campaign}, 2, ${ID.image2}, ${ID.cs4}, 'card', ${checks}, ${kit}, 'composed', ${ID.runCreative}, now(), ${ID.rory})`;
 }
 
-/** Neon's production branch: every file, owned by a role that is not a superuser. Returns that role's URL. */
+/** Neon's production branch at the cutover: every file up to then, owned by a role that is not a superuser. Returns that role's URL. */
 async function buildTarget(): Promise<{ url: string; db: string; owner: string }> {
   const owner = `cs_owner_${randomBytes(3).toString("hex")}`;
   await admin(async (sql) => {
@@ -267,7 +284,7 @@ async function buildTarget(): Promise<{ url: string; db: string; owner: string }
   madeRoles.push(owner);
   const db = await freshDb(owner);
   const url = urlFor(db, owner);
-  migrate(url);
+  migrate(url, cutoverEra());
   return { url, db, owner };
 }
 

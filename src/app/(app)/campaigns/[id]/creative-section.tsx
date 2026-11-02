@@ -20,11 +20,13 @@ import { formatPence, formatWhen } from "@/lib/format";
 import {
   AdControls,
   CopySetControls,
+  DiscardTranslationButton,
   KeepSetButtons,
   KeepWordsButtons,
   MakeCreativeButton,
   RedrawAllButton,
   RestoreButton,
+  TranslateButton,
   type FieldSpec,
 } from "./creative-controls";
 
@@ -38,6 +40,7 @@ const RUN_KIND: Record<CreativeRunView["kind"], string> = {
   words: "New words",
   imagery: "Imagery agent",
   copy: "Copy agent",
+  translate: "Translate",
 };
 
 const CHANNEL_NAME: Record<string, string> = {
@@ -72,7 +75,8 @@ export function CreativeSection({ view }: { view: CreativeView }) {
     running ||
     view.variants.some((v) => v.busy.picture || v.busy.words) ||
     Object.keys(view.busySets).length > 0 ||
-    view.runs.some((r) => RUNNING.has(r.status));
+    view.runs.some((r) => RUNNING.has(r.status)) ||
+    !!view.translate.runningRunId;
   const lastMake = view.runs.find((r) => r.kind === "make") ?? null;
   const makeProblem = lastMake && !RUNNING.has(lastMake.status) && lastMake.status !== "completed" ? lastMake : null;
   const usedIn = new Map<string, number>();
@@ -164,6 +168,7 @@ export function CreativeSection({ view }: { view: CreativeView }) {
               <p className="text-ink-2" data-gallery-summary="">
                 {plural(view.variants.length, "ad")}, {picked} picked. Each shows its checks: contrast, fit and the legal line.
               </p>
+              <Languages view={view} />
               {view.olderKitCount > 0 && (
                 <div
                   className="flex flex-col gap-3 rounded-field bg-review-soft px-4 py-3 text-review-ink sm:flex-row sm:items-center sm:justify-between"
@@ -322,6 +327,7 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
           <KeepWordsButtons campaignId={view.campaignId} variantId={v.id} usedIn={usedIn} />
         </div>
       )}
+      <Translations view={view} v={v} number={number} />
       <AdControls
         campaignId={view.campaignId}
         variantId={v.id}
@@ -370,6 +376,19 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
               <span className="font-semibold text-ink">Legal line:</span> {v.words.legalLines.join(" ")}
             </li>
           )}
+          {v.translations.map((t) => (
+            <li key={t.lang} className="wrap-anywhere" data-translation-words={t.lang}>
+              <span className="font-semibold text-ink">
+                {t.name} ({t.badge.label.toLowerCase()}):
+              </span>{" "}
+              {t.headline}. {t.body} Button: {t.cta}. {t.legalLines.length > 0 && <>Legal lines: {t.legalLines.join(" ")}</>}
+            </li>
+          ))}
+          {v.translations.length > 0 && (
+            <li className="wrap-anywhere">
+              <span className="font-semibold text-ink">{v.translations[0].badge.label}:</span> {v.translations[0].badge.detail}
+            </li>
+          )}
           <li className="flex flex-wrap gap-x-3 gap-y-1">
             {v.image.runId && <TextLink href={`/runs/${v.image.runId}`}>The picture&apos;s run</TextLink>}
             {v.words.runId && <TextLink href={`/runs/${v.words.runId}`}>The words&apos; run</TextLink>}
@@ -378,6 +397,122 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
         </ul>
       </details>
     </li>
+  );
+}
+
+/**
+ * C7-2: the brand's languages and Translate on the whole pick. Each language
+ * is allowed, or refused with the reason (no legal lines for it); the cost is
+ * on the button (rule 3).
+ */
+function Languages({ view }: { view: CreativeView }) {
+  const t = view.translate;
+  const running = !!t.runningRunId;
+  const demo = t.languages.some((l) => l.writtenForDemo);
+  return (
+    <div className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" data-languages="">
+      <div className="min-w-0 max-w-prose space-y-1.5">
+        <p className="font-semibold">Languages</p>
+        {t.languages.length === 0 ? (
+          <p className="text-sm text-ink-2">
+            The brand has no languages yet.{" "}
+            <TextLink href={`/brands/${view.brandId}/languages`}>Choose them on the brand&apos;s Languages page</TextLink>, with the legal lines
+            for each.
+          </p>
+        ) : (
+          <>
+            <ul aria-label="The brand's languages" className="flex flex-wrap gap-1.5">
+              {t.languages.map((l) => (
+                <li key={l.lang} data-language={l.lang} title={l.reason ?? undefined}>
+                  <Pill tone={l.allowed ? "neutral" : "attention"} wrap>
+                    {l.name}
+                    {l.allowed ? "" : ": no legal lines"}
+                  </Pill>
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-ink-2">
+              The Localise agent translates the words of picked ads; each translation is checked in every size and badged
+              &ldquo;Machine translation&rdquo;. Legal lines are the brand&apos;s own for each language
+              {demo ? " (written by Claude for the demo)" : ""}, never machine-translated.{" "}
+              <TextLink href={`/brands/${view.brandId}/languages`}>Languages page</TextLink>
+            </p>
+          </>
+        )}
+        {running && (
+          <p role="status" className="text-sm text-primary">
+            Translating. <TextLink href={`/runs/${t.runningRunId}`}>See the run</TextLink>
+          </p>
+        )}
+      </div>
+      {t.languages.length > 0 && (
+        <TranslateButton
+          campaignId={view.campaignId}
+          label="Translate the picked ads"
+          estimate={t.picked.estimate}
+          reason={t.picked.reason}
+          running={running}
+          align="end"
+        />
+      )}
+    </div>
+  );
+}
+
+/** C7-2: an ad's translations, each a thumbnail that opens its sizes, badged "Machine translation" (rule 1); Translate on a picked ad. */
+function Translations({ view, v, number }: { view: CreativeView; v: VariantView; number: number }) {
+  if (v.translations.length === 0 && !v.picked) return null;
+  const running = !!view.translate.runningRunId;
+  return (
+    <div className="space-y-2" data-translations="">
+      {v.translations.length > 0 && (
+        <ul aria-label={`Ad ${number} in other languages`} className="grid grid-cols-3 gap-2">
+          {v.translations.map((t) => (
+            <li key={t.lang} data-translation={t.lang} className="min-w-0">
+              <a
+                href={t.sizesHref}
+                title={`${t.name}: every size, with its checks`}
+                className="block rounded-field focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element -- a drawn PNG behind the session, not a static asset */}
+                <img
+                  src={t.src}
+                  width={1080}
+                  height={1080}
+                  loading="lazy"
+                  alt={`Ad ${number} in ${t.name}, a machine translation, opens its sizes. Headline: ${t.headline}. Button: ${t.cta}.`}
+                  className="block aspect-square h-auto w-full rounded-field bg-surface-2 object-contain"
+                />
+                <span className="mt-1 block text-sm font-semibold">{t.name}</span>
+              </a>
+              <DiscardTranslationButton campaignId={view.campaignId} setId={t.setId} what={`the ${t.name} translation of ad ${number}`} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {v.translations.length > 0 && (
+        <p className="flex flex-wrap items-center gap-1.5" data-badge="translation" title={v.translations[0].badge.detail}>
+          <Pill tone="review" wrap>
+            {v.translations.some((t) => t.simulated) ? "Machine translation (simulated)" : "Machine translation"}
+          </Pill>
+        </p>
+      )}
+      {v.picked && v.translate.todo > 0 && (
+        <TranslateButton
+          campaignId={view.campaignId}
+          variantId={v.id}
+          label={v.translations.length ? "Translate the rest" : "Translate"}
+          estimate={v.translate.estimate}
+          reason={v.translate.reason}
+          running={running}
+        />
+      )}
+      {v.picked && v.translate.todo === 0 && v.translations.length === 0 && v.translate.reason && (
+        <p className="text-sm text-ink-2 wrap-anywhere" data-translate-reason="">
+          {v.translate.reason}
+        </p>
+      )}
+    </div>
   );
 }
 
