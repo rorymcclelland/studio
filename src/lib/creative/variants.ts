@@ -5,6 +5,7 @@ import { asUser, type Tx } from "@/lib/db/scoped";
 import type { PaletteColour } from "./render/colour";
 import { LAYOUT_IDS, LAYOUT_SPECS, type LayoutId } from "./render/layouts";
 import { renderAd, type RenderChecks, type RenderInput } from "./render/render";
+import { SQUARE, type SizeId } from "./render/sizes";
 
 // S5-3 and S5-4: ad variants. A variant is one picture, one paid-social (or
 // display) copy set and one layout, drawn in code by renderAd (rule 8). The
@@ -128,10 +129,21 @@ export function kitHash(kit: KitSnapshot): string {
   return createHash("sha256").update(JSON.stringify(kit)).digest("hex");
 }
 
-/** The ETag of a drawn ad: the renderer's version and its parts' hashes (assets and copy sets never change, so their ids and hashes are enough). */
-export function adEtag(p: { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot; simulated: boolean }): string {
+/** Bump when a size other than the square draws differently (C7-1); the square's ETag doesn't include it. */
+export const SIZES_VERSION = 1;
+
+export type EtagParts = { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot; simulated: boolean };
+
+/**
+ * The ETag of a drawn ad: the renderer's version and its parts' hashes (assets
+ * and copy sets never change, so their ids and hashes are enough). C7-1: a
+ * size other than the 1080 square adds the size, so each size revalidates on
+ * its own; the square's is unchanged (it is the same drawing as before sizes).
+ */
+export function adEtag(p: EtagParts & { size?: SizeId }): string {
+  const sized = p.size && p.size !== SQUARE ? [`size:${p.size}`, `sizes:${SIZES_VERSION}`] : [];
   const h = createHash("sha256")
-    .update([RENDER_VERSION, p.imageSha256, p.copySetId, p.layout, kitHash(p.kit), p.simulated ? "simulated" : "real"].join("|"))
+    .update([RENDER_VERSION, p.imageSha256, p.copySetId, p.layout, kitHash(p.kit), p.simulated ? "simulated" : "real", ...sized].join("|"))
     .digest("hex")
     .slice(0, 40);
   return `"ad-${h}"`;
@@ -321,7 +333,17 @@ export async function composeVariants(
   return result;
 }
 
-export type DrawableVariant = { id: string; layout: LayoutId; etag: string; imageAssetId: string; copySetId: string; kit: KitSnapshot };
+export type DrawableVariant = {
+  id: string;
+  layout: LayoutId;
+  etag: string;
+  imageAssetId: string;
+  copySetId: string;
+  kit: KitSnapshot;
+  /** C7-1: the words' channel decides the sizes; the ETag's parts make each size's ETag. */
+  channel: AdChannel;
+  etagParts: EtagParts;
+};
 
 /**
  * A variant that can be drawn for the signed-in user, or null: another
@@ -332,20 +354,23 @@ export type DrawableVariant = { id: string; layout: LayoutId; etag: string; imag
 export async function drawableVariant(userId: string, variantId: string): Promise<DrawableVariant | null> {
   if (!UUID.test(variantId)) return null;
   const [v] = await asUser(userId, (tx) => tx`
-    select v.id, v.layout, v.kit, v.image_asset_id, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, s.discarded_at as words_discarded
+    select v.id, v.layout, v.kit, v.image_asset_id, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, s.discarded_at as words_discarded, s.channel
     from public.ad_variants v
     join public.assets a on a.id = v.image_asset_id
     join public.copy_sets s on s.id = v.copy_set_id
     where v.id = ${variantId}`);
   if (!v || v.image_discarded || v.words_discarded) return null;
   const kit = v.kit as KitSnapshot;
+  const etagParts: EtagParts = { imageSha256: v.sha256 as string, copySetId: v.copy_set_id as string, layout: v.layout as string, kit, simulated: v.simulated === true };
   return {
     id: v.id as string,
     layout: v.layout as LayoutId,
     imageAssetId: v.image_asset_id as string,
     copySetId: v.copy_set_id as string,
     kit,
-    etag: adEtag({ imageSha256: v.sha256 as string, copySetId: v.copy_set_id as string, layout: v.layout as string, kit, simulated: v.simulated === true }),
+    channel: v.channel as AdChannel,
+    etagParts,
+    etag: adEtag(etagParts),
   };
 }
 

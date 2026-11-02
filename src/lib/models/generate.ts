@@ -372,7 +372,7 @@ export async function generateImage(input: GenerateImageInput): Promise<Generate
       ...(input.seed !== undefined ? { seed: input.seed } : {}),
       providerOptions: {
         google: { imageConfig: { imageSize: cfg.size } },
-        ...(cfg.provider === "mock" ? { mock: { palette: input.palette ?? [] } } : {}),
+        ...(cfg.provider === "mock" ? { mock: { palette: input.palette ?? [], size: cfg.size } } : {}),
       },
       maxRetries: 0,
       abortSignal: AbortSignal.timeout(IMAGE_TIMEOUT_MS),

@@ -1,4 +1,5 @@
 import { etagMatches } from "@/lib/http/etag";
+import { drawInSize, sizedVariant, sizeEtag, sizeFromPath } from "./ad-sizes";
 import { drawableVariant, drawVariant } from "./variants";
 
 // S5-3: what /ads/[variantId] answers. Kept out of the route file so tests can
@@ -72,5 +73,38 @@ export async function adResponse(userId: string | null, segment: string, ifNoneM
   return new Response(new Uint8Array(png), {
     status: 200,
     headers: { ...headers, "content-type": "image/png", "content-length": String(png.length) },
+  });
+}
+
+/**
+ * C7-1: an ad in one size of its channel (/ads/<id>/<size>.png). The same
+ * access check as /ads/<id> (rule 7), then the size: an unknown size, or one
+ * from the other channel, is the same plain 404 as another workspace's ad. The
+ * size is in the ETag (the square's is the ad's own). A size the renderer
+ * refuses (the words or the legal lines don't fit it at a readable size) is a
+ * 422 with the reason, which the Sizes view also shows.
+ */
+export async function adSizeResponse(userId: string | null, variantSegment: string, sizeSegment: string, ifNoneMatch: string | null = null): Promise<Response> {
+  const size = sizeFromPath(sizeSegment);
+  const variant = size ? await sizedVariant(userId, variantIdFromPath(variantSegment), size) : null;
+  if (!variant || !userId || !size) return NOT_FOUND();
+  const etag = sizeEtag(variant, size);
+  const headers = {
+    "cache-control": "private, no-cache",
+    etag,
+    "x-content-type-options": "nosniff",
+    "content-security-policy": "default-src 'none'; sandbox",
+  };
+  if (etagMatches(ifNoneMatch, etag)) return new Response(null, { status: 304, headers });
+  const drawn = await drawInSize(userId, variant, size);
+  if (!drawn.ok) {
+    return new Response(`This size can't be drawn: ${drawn.refused}.`, {
+      status: 422,
+      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store", "x-content-type-options": "nosniff" },
+    });
+  }
+  return new Response(new Uint8Array(drawn.png), {
+    status: 200,
+    headers: { ...headers, "content-type": "image/png", "content-length": String(drawn.png.length) },
   });
 }

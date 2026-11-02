@@ -24,7 +24,7 @@ type Case = { name: string; input: () => Promise<RenderInput> };
 
 async function picture(palette: string[]): Promise<Buffer> {
   // A 1K mock picture (1024 × 1024), as every picture made before Sprint 7 is.
-  const png = await drawMockImage({ prompt: "golden", palette, aspect: "1:1", seed: 1, size: "1K" } as Parameters<typeof drawMockImage>[0]);
+  const png = await drawMockImage({ prompt: "golden", palette, aspect: "1:1", seed: 1, size: "1K" });
   return Buffer.from(png);
 }
 

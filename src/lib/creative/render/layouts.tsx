@@ -182,7 +182,8 @@ function split(size: SizeSpec): LayoutSpec {
   // square picture whole in a band at most as tall as the canvas is wide, leaving the square's text room;
   // the landscape puts it whole on the left, as tall as the canvas.
   const band = mode === "square" ? Math.round(c.H * 0.6) : mode === "top" ? Math.min(c.W, c.H - 432) : c.H;
-  const g = { ...c, kind: "split" as const, mode, band, border: r(8), padTop: r(44), padBottom: r(40), bodyGap: r(14), ctaGap: r(24), logoTop: r(56) } as const;
+  // Beside the picture, the words start below the "Simulated image" pill in the top right corner.
+  const g = { ...c, kind: "split" as const, mode, band, border: r(8), padTop: mode === "side" ? r(72) : r(44), padBottom: r(40), bodyGap: r(14), ctaGap: r(24), logoTop: r(56) } as const;
   const side = mode === "side";
   const textWidth = side ? c.W - band - g.border - 2 * c.margin : c.W - 2 * c.margin;
   return {
@@ -277,17 +278,17 @@ function banner(size: SizeSpec): LayoutSpec {
     plate: { padY: 4, padX: 8, radius: 6, shadow: "0 2px 6px rgba(0, 0, 0, 0.18)" },
   };
   const t = {
-    rectangle: { padX: 12, padY: 10, gap: 8, legalGap: 6, headline: [22, 20, 18, 16, 14], hLines: 2, cta: { size: 14, height: 30, padX: 14, maxWidth: 170 }, legal: [11, 10], logo: { maxWidth: 96, maxHeight: 24 }, minPicture: 56 },
-    "half-page": { padX: 18, padY: 16, gap: 14, legalGap: 10, headline: [32, 30, 28, 26, 24, 22, 20], hLines: 3, cta: { size: 17, height: 40, padX: 20, maxWidth: 240 }, legal: [12, 11, 10], logo: { maxWidth: 150, maxHeight: 34 }, minPicture: 120 },
+    rectangle: { padX: 12, padY: 10, gap: 8, legalGap: 6, headline: [22, 20, 18, 16, 14], hLines: 2, cta: { size: 14, height: 30, padX: 14, maxWidth: 200 }, legal: [11, 10], logo: { maxWidth: 96, maxHeight: 22 }, minPicture: 44 },
+    "half-page": { padX: 18, padY: 16, gap: 14, legalGap: 10, headline: [32, 30, 28, 26, 24, 22, 20], hLines: 3, cta: { size: 17, height: 40, padX: 20, maxWidth: 264 }, legal: [12, 11, 10], logo: { maxWidth: 150, maxHeight: 34 }, minPicture: 120 },
     leaderboard: { padX: 14, padY: 8, gap: 12, legalGap: 3, headline: [22, 20, 18, 16, 14], hLines: 1, cta: { size: 14, height: 34, padX: 16, maxWidth: 150 }, legal: [10], logo: { maxWidth: 100, maxHeight: 28 }, minPicture: H },
   }[mode];
   const g = { ...c, kind: "banner" as const, mode, padX: t.padX, padY: t.padY, gap: t.gap, legalGap: t.legalGap, minPicture: t.minPicture } as const;
-  // The leaderboard is one row: the square picture, the logo, the words and the button.
+  // The leaderboard is one row: the square picture, the logo, the words and the button. The other two put the
+  // logo on the picture's top left corner (as Full bleed does), so the button has its row to itself.
   const logoRoom = t.logo.maxWidth + 2 * c.plate.padX;
   const textWidth = mode === "leaderboard" ? W - H - 4 * t.padX - logoRoom - t.cta.maxWidth : W - 2 * t.padX;
   const legalBlock = (h: StackHeights) => (h.legal ? t.legalGap + h.legal : 0);
-  const plated = (h: StackHeights) => (h.logo ? h.logo + 2 * c.plate.padY : 0);
-  const text = (h: StackHeights) => 2 * t.padY + h.headline + t.gap + Math.max(h.cta, plated(h)) + legalBlock(h);
+  const text = (h: StackHeights) => 2 * t.padY + h.headline + t.gap + h.cta + legalBlock(h);
   return {
     id: "banner",
     name: "Banner",
@@ -645,15 +646,15 @@ function Banner(p: DrawProps): ReactElement {
   }
   return (
     <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, background: p.colours.panel }}>
-      <div style={{ display: "flex", width: g.W, height: box.height, overflow: "hidden", flexShrink: 0 }}>
+      <div style={{ display: "flex", position: "relative", width: g.W, height: box.height, overflow: "hidden", flexShrink: 0 }}>
         <Picture p={p} box={box} />
+        <Logo p={p} plate style={{ position: "absolute", top: BANNER_LABEL.top, left: BANNER_LABEL.top }} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", flexGrow: 1, padding: `${g.padY}px ${g.padX}px` }}>
         <div style={{ display: "flex", flexDirection: "column" }}>
           <Headline p={p} />
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: g.gap }}>
+          <div style={{ display: "flex", marginTop: g.gap }}>
             <Button p={p} />
-            <Logo p={p} plate={!lightPanel} />
           </div>
         </div>
         <Legal p={p} style={{ marginTop: g.legalGap }} />
