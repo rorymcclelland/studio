@@ -1,0 +1,14 @@
+{
+  "success": false,
+  "files": [
+    {
+      "file": "tests/lib/sample.test.ts",
+      "tests": [
+        { "title": "passes", "ancestors": ["sample"], "status": "passed" },
+        { "title": "fails", "ancestors": ["sample"], "status": "failed" },
+        { "title": "inner one", "ancestors": ["a group"], "status": "passed" },
+        { "title": "inner two", "ancestors": ["a group"], "status": "passed" }
+      ]
+    }
+  ]
+}

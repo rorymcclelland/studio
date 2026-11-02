@@ -9,7 +9,7 @@
 // and Redraw with current kit (one ad, or all) redraws them, with undo.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { contrastViolations, demoBrandId, expectNoHorizontalScroll, settle, signIn } from "./helpers";
+import { caption, contrastViolations, demoBrandId, expectNoHorizontalScroll, settle, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan in January";
 
@@ -238,9 +238,9 @@ test("S5-4 #6: every action on an ad is reachable by keyboard at 375 px", async 
   await expect(edit).toBeFocused();
 });
 
-test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", async ({ page }) => {
+test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", { annotation: [{ type: "case", description: "F-26.1" }, { type: "case", description: "F-26.2" }, { type: "case", description: "F-26.3" }, { type: "case", description: "F-26.4" }] }, async ({ page }) => {
   test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to change the brand's palette");
-  test.setTimeout(300_000);
+  test.setTimeout(600_000);
   const quill = await demoBrandId(page, "Quillmoor Money");
   await newQuillmoorCampaign(page);
   const panel = visible(page, "[data-signoff-panel]");
@@ -251,14 +251,16 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
   await page.reload();
   await settle(page);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
-  await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
   // #3: on the current kit, no ad offers a redraw.
+  await caption(page, "F-26.3: every ad is on the current kit, so none offers a redraw");
   await expect(page.locator("[data-older-kit]")).toHaveCount(0);
   await expect(creative(page).getByRole("button", { name: /^Redraw/ })).toHaveCount(0);
 
   const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
   const [{ palette }] = await sql`select palette from public.brands where id = ${quill}`;
   try {
+    await caption(page, "The brand's palette changes: every ad says it was made with an older kit");
     // A palette change (the same colours in another order changes which panel colour each layout prefers).
     await sql`update public.brands set palette = ${sql.json([...(palette as unknown[])].reverse() as never)} where id = ${quill}`;
     await page.reload();
@@ -275,6 +277,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     }
     await page.setViewportSize({ width: 1280, height: 900 });
 
+    await caption(page, "F-26.1, F-26.4: pick ad 1 and redraw it with the current kit: the pick carries over");
     // #1 and #4: one ad redrawn; the pick carries over to the redrawn ad.
     const firstId = (await ad(page, 1).getAttribute("data-ad"))!;
     await ad(page, 1).getByRole("button", { name: "Pick ad 1" }).click();
@@ -288,6 +291,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await expect(picked.locator("[data-badge=kit]")).toHaveCount(0);
     await expect(bar).toContainText("11 ads were made with an older kit.");
 
+    await caption(page, "F-26.2: undo brings the old ad back, with its pick");
     // #2: undo brings the old ad back (with the pick) and discards the redrawn one.
     const old = page.locator(`[data-discarded-ad="${firstId}"]`);
     await expect(old).toContainText("Restoring it brings back the older kit");
@@ -297,6 +301,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await expect(bar).toContainText("All 12 ads were made with an older kit.");
 
     // Redraw all.
+    await caption(page, "Redraw all 12 older ads with the current kit, at no AI cost");
     await bar.getByRole("button", { name: /^Redraw all 12 older ads/ }).click();
     // Twelve drawings in code: a few seconds.
     await expect(toast(page, "12 ads redrawn with the current kit.")).toBeVisible({ timeout: 30_000 });
