@@ -23,6 +23,7 @@ import {
   type AdWords,
   type KitSnapshot,
   type LayoutId,
+  type PictureCache,
   type Rendered,
   type VariantOrigin,
 } from "./variants";
@@ -683,8 +684,8 @@ type Redraw = { ok: true; id: string; layout: LayoutId; checks: RenderChecks } |
 const PICTURE_BEING_DRAWN = "a new picture is being drawn for it";
 
 /** Draws an ad with the brand's kit as it is now, in its own layout (the same picture and words). Nothing is saved; no model is called. */
-async function drawWithKit(userId: string, ad: OlderAd, kit: KitSnapshot): Promise<Redraw> {
-  const parts = await asUser(userId, (tx) => loadParts(tx, ad.image_asset_id, ad.copy_set_id, kit));
+async function drawWithKit(userId: string, ad: OlderAd, kit: KitSnapshot, pictures?: PictureCache): Promise<Redraw> {
+  const parts = await asUser(userId, (tx) => loadParts(tx, ad.image_asset_id, ad.copy_set_id, kit, undefined, pictures));
   if (!parts) return { ok: false, id: ad.id, reason: "its picture or words couldn't be read" };
   const r = await renderAd(renderInputFor(parts, ad.layout));
   if ("refused" in r) return { ok: false, id: ad.id, reason: r.refused };
@@ -791,8 +792,9 @@ export async function redrawOlderAds(member: Member, campaignId: string): Promis
   if (older.length === 0) throw new CreativeError("Every ad already uses the brand's current kit.");
 
   const results: Redraw[] = [];
+  const pictures: PictureCache = new Map(); // each picture is shared by its ads' words: converted once
   for (const ad of older) {
-    results.push(loaded.busy.has(ad.id) ? { ok: false, id: ad.id, reason: PICTURE_BEING_DRAWN } : await drawWithKit(member.userId, ad, kit));
+    results.push(loaded.busy.has(ad.id) ? { ok: false, id: ad.id, reason: PICTURE_BEING_DRAWN } : await drawWithKit(member.userId, ad, kit, pictures));
   }
   const kept = results.flatMap((r) => (r.ok ? [] : [{ id: r.id, reason: r.reason }]));
   const ok = results.filter((r): r is Extract<Redraw, { ok: true }> => r.ok);

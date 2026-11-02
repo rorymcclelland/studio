@@ -5,7 +5,10 @@
 // is refused inline and saves nothing, and Pick and Discard survive a reload
 // with an undo. The grid is one column at 375 px and four at 1440 px, with AA
 // contrast. Plus S5-3 #6: a layout switch draws the ad in another layout.
+// F-26: after a palette change the ads say they were made with an older kit,
+// and Redraw with current kit (one ad, or all) redraws them, with undo.
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import postgres from "postgres";
 import { contrastViolations, demoBrandId, expectNoHorizontalScroll, settle, signIn } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan in January";
@@ -233,4 +236,76 @@ test("S5-4 #6: every action on an ad is reachable by keyboard at 375 px", async 
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
   await expect(edit).toBeFocused();
+});
+
+test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", async ({ page }) => {
+  test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to change the brand's palette");
+  test.setTimeout(300_000);
+  const quill = await demoBrandId(page, "Quillmoor Money");
+  await newQuillmoorCampaign(page);
+  const panel = visible(page, "[data-signoff-panel]");
+  await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
+  await panel.getByRole("button", { name: "Approve version 1" }).click();
+  await expect(toast(page, "Version 1 signed off.")).toBeVisible();
+  // Read the signed-off page afresh: this spec is about redrawing, not the sign-off panel's refresh.
+  await page.reload();
+  await settle(page);
+  await creative(page).getByRole("button", { name: /^Make creative/ }).click();
+  await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  // #3: on the current kit, no ad offers a redraw.
+  await expect(page.locator("[data-older-kit]")).toHaveCount(0);
+  await expect(creative(page).getByRole("button", { name: /^Redraw/ })).toHaveCount(0);
+
+  const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
+  const [{ palette }] = await sql`select palette from public.brands where id = ${quill}`;
+  try {
+    // A palette change (the same colours in another order changes which panel colour each layout prefers).
+    await sql`update public.brands set palette = ${sql.json([...(palette as unknown[])].reverse() as never)} where id = ${quill}`;
+    await page.reload();
+    await settle(page);
+    const bar = page.locator("[data-older-kit]");
+    await expect(bar).toContainText("All 12 ads were made with an older kit.");
+    await expect(page.locator("[data-gallery] [data-badge=kit]")).toHaveCount(12);
+    await expect(page.locator("[data-gallery] [data-badge=kit]").first()).toHaveText("Made with an older kit");
+    for (const width of [375, 1440]) {
+      await page.setViewportSize({ width, height: 900 });
+      await settle(page);
+      await expectNoHorizontalScroll(page, `older-kit ads at ${width}px`);
+      expect(await contrastViolations(page), `older-kit ads at ${width}px`).toEqual([]);
+    }
+    await page.setViewportSize({ width: 1280, height: 900 });
+
+    // #1 and #4: one ad redrawn; the pick carries over to the redrawn ad.
+    const firstId = (await ad(page, 1).getAttribute("data-ad"))!;
+    await ad(page, 1).getByRole("button", { name: "Pick ad 1" }).click();
+    await expect(toast(page, "Picked for the shortlist.")).toBeVisible();
+    await ad(page, 1).getByRole("button", { name: "Redraw ad 1 with the current kit, no AI cost" }).click();
+    await expect(toast(page, "Ad redrawn with the current kit.")).toBeVisible();
+    await expect(page.locator(`[data-gallery] [data-ad="${firstId}"]`)).toHaveCount(0);
+    await expect(ads(page)).toHaveCount(12);
+    const picked = page.locator("[data-gallery] > li[data-picked]");
+    await expect(picked).toHaveCount(1);
+    await expect(picked.locator("[data-badge=kit]")).toHaveCount(0);
+    await expect(bar).toContainText("11 ads were made with an older kit.");
+
+    // #2: undo brings the old ad back (with the pick) and discards the redrawn one.
+    const old = page.locator(`[data-discarded-ad="${firstId}"]`);
+    await expect(old).toContainText("Restoring it brings back the older kit");
+    await old.getByRole("button", { name: /^Restore the ad/ }).click();
+    await expect(toast(page, "Ad restored to the gallery.")).toBeVisible();
+    await expect(page.locator(`[data-gallery] [data-ad="${firstId}"]`)).toHaveAttribute("data-picked", "");
+    await expect(bar).toContainText("All 12 ads were made with an older kit.");
+
+    // Redraw all.
+    await bar.getByRole("button", { name: /^Redraw all 12 older ads/ }).click();
+    // Twelve drawings in code: a few seconds.
+    await expect(toast(page, "12 ads redrawn with the current kit.")).toBeVisible({ timeout: 30_000 });
+    await expect(bar).toHaveCount(0);
+    await expect(page.locator("[data-gallery] [data-badge=kit]")).toHaveCount(0);
+    await expect(ads(page)).toHaveCount(12);
+    await expectAdsDrawn(page);
+  } finally {
+    await sql`update public.brands set palette = ${sql.json(palette as never)} where id = ${quill}`;
+    await sql.end();
+  }
 });

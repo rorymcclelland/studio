@@ -152,6 +152,9 @@ export function adEtag(p: { imageSha256: string; copySetId: string; layout: stri
   return `"ad-${h}"`;
 }
 
+/** Pictures already converted to PNG, by asset id, so a batch (Redraw all) converts each picture once. */
+export type PictureCache = Map<string, VariantParts["picture"]>;
+
 /** Loads a picture (as PNG) and a set's words into parts, inside a transaction the caller holds. */
 export async function loadParts(
   tx: Tx,
@@ -159,14 +162,18 @@ export async function loadParts(
   copySetId: string,
   kit: KitSnapshot,
   override?: { words: AdWords; legalLines: string[] },
+  pictures?: PictureCache,
 ): Promise<VariantParts | null> {
-  const [img] = await tx`select bytes, sha256, simulated from public.assets where id = ${imageAssetId} and kind = 'image'`;
+  const cached = pictures?.get(imageAssetId);
+  const [img] = cached ? [null] : await tx`select bytes, sha256, simulated from public.assets where id = ${imageAssetId} and kind = 'image'`;
   const [cs] = await tx`select channel, set, legal_lines from public.copy_sets where id = ${copySetId}`;
-  if (!img || !cs) return null;
+  if ((!cached && !img) || !cs) return null;
   const words = override?.words ?? adWords(cs.channel as string, cs.set);
   if (!words) return null;
+  const picture = cached ?? { png: await pictureToPng(img!.bytes as Buffer), sha256: img!.sha256 as string, simulated: img!.simulated === true };
+  pictures?.set(imageAssetId, picture);
   return {
-    picture: { png: await pictureToPng(img.bytes as Buffer), sha256: img.sha256 as string, simulated: img.simulated === true },
+    picture,
     copy: words,
     legalLines: override?.legalLines ?? (cs.legal_lines as string[]),
     kit,
