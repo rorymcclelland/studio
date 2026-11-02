@@ -168,7 +168,8 @@ A picked ad becomes a launch pack: every size each channel needs, in English and
 | C7-3 | Launch pack: a streamed zip per campaign with manifest and README, picked ads only | M | Ready, Sprint 7 |
 | F-28 | Watch production for a week (the upstream report was dropped on 2 Nov: 4.0.0 rewrote that code; trying it is F-31) | S | Ready, Sprint 7 |
 | N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 7 (reminder on 12 Nov) |
-| N-8b | Test pack | S | Ready, Sprint 7 |
+| N-8b | Test pack, now hand checks only (real AI output, crops, demo legal lines) | S | Ready, Sprint 7 (narrowed 2 Nov, decision 0021) |
+| N-8c | Demo sign-off: case list `tests/e2e/cases.ts`, browser tests for Sizes and several audiences, recordings, results to `e2e-results/ci/<branch>`, the demo page, an independent QA review of the tests against the agreed cases | M | In progress, Sprint 7 (added 2 Nov, Rory) |
 
 ## Not yet in a sprint (ranked)
 
@@ -204,4 +205,5 @@ Re-ranked at the Sprint 6 close. Sprint 7 (Creative II with F-26, F-27, F-28 and
 | 29 Oct 2026 | Production moved to Neon (copy 68 s, "Copy matches"); the same day, a workspace-lock hang and dropped-connection crashes fixed (decision 0016: `postgres` 3.4.9 patched); idle transactions end after 15 s |
 | 2 Nov 2026 | Sprint 6 closed: all eight items done, N-7 split (N-7a after 12 Nov); new rows F-28 to F-30; Sprint 7 (Creative II) to be refined |
 | 2 Nov 2026 | F-28: don't report the 3.4.9 driver bugs upstream (4.0.0 rewrote that code and similar issues are closed); try 4.0.0 instead, as F-31 (Rory) |
+| 2 Nov 2026 | Studio adopts the build working agreement (decision 0021): Claude is QA, Rory signs off from a demo page built from CI's browser tests, hand checks only for real AI output; the live site changes only after sign-off. Sprint 7 had already been deployed to production (Rory approved) before its demo existed; its demo and sign-off follow, and from Sprint 8 the merge to `main` waits for sign-off (Rory) |
 | 2 Nov 2026 | Sprint 7 refined and confirmed (all as recommended): 2K pictures; three banners with honest refusals; per-brand languages, French, German and Spanish first; legal lines per language written by a person; Sonnet translates; picked ads in the pack, no approval to download; N-7a on or after 12 Nov |
