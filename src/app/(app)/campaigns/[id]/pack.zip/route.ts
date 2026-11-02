@@ -7,10 +7,12 @@ import { packResponse } from "@/lib/creative/pack";
 // (decision 0020): a buffered function response is capped at 4.5 MB on
 // Vercel; a streamed one isn't. No session, a malformed id and another
 // workspace's campaign are the same 404 (rule 7); no sign-off or nothing
-// picked is a 409 with the reason. A download publishes nothing and spends
+// picked, or a pack over 200 files, is a 409 with the reason. A download publishes nothing and spends
 // nothing, so it needs no approval (rule 3, Q6). Per-user, request-time work.
 
-// Drawing takes about half a second a file; a large pack can take minutes.
+// Drawing takes about half a second a file. A pack is at most 200 files
+// (about 100 s; PACK_MAX_FILES) and one is drawn at a time per instance (a
+// second request is a 429), so none is cut off at this limit (review fix 2).
 export const maxDuration = 300;
 
 export async function GET(_request: Request, ctx: RouteContext<"/campaigns/[id]/pack.zip">) {

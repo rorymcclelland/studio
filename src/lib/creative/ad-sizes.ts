@@ -186,19 +186,21 @@ function badgesFor(checks: RenderChecks<DrawLayoutId>, size: SizeSpec, translati
   ];
   if (checks.logo === "none") badges.push({ key: "logo", label: "No logo", tone: "warn", detail: "The brand has no logo yet. Upload one on the brand page." });
   if (checks.simulatedLabel) badges.push({ key: "simulated", label: "Simulated image", tone: "info", detail: "Drawn by the mock image model, not a real one." });
-  const pic = checks.picture;
-  if (pic && pic.upscale > UPSCALE_NOTE_ABOVE) {
-    const oneK = Math.max(pic.source.width, pic.source.height) <= 1024;
-    badges.push({
-      key: "upscaled",
-      label: oneK ? "Upscaled from a 1K picture" : "Upscaled picture",
-      tone: "warn",
-      detail: `The picture is ${pic.source.width} × ${pic.source.height} and is enlarged ${pic.upscale.toFixed(2)} times to fill ${pic.box.width} × ${pic.box.height}, so it may look soft. Pictures drawn from Sprint 7 are 2K.`,
-    });
-  }
+  const upscaled = checks.picture ? upscaleNote(checks.picture) : null;
+  if (upscaled) badges.push({ key: "upscaled", label: upscaled.label, tone: "warn", detail: upscaled.detail });
   // Rule 1 (C7-2): every translated ad says it is a machine translation.
   if (translation) badges.push(translationBadge(translation.simulated));
   return badges;
+}
+
+/** A picture enlarged more than UPSCALE_NOTE_ABOVE times, as the Sizes view and the launch pack note it; null otherwise. */
+export function upscaleNote(pic: NonNullable<RenderChecks["picture"]>): { label: string; detail: string } | null {
+  if (pic.upscale <= UPSCALE_NOTE_ABOVE) return null;
+  const oneK = Math.max(pic.source.width, pic.source.height) <= 1024;
+  return {
+    label: oneK ? "Upscaled from a 1K picture" : "Upscaled picture",
+    detail: `The picture is ${pic.source.width} × ${pic.source.height} and is enlarged ${pic.upscale.toFixed(2)} times to fill ${pic.box.width} × ${pic.box.height}, so it may look soft. New pictures are drawn at 2K.`,
+  };
 }
 
 /** The "Machine translation" badge (rule 1), as the gallery and the Sizes view show it. */

@@ -289,10 +289,16 @@ describe("C7-2 Languages", () => {
       const de = v.translate.languages.find((l) => l.lang === "de-DE")!;
       expect(de.allowed).toBe(false);
       expect(de.reason).toMatch(/no German legal lines, so its ads can't go out in German/);
+      // French and Spanish are still allowed, so the button works; the reason German is left out is visible text
+      // beside it (not only a tooltip on the language).
+      expect(v.translate.picked.reason ?? "").not.toMatch(/German/);
+      expect(v.translate.refusedNote).toBe(`German is left out: ${de.reason}`);
       // With German the only language, the button itself is refused with the reason.
       await saveBrandLanguages(a, quill, [{ lang: "de-DE", legalLines: [], bannedTerms: [] }]);
       const only = await view();
       expect(only.translate.picked.reason).toMatch(/no German legal lines/);
+      // Every language refused: the button's own reason says it, once.
+      expect(only.translate.refusedNote).toBeNull();
       expect(only.variants.find((x) => x.picked)!.translate.reason).toMatch(/no German legal lines/);
       await expect(startTranslate(a, campaign, "picked", noSend)).rejects.toThrow(/no German legal lines/);
       // A run asked for German directly (an old tab) leaves it out with the reason, and calls no model.
@@ -310,7 +316,8 @@ describe("C7-2 Languages", () => {
     for (const t of v.translations) {
       expect(t.badge.label).toBe("Machine translation (simulated)");
       expect(t.badge.detail).toContain(MACHINE_TRANSLATION.detail);
-      expect(t.src).toBe(`/ads/${v.id}/1080x1080.png?lang=${t.lang}`);
+      expect(t.thumb).toEqual({ src: `/ads/${v.id}/1080x1080.png?lang=${t.lang}`, size: "1080x1080", width: 1080, height: 1080 });
+      expect(t.thumbReason).toBeNull();
     }
     expect((await view()).translate.simulated).toBe(true);
     const sizes = (await adSizes(a.userId, v.id, "fr-FR"))!;
@@ -466,5 +473,67 @@ describe("C7-2 failures and tenancy", () => {
     const run = await execute(b, theirs);
     expect(run.status).toBe("failed");
     expect(run.error).toMatch(/isn't in this workspace/);
+  });
+});
+
+describe("review fix 8: a translated ad's thumbnail", () => {
+  /** A translation written straight into the table (as the Localise agent saves one), replacing any current one in that language. */
+  const put = (setId: string, lang: string, words: { headline: string; body: string; cta: string }, legalLines: string[]) =>
+    asUser(a.userId, async (tx) => {
+      await tx`update public.copy_sets set discarded_at = now() where translated_from = ${setId} and lang = ${lang} and discarded_at is null`;
+      const [s] = await tx`
+        insert into public.copy_sets (workspace_id, campaign_id, brief_version, channel, segment_ref, segment_title, set, legal_lines, source, created_by, lang, translated_from, simulated)
+        select workspace_id, campaign_id, brief_version, channel, segment_ref, segment_title, ${tx.json(words)}, ${legalLines}, 'agent', ${a.userId}, ${lang}, id, true
+        from public.copy_sets where id = ${setId}
+        returning id`;
+      return s.id as string;
+    });
+
+  const kitOf = async (variantId: string) => (await asUser(a.userId, (tx) => tx`select kit from public.ad_variants where id = ${variantId}`))[0].kit as KitSnapshot;
+  const baseFor = (kit: KitSnapshot, legalLines: string[]) => ({
+    legalLines,
+    logo: kit.logo && "svg" in kit.logo ? { svg: kit.logo.svg } : null,
+    palette: kit.palette,
+    fontPrimary: kit.fontPrimary,
+    fontSecondary: kit.fontSecondary,
+    brandName: kit.brandName,
+  });
+
+  it("is the first size the translation fits, at that size's own width and height (a display ad's medium rectangle, not a 1080 square)", async () => {
+    const ad = display[2];
+    const words = { headline: "Tu dinero, claro", body: "Redondea tus gastos.", cta: "Ver la app" };
+    const legal = DEMO_LANGUAGES.quillmoor["es-ES"].legalLines;
+    const setId = await put(ad.words.setId, "es-ES", words, legal);
+    const fits = await fitInSizes({ ...baseFor(await kitOf(ad.id), legal), copy: words }, ad.layout, "display");
+    const first = fits.find((f) => f.ok)!;
+    expect(first.size).toBe("300x250");
+    const t = (await view()).variants.find((x) => x.id === ad.id)!.translations.find((x) => x.setId === setId)!;
+    expect(t.thumb).toEqual({ src: `/ads/${ad.id}/300x250.png?lang=es-ES`, size: "300x250", width: 300, height: 250 });
+    expect(t.thumbReason).toBeNull();
+    // The thumbnail's address draws (it is a size the words fit).
+    expect((await adSizeResponse(a.userId, ad.id, "300x250.png", null, "es-ES")).status).toBe(200);
+  });
+
+  it("skips a size the words overflow: a German compound the square can't hold shows the first size that holds it", async () => {
+    const ad = social[1];
+    const words = { headline: "Sparkontenübersichtsverwaltungsseitenzug", body: "Runden Sie Alltagsausgaben auf.", cta: "App laden" };
+    const legal = DEMO_LANGUAGES.quillmoor["de-DE"].legalLines;
+    const fits = await fitInSizes({ ...baseFor(await kitOf(ad.id), legal), copy: words }, ad.layout, "paid social");
+    expect(fits[0]).toMatchObject({ size: "1080x1080", ok: false });
+    const first = fits.find((f) => f.ok)!;
+    const setId = await put(ad.words.setId, "de-DE", words, legal);
+    const t = (await view()).variants.find((x) => x.id === ad.id)!.translations.find((x) => x.setId === setId)!;
+    expect(t.thumb).toEqual({ src: `/ads/${ad.id}/${first.size}.png?lang=de-DE`, size: first.size, width: SIZES[first.size].width, height: SIZES[first.size].height });
+    expect((await adSizeResponse(a.userId, ad.id, `${first.size}.png`, null, "de-DE")).status).toBe(200);
+    expect((await adSizeResponse(a.userId, ad.id, "1080x1080.png", null, "de-DE")).status).toBe(422);
+  });
+
+  it("shows the reason instead of an image when no size holds the words", async () => {
+    const ad = display[2];
+    const legal = Array.from({ length: 12 }, (_, i) => `Mention légale numéro ${i + 1} : un texte réglementaire assez long pour ne tenir dans aucune bannière.`);
+    const setId = await put(ad.words.setId, "fr-FR", { headline: "Votre argent, clair", body: "Arrondissez vos dépenses.", cta: "Voir l'appli" }, legal);
+    const t = (await view()).variants.find((x) => x.id === ad.id)!.translations.find((x) => x.setId === setId)!;
+    expect(t.thumb).toBeNull();
+    expect(t.thumbReason).toMatch(/^No size of this ad can hold the French words\. The legal lines don't fit/);
   });
 });

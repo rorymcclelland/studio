@@ -47,6 +47,8 @@ create policy brand_languages_update on public.brand_languages for update to aut
 create policy brand_languages_delete on public.brand_languages for delete to authenticated using (public.is_member(workspace_id));
 
 revoke all on public.brand_languages from anon;
+-- Saving a brand's languages reads, adds, updates and removes rows; the rest of the default grant is taken back.
+revoke truncate, references, trigger on public.brand_languages from authenticated;
 
 -- Copy sets gain a language. Every set so far is British English. A
 -- translation names the English set it was made from, and records whether the

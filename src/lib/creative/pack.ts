@@ -1,17 +1,15 @@
 import { strToU8, Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import { asUser } from "@/lib/db/scoped";
-import { drawInSize, fitInSizes, sentence, translationBadge } from "./ad-sizes";
+import { drawInSize, sentence, translationBadge, upscaleNote } from "./ad-sizes";
+import { clearFitCache, fitBase, fitsFor, logoFor } from "./fit-cache";
 import { getCreative, type CreativeView, type VariantView } from "./gallery";
-import { ENGLISH, LANG_NAMES, MACHINE_TRANSLATION, SUPPORTED_LANGS, type Lang } from "./languages";
+import { brandLanguagesIn, DEMO_LANGUAGES, ENGLISH, isDemoSlug, LANG_NAMES, MACHINE_TRANSLATION, SUPPORTED_LANGS, WRITTEN_FOR_DEMO, type Lang } from "./languages";
 import type { RenderChecks } from "./render/render";
 import { SIZES, sizesFor, type DrawLayoutId, type SizeId } from "./render/sizes";
 import { languageOptions } from "./translate";
 import {
   adEtag,
-  kitHash,
   loadParts,
-  RENDER_VERSION,
-  SIZES_VERSION,
   type AdChannel,
   type AdWords,
   type DrawableVariant,
@@ -33,7 +31,9 @@ import {
 // from what was actually drawn. Nothing is left out silently: a size or
 // language that can't go in is listed with its reason. Simulated pictures and
 // words and machine translations are labelled in both manifests and the
-// README (rule 1).
+// README (rule 1), and so are legal lines written for the demo (Q4). A pack is
+// at most PACK_MAX_FILES drawings, and one pack is drawn at a time per server
+// instance (review fix 2): a larger or second one is refused with the reason.
 
 export const PACK_VERSION = 1;
 
@@ -87,6 +87,8 @@ export type PackItem = {
   setId: string;
   words: PackWords;
   legalLines: string[];
+  /** Q4: the language's legal lines were written by Claude for the demo, not by the brand (never for English). */
+  legalLinesWrittenForDemo: boolean;
   altText: string;
   picture: { assetId: string; simulated: boolean; model: string | null; idea: string | null };
   wordsFrom: { setId: string; source: "agent" | "person"; runId: string | null; model: string | null; simulated: boolean };
@@ -109,7 +111,16 @@ export type PackLeftOut = {
 };
 
 export type PackPlan = {
-  campaign: { id: string; objective: string; brandName: string; briefTitle: string | null; briefVersion: number; signedOffAt: Date | null };
+  campaign: {
+    id: string;
+    objective: string;
+    brandName: string;
+    /** One of the simulated demo brands (brands.is_simulated): the README says the brand is fictional only then. */
+    brandSimulated: boolean;
+    briefTitle: string | null;
+    briefVersion: number;
+    signedOffAt: Date | null;
+  };
   /** The picked ads, in gallery order, with their gallery numbers. */
   ads: { id: string; number: number; channel: AdChannel; audience: string; headline: string; layout: LayoutId }[];
   items: PackItem[];
@@ -120,29 +131,12 @@ export type PackPlan = {
 
 export type PackRefusal = { refused: string };
 
-type FitResult = Awaited<ReturnType<typeof fitInSizes>>;
-const FIT_MAX = 600;
-declare global {
-  var __csPackFitCache: Map<string, FitResult> | undefined;
-}
-// Fitting is pure in the words, legal lines, layout, kit and renderer, and copy sets never change, so the
-// gallery's file count is worked out once per set, layout and kit per instance (the page refreshes while runs go).
-const fitCache: Map<string, FitResult> = (globalThis.__csPackFitCache ??= new Map());
-
-async function fitsFor(setId: string, base: Parameters<typeof fitInSizes>[0], layout: LayoutId, channel: AdChannel, kit: KitSnapshot): Promise<FitResult> {
-  const key = [RENDER_VERSION, SIZES_VERSION, setId, layout, channel, kitHash(kit)].join("|");
-  const hit = fitCache.get(key);
-  if (hit) return hit;
-  const fits = await fitInSizes(base, layout, channel);
-  fitCache.set(key, fits);
-  while (fitCache.size > FIT_MAX) fitCache.delete(fitCache.keys().next().value as string);
-  return fits;
-}
-
-/** Forgets the planned fits (tests). */
+/** Forgets the planned fits (tests); the cache is shared with the gallery's thumbnails (fit-cache.ts). */
 export function clearPackFitCache() {
-  fitCache.clear();
+  clearFitCache();
 }
+
+const sameLines = (x: string[], y: readonly string[]) => x.length === y.length && x.every((l, i) => l === y[i]);
 
 function altText(idea: string | null, w: PackWords): string {
   const picture = idea?.trim() ? `${idea.trim().replace(/[.\s]+$/, "")}. ` : "";
@@ -166,7 +160,8 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
 
   return asUser(userId, async (tx) => {
     const [c] = await tx`
-      select c.objective, c.approved_at, c.brand_id, b.name as brand_name, bv.brief ->> 'title' as brief_title
+      select c.objective, c.approved_at, c.brand_id, b.name as brand_name, b.slug as brand_slug, b.is_simulated as brand_simulated,
+        bv.brief ->> 'title' as brief_title
       from public.campaigns c join public.brands b on b.id = c.brand_id
       left join public.brief_versions bv on bv.campaign_id = c.id and bv.version = c.approved_version
       where c.id = ${campaignId}`;
@@ -188,6 +183,17 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
       where translated_from = any(${setIds}::uuid[]) and discarded_at is null
       order by created_at`;
     const { options } = await languageOptions(tx, c.brand_id as string);
+    const brandLanguages = await brandLanguagesIn(tx, c.brand_id as string);
+    const brandSlug = c.brand_slug as string;
+    const brandSimulated = c.brand_simulated === true;
+    // Q4 and rule 1: a translation's legal lines are a snapshot. They are marked as written for the demo when the
+    // language's lines are still the ones written for the demo, or when they are the demo brand's own demo lines
+    // (a language edited or removed since keeps its old translations, still marked).
+    const demoLegal = (lang: Lang, lines: string[]) => {
+      const now = brandLanguages.find((l) => l.lang === lang);
+      if (now?.writtenForDemo && sameLines(lines, now.legalLines)) return true;
+      return brandSimulated && isDemoSlug(brandSlug) && lines.length > 0 && sameLines(lines, DEMO_LANGUAGES[brandSlug][lang].legalLines);
+    };
     const logos = new Map<string, Buffer | null>();
 
     const items: PackItem[] = [];
@@ -210,15 +216,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
         layout,
         etagParts: { imageSha256: r.sha256 as string, copySetId: r.copy_set_id as string, layout, kit, simulated: r.picture_simulated === true },
       });
-      let logoPng: Buffer | null = null;
-      if (kit.logo && "assetId" in kit.logo) {
-        if (!logos.has(kit.logo.assetId)) {
-          const [l] = await tx`select bytes from public.assets where id = ${kit.logo.assetId}`;
-          logos.set(kit.logo.assetId, l ? (l.bytes as Buffer) : null);
-        }
-        logoPng = logos.get(kit.logo.assetId) ?? null;
-      }
-      const logo = kit.logo && "svg" in kit.logo ? { svg: kit.logo.svg } : logoPng ? { png: logoPng } : null;
+      const logo = await logoFor(tx, kit, logos);
       const picture = { assetId: r.image_asset_id as string, simulated: r.picture_simulated === true, model: (r.picture_model as string | null) ?? null, idea: (r.idea as string | null) ?? null };
       const englishFrom = {
         setId: r.copy_set_id as string,
@@ -254,14 +252,9 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
         const raw = (t ? t.set : r.set) as AdWords;
         const legalLines = (t ? t.legal_lines : r.legal_lines) as string[];
         const words = { headline: shown(raw.headline), body: shown(raw.body), cta: shown(raw.cta) };
-        const fits = await fitsFor(
-          setId,
-          { copy: { headline: raw.headline, body: raw.body, cta: raw.cta }, legalLines, logo, palette: kit.palette, fontPrimary: kit.fontPrimary, fontSecondary: kit.fontSecondary, brandName: kit.brandName },
-          layout,
-          channel,
-          kit,
-        );
+        const fits = await fitsFor(setId, fitBase(raw, legalLines, logo, kit), layout, channel, kit);
         const badge = t ? translationBadge(t.simulated === true) : null;
+        const legalLinesWrittenForDemo = lang !== ENGLISH && demoLegal(lang, legalLines);
         for (const f of fits) {
           const size = SIZES[f.size];
           if (!f.ok) {
@@ -284,6 +277,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
             setId,
             words,
             legalLines,
+            legalLinesWrittenForDemo,
             altText: altText(picture.idea, words),
             picture,
             wordsFrom: t
@@ -299,6 +293,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
         id: campaignId,
         objective: c.objective as string,
         brandName: c.brand_name as string,
+        brandSimulated,
         briefTitle: (c.brief_title as string | null) ?? null,
         briefVersion: view.version!,
         signedOffAt: (c.approved_at as Date | null) ?? null,
@@ -332,9 +327,22 @@ export type PackSummary =
 
 export const PACK_EXTRAS = ["manifest.json", "manifest.csv", "README.txt"] as const;
 
+/**
+ * The most drawings one download may hold (review fix 2). Drawing takes about
+ * half a second a file and the route has 300 s (maxDuration), so a pack of
+ * about 250 files or more would be cut off and leave a zip that won't open;
+ * 200 keeps a margin for a slow instance.
+ */
+export const PACK_MAX_FILES = 200;
+
+export function packTooLarge(files: number, max = PACK_MAX_FILES): string {
+  return `This pack would have ${files} files; the most one download can draw is ${max}. Pick fewer ads.`;
+}
+
 /** What the gallery shows before download: the counts, what's left out, or why there's no pack. */
-export function packSummary(plan: PackPlan | PackRefusal): PackSummary {
+export function packSummary(plan: PackPlan | PackRefusal, maxFiles = PACK_MAX_FILES): PackSummary {
   if ("refused" in plan) return { allowed: false, reason: plan.refused };
+  if (plan.items.length > maxFiles) return { allowed: false, reason: packTooLarge(plan.items.length, maxFiles) };
   const langs = [ENGLISH, ...SUPPORTED_LANGS] as PackLang[];
   return {
     allowed: true,
@@ -356,6 +364,13 @@ export function packSummary(plan: PackPlan | PackRefusal): PackSummary {
 // ---------------------------------------------------------------- manifests
 
 export type DrawnItem = PackItem & { checks: RenderChecks<DrawLayoutId> };
+
+/** The picture's own size and how much it is enlarged in this file (from the renderer's checks), with the Sizes view's note. */
+export function pictureScale(i: DrawnItem): { source: { width: number; height: number }; upscale: number; note: string | null } | null {
+  const pic = i.checks.picture;
+  if (!pic) return null;
+  return { source: { width: pic.source.width, height: pic.source.height }, upscale: Math.round(pic.upscale * 100) / 100, note: upscaleNote(pic)?.label ?? null };
+}
 
 /** The labels a file carries (rule 1): simulated picture, simulated words, machine translation. */
 export function labelsFor(i: PackItem): string[] {
@@ -380,6 +395,7 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
   const simulatedPictures = drawn.some((i) => i.picture.simulated);
   const simulatedWords = drawn.some((i) => (i.translation ? i.translation.simulated : i.wordsFrom.simulated));
   const translations = drawn.some((i) => i.translation);
+  const demoLegal = drawn.some((i) => i.legalLinesWrittenForDemo);
   const manifest = {
     pack: {
       madeBy: "Studio (working title)",
@@ -392,6 +408,7 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
         simulatedImages: simulatedPictures ? "Some pictures were drawn by the mock image model, not a real one; each such file is labelled \"Simulated image\" here and on the ad itself." : null,
         simulatedWords: simulatedWords ? "Some words were written by the mock model, not a real one; each such file is labelled here." : null,
         machineTranslation: translations ? { label: MACHINE_TRANSLATION.label, detail: MACHINE_TRANSLATION.detail } : null,
+        legalLinesWrittenForDemo: demoLegal ? WRITTEN_FOR_DEMO : null,
       },
     },
     files: drawn.map((i) => ({
@@ -406,7 +423,10 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
       body: i.words.body,
       button: i.words.cta,
       legalLines: i.legalLines,
+      legalLinesWrittenForDemo: i.legalLinesWrittenForDemo,
       altText: i.altText,
+      /** The picture's own size and the factor it is enlarged by to fill this size (above 1.1: "Upscaled"). */
+      picture: pictureScale(i),
       checks: {
         contrast: { headline: i.checks.contrast.headline, body: i.checks.contrast.body, legal: i.checks.contrast.legal, button: i.checks.contrast.cta, aa: "4.5:1" },
         fit: { passed: true, headlinePx: i.checks.fit.headline.size, bodyPx: i.checks.fit.body.size, legalPx: i.checks.fit.legal.size },
@@ -461,12 +481,15 @@ export const CSV_COLUMNS = [
   "body",
   "button",
   "legal_lines",
+  "legal_lines_written_for_demo",
   "alt_text",
   "contrast_text",
   "contrast_button",
   "fit",
   "legal_lines_present",
   "picture",
+  "picture_source_size",
+  "picture_upscale",
   "words",
   "machine_translation",
   "labels",
@@ -476,6 +499,7 @@ export const CSV_COLUMNS = [
 export function manifestCsv(drawn: DrawnItem[], leftOut: PackLeftOut[]): string {
   const rows: (string | number | boolean | null)[][] = [];
   for (const i of drawn) {
+    const scale = pictureScale(i);
     rows.push([
       "included",
       i.path,
@@ -490,12 +514,15 @@ export function manifestCsv(drawn: DrawnItem[], leftOut: PackLeftOut[]): string 
       i.words.body,
       i.words.cta,
       i.legalLines.join(" | "),
+      i.legalLinesWrittenForDemo ? "yes" : "no",
       i.altText,
       Math.min(i.checks.contrast.headline, i.checks.contrast.body, i.checks.contrast.legal).toFixed(1),
       i.checks.contrast.cta.toFixed(1),
       "passed",
       i.checks.legalLinePresent ? "yes" : "no legal lines in the kit",
       pictureProvenance(i),
+      scale ? `${scale.source.width}x${scale.source.height}` : "",
+      scale ? scale.upscale.toFixed(2) : "",
       wordsProvenance(i),
       i.translation ? i.translation.label : "",
       labelsFor(i).join("; "),
@@ -503,7 +530,19 @@ export function manifestCsv(drawn: DrawnItem[], leftOut: PackLeftOut[]): string 
     ]);
   }
   for (const l of leftOut) {
-    rows.push(["left out", "", l.adNumber, l.channel, l.audience, l.size ?? "every size", l.sizeName ?? "", l.lang, l.langName, l.headline, "", "", "", "", "", "", "", "", "", "", "", "", l.reason]);
+    const row: (string | number | null)[] = CSV_COLUMNS.map(() => "");
+    const put = (col: (typeof CSV_COLUMNS)[number], value: string | number) => (row[CSV_COLUMNS.indexOf(col)] = value);
+    put("status", "left out");
+    put("ad", l.adNumber);
+    put("channel", l.channel);
+    put("audience", l.audience);
+    put("size", l.size ?? "every size");
+    put("size_name", l.sizeName ?? "");
+    put("language", l.lang);
+    put("language_name", l.langName);
+    put("headline", l.headline);
+    put("reason_left_out", l.reason);
+    rows.push(row);
   }
   // CRLF, as RFC 4180 and spreadsheets expect; a byte-order mark so Excel reads the accents as UTF-8.
   return `﻿${[CSV_COLUMNS.map(csvField).join(","), ...rows.map((r) => r.map(csvField).join(","))].join("\r\n")}\r\n`;
@@ -518,6 +557,8 @@ export function readme(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLeftOut[
   const simulatedTranslations = translated.filter((i) => i.translation?.simulated).length;
   const simulatedWords = drawn.filter((i) => !i.translation && i.wordsFrom.simulated).length;
   const langs = [...new Set(drawn.map((i) => i.langName))];
+  const demoLegal = drawn.filter((i) => i.legalLinesWrittenForDemo);
+  const upscaled = drawn.filter((i) => pictureScale(i)?.note);
   const lines = [
     `LAUNCH PACK: ${c.brandName}`,
     "",
@@ -526,7 +567,7 @@ export function readme(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLeftOut[
     `Made by Studio on ${day(madeAt)} (UK time).`,
     "",
     "WHAT THIS IS",
-    `The ${plan.ads.length === 1 ? "picked ad" : `${plan.ads.length} picked ads`} of this campaign, in every size its channel needs and in ${langs.join(", ").replace(/, ([^,]*)$/, " and $1")}: ${drawn.length} ${drawn.length === 1 ? "ad" : "ads"} as PNG files, each of which passed its checks (contrast, fit and the legal lines) when this pack was made.`,
+    `The ${plan.ads.length === 1 ? "picked ad" : `${plan.ads.length} picked ads`} of this campaign, in every size its channel needs and in ${langs.join(", ").replace(/, ([^,]*)$/, " and $1")}: ${drawn.length} ${drawn.length === 1 ? "ad" : "ads"} as PNG files, each of which passed its checks (contrast, fit, and the legal lines where the brand has them) when this pack was made.`,
     "Folders: one per channel (paid-social, display), then one per language (en-GB, fr-FR, de-DE, es-ES).",
     "Every file is listed in manifest.json and manifest.csv with its words, alt text, checks and where the picture and words came from.",
     leftOut.length
@@ -542,8 +583,19 @@ export function readme(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLeftOut[
     lines.push(`- Machine translation: ${translated.length} ${translated.length === 1 ? "file is" : "files are"} in a language other than English. ${MACHINE_TRANSLATION.detail}`);
     if (simulatedTranslations) lines.push(`  ${simulatedTranslations} of them ${simulatedTranslations === 1 ? "is" : "are"} "${MACHINE_TRANSLATION.simulatedLabel}": ${MACHINE_TRANSLATION.simulatedDetail}`);
   }
-  if (!simulatedPictures && !simulatedWords && !translated.length) lines.push("- None: every picture and every word here came from a real model or a person, in English.");
-  lines.push("", "Studio is a working title. The brand in this pack is fictional.", "");
+  if (demoLegal.length) {
+    const names = [...new Set(demoLegal.map((i) => i.langName))];
+    lines.push(`- Legal lines written for the demo: ${demoLegal.length} ${demoLegal.length === 1 ? "file has" : "files have"} ${names.join(", ").replace(/, ([^,]*)$/, " and $1")} legal lines that say so in the manifests. ${WRITTEN_FOR_DEMO}`);
+  }
+  if (!simulatedPictures && !simulatedWords && !translated.length && !demoLegal.length) lines.push("- None: every picture and every word here came from a real model or a person, in English.");
+  lines.push("", "PICTURE SIZES");
+  if (upscaled.length) {
+    const notes = [...new Set(upscaled.map((i) => pictureScale(i)!.note))];
+    lines.push(
+      `- ${notes.join("; ")}: ${upscaled.length} ${upscaled.length === 1 ? "file enlarges its picture" : "files enlarge their pictures"} more than 1.1 times to fill the size, so ${upscaled.length === 1 ? "it" : "they"} may look soft. The manifests give each file's picture size and upscale factor. New pictures are drawn at 2K.`,
+    );
+  } else lines.push("- No picture is enlarged more than 1.1 times. The manifests give each file's picture size and upscale factor.");
+  lines.push("", plan.campaign.brandSimulated ? "Studio is a working title. The brand in this pack is fictional." : "Studio is a working title.", "");
   return lines.join("\r\n");
 }
 
@@ -557,8 +609,21 @@ type Entry = { name: string; data: Uint8Array; compress: boolean };
  * picture is read once per ad. A drawing that fails here (it fitted when
  * planned) is moved to Left out with the reason, never dropped.
  */
-export function packStream(userId: string, plan: PackPlan, madeAt: Date = new Date(), onDone?: (stats: { files: number; leftOut: number; bytes: number; ms: number }) => void): ReadableStream<Uint8Array> {
+export function packStream(
+  userId: string,
+  plan: PackPlan,
+  madeAt: Date = new Date(),
+  onDone?: (stats: { files: number; leftOut: number; bytes: number; ms: number }) => void,
+  /** Called once when the stream closes, errors or is cancelled (the one-pack-at-a-time slot is released here). */
+  onEnd?: () => void,
+): ReadableStream<Uint8Array> {
   const started = Date.now();
+  let ended = false;
+  const end = () => {
+    if (ended) return;
+    ended = true;
+    onEnd?.();
+  };
   let bytes = 0;
   const drawn: DrawnItem[] = [];
   const leftOut: PackLeftOut[] = [...plan.leftOut];
@@ -624,12 +689,14 @@ export function packStream(userId: string, plan: PackPlan, madeAt: Date = new Da
     start(controller) {
       zip = new Zip((err, chunk, final) => {
         if (err) {
+          end();
           controller.error(err);
           return;
         }
         bytes += chunk.length;
         controller.enqueue(chunk);
         if (final) {
+          end();
           controller.close();
           onDone?.({ files: drawn.length, leftOut: leftOut.length, bytes, ms: Date.now() - started });
         }
@@ -649,11 +716,13 @@ export function packStream(userId: string, plan: PackPlan, madeAt: Date = new Da
         file.push(data, true);
       } catch (err) {
         console.error("[pack] the zip stopped", err instanceof Error ? err.message : String(err));
+        end();
         controller.error(err);
       }
     },
     async cancel() {
       cancelled = true;
+      end();
       await it.return(undefined);
     },
   });
@@ -663,8 +732,31 @@ export function packStream(userId: string, plan: PackPlan, madeAt: Date = new Da
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-const NOT_FOUND = () =>
-  new Response("Not found", { status: 404, headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store", "x-content-type-options": "nosniff" } });
+const TEXT_HEADERS = { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store", "x-content-type-options": "nosniff" };
+const NOT_FOUND = () => new Response("Not found", { status: 404, headers: TEXT_HEADERS });
+
+export const PACK_BUSY = "A launch pack is already being drawn; try again in a minute.";
+
+// One pack is drawn at a time per server instance (review fix 2): drawing is
+// CPU and memory bound (about 600 MB while drawing), so two at once would
+// slow both towards the time limit. The slot is a module-level flag, released
+// when the stream ends, errors or is cancelled. A slot older than the route's
+// time limit is stale (the function was stopped mid-stream) and is taken over.
+const PACK_SLOT_STALE_MS = 330_000;
+declare global {
+  var __csPackSlot: { takenAt: number } | null | undefined;
+}
+
+/** Takes the instance's pack slot: its release function, or null while another pack is being drawn. */
+export function takePackSlot(now: number = Date.now()): (() => void) | null {
+  const held = globalThis.__csPackSlot;
+  if (held && now - held.takenAt < PACK_SLOT_STALE_MS) return null;
+  const mine = { takenAt: now };
+  globalThis.__csPackSlot = mine;
+  return () => {
+    if (globalThis.__csPackSlot === mine) globalThis.__csPackSlot = null;
+  };
+}
 
 /** The zip's own name: quillmoor-money-launch-pack-2026-11-02.zip. */
 export function packFileName(brandName: string, madeAt: Date): string {
@@ -675,22 +767,32 @@ export function packFileName(brandName: string, madeAt: Date): string {
 /**
  * What /campaigns/<id>/pack.zip answers: the same 404 for no session, a
  * malformed id and another workspace's campaign (rule 7); a 409 with the
- * reason when the brief isn't signed off or nothing is picked (never an empty
- * zip); otherwise the zip, streamed.
+ * reason when the brief isn't signed off, nothing is picked or the pack is
+ * larger than PACK_MAX_FILES (never an empty or cut-off zip); a 429 while
+ * another pack is being drawn on this instance; otherwise the zip, streamed.
  */
-export async function packResponse(userId: string | null, campaignId: string, madeAt: Date = new Date()): Promise<Response> {
+export async function packResponse(userId: string | null, campaignId: string, madeAt: Date = new Date(), opts: { maxFiles?: number } = {}): Promise<Response> {
   if (!userId || !UUID.test(campaignId)) return NOT_FOUND();
   const plan = await planPack(userId, campaignId);
   if (!plan) return NOT_FOUND();
-  if ("refused" in plan) {
-    return new Response(plan.refused, {
-      status: 409,
-      headers: { "content-type": "text/plain; charset=utf-8", "cache-control": "private, no-store", "x-content-type-options": "nosniff" },
-    });
+  if ("refused" in plan) return new Response(plan.refused, { status: 409, headers: TEXT_HEADERS });
+  const maxFiles = opts.maxFiles ?? PACK_MAX_FILES;
+  if (plan.items.length > maxFiles) return new Response(packTooLarge(plan.items.length, maxFiles), { status: 409, headers: TEXT_HEADERS });
+  const release = takePackSlot();
+  if (!release) return new Response(PACK_BUSY, { status: 429, headers: { ...TEXT_HEADERS, "retry-after": "60" } });
+  let stream: ReadableStream<Uint8Array>;
+  try {
+    stream = packStream(
+      userId,
+      plan,
+      madeAt,
+      (s) => console.info("[pack] made", { campaignId, files: s.files, leftOut: s.leftOut, bytes: s.bytes, ms: s.ms }),
+      release,
+    );
+  } catch (err) {
+    release();
+    throw err;
   }
-  const stream = packStream(userId, plan, madeAt, (s) =>
-    console.info("[pack] made", { campaignId, files: s.files, leftOut: s.leftOut, bytes: s.bytes, ms: s.ms }),
-  );
   return new Response(stream, {
     status: 200,
     headers: {

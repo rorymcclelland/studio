@@ -236,6 +236,7 @@ export function TranslateButton({
   label,
   estimate,
   reason,
+  note = null,
   running,
   align = "start",
 }: {
@@ -245,11 +246,14 @@ export function TranslateButton({
   label: string;
   estimate: string;
   reason: string | null;
+  /** Shown beside the button while it works: why some of the brand's languages are left out (test case 5). */
+  note?: string | null;
   running: boolean;
   align?: "start" | "end";
 }) {
   const { run, pending, error } = useBriefAction();
   const reasonId = useId();
+  const noteId = useId();
   const blocked = !!reason || running;
   return (
     <div className={cx("flex min-w-0 flex-col gap-2", align === "end" ? "items-start sm:items-end" : "items-start")}>
@@ -259,7 +263,7 @@ export function TranslateButton({
         variant={variantId ? "quiet" : "primary"}
         className="flex-wrap px-3"
         disabled={pending || blocked}
-        aria-describedby={reason && !running ? reasonId : undefined}
+        aria-describedby={reason && !running ? reasonId : note ? noteId : undefined}
         onClick={() => run(() => (variantId ? translateAd(campaignId, variantId) : translatePicked(campaignId)))}
       >
         {pending ? "Starting…" : running ? "Translating…" : <Costed label={label} estimate={estimate} />}
@@ -267,6 +271,11 @@ export function TranslateButton({
       {reason && !running && (
         <p id={reasonId} className={cx("max-w-sm text-sm text-ink-2 wrap-anywhere", align === "end" && "sm:text-right")} data-translate-reason="">
           {reason}
+        </p>
+      )}
+      {!reason && note && (
+        <p id={noteId} className={cx("max-w-sm text-sm text-ink-2 wrap-anywhere", align === "end" && "sm:text-right")} data-translate-note="">
+          {note}
         </p>
       )}
       <ActionError error={error} />

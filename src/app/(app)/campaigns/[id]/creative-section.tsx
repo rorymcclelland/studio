@@ -460,6 +460,7 @@ function Languages({ view }: { view: CreativeView }) {
           label="Translate the picked ads"
           estimate={t.picked.estimate}
           reason={t.picked.reason}
+          note={t.refusedNote}
           running={running}
           align="end"
         />
@@ -483,15 +484,22 @@ function Translations({ view, v, number }: { view: CreativeView; v: VariantView;
                 title={`${t.name}: every size, with its checks`}
                 className="block rounded-field focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element -- a drawn PNG behind the session, not a static asset */}
-                <img
-                  src={t.src}
-                  width={1080}
-                  height={1080}
-                  loading="lazy"
-                  alt={`Ad ${number} in ${t.name}, a machine translation, opens its sizes. Headline: ${t.headline}. Button: ${t.cta}.`}
-                  className="block aspect-square h-auto w-full rounded-field bg-surface-2 object-contain"
-                />
+                {t.thumb ? (
+                  // The first size these words fit, at its own width and height (review fix 8).
+                  // eslint-disable-next-line @next/next/no-img-element -- a drawn PNG behind the session, not a static asset
+                  <img
+                    src={t.thumb.src}
+                    width={t.thumb.width}
+                    height={t.thumb.height}
+                    loading="lazy"
+                    alt={`Ad ${number} in ${t.name}, a machine translation, opens its sizes. Headline: ${t.headline}. Button: ${t.cta}.`}
+                    className="block h-auto w-full rounded-field bg-surface-2"
+                  />
+                ) : (
+                  <span className="block rounded-field bg-surface-2 p-2 text-sm text-ink-2 wrap-anywhere" data-translation-reason="">
+                    {t.thumbReason}
+                  </span>
+                )}
                 <span className="mt-1 block text-sm font-semibold">{t.name}</span>
               </a>
               <DiscardTranslationButton campaignId={view.campaignId} setId={t.setId} what={`the ${t.name} translation of ad ${number}`} />
