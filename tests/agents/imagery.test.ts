@@ -103,7 +103,7 @@ describe("S5-1 Imagery agent", () => {
       expect(Number(s.cost_pence), s.name).toBeGreaterThan(0);
       expect(s.provider, s.name).toBe("mock");
     }
-    for (const d of draws) expect(Number(d.cost_pence)).toBeCloseTo(imageCostPence("mock", "mock-image", "1K", 1), 4);
+    for (const d of draws) expect(Number(d.cost_pence)).toBeCloseTo(imageCostPence("mock", "mock-image", "2K", 1), 4);
     expect((prompts[0].output as ImageryOutput).prompts).toHaveLength(4);
     // Each check asked the question about one picture.
     for (const c of checks) expect((c.input as { prompt: string }).prompt).toContain(VISION_QUESTION);
@@ -123,7 +123,7 @@ describe("S5-1 Imagery agent", () => {
     const assets = await listAssets(a.userId, { runId });
     expect(assets).toHaveLength(IMAGE_COUNT);
     for (const x of assets) {
-      expect(x).toMatchObject({ kind: "image", mime: "image/webp", width: 1024, height: 1024, simulated: true, campaignId: id, createdByKind: "agent", discardedAt: null });
+      expect(x).toMatchObject({ kind: "image", mime: "image/webp", width: 2048, height: 2048, simulated: true, campaignId: id, createdByKind: "agent", discardedAt: null });
       expect(x.meta).toMatchObject({ briefVersion: version, attempt: 1 });
     }
     const [{ bytes }] = await asUser(a.userId, (tx) => tx`select bytes from public.assets where id = ${assets[0].id}`);
@@ -430,9 +430,9 @@ describe("S5-1 Imagery agent", () => {
   it("#6 with the cap nearly reached, the run stops before the first picture that doesn't fit, keeps those drawn, and charges nothing over the cap", async () => {
     const id = await draftBrief();
     await signOff(id);
-    // Room for the prompts, two pictures and their checks, but not a third picture.
+    // Room for the prompts, two pictures and their checks, but not a third picture (2K pictures are 3.98p each).
     const before = await spendPosition(a.userId, a.workspaceId);
-    const limit = before.workspace + 6.6;
+    const limit = before.workspace + 10.6;
     process.env.WORKSPACE_DAILY_CAP_PENCE = String(limit);
     const { runId, status, run } = await runImagery(id);
     expect(status).toBe("stopped_cap");
@@ -507,7 +507,7 @@ describe("S5-1 Imagery agent", () => {
     const failed = run.steps.find((s) => s.status === "failed")!;
     expect(failed.name).toMatch(/^Draw picture \d$/);
     expect(failed.error).toMatch(/Internal error/);
-    expect(Number(failed.cost_pence)).toBeCloseTo(imageCostPence("mock", "mock-image", "1K", 1), 4);
+    expect(Number(failed.cost_pence)).toBeCloseTo(imageCostPence("mock", "mock-image", "2K", 1), 4);
     expect((run.output as { notMade: { outcome: string }[] }).notMade).toEqual([expect.objectContaining({ outcome: "failed" })]);
   });
 

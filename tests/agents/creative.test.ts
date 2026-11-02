@@ -179,7 +179,7 @@ describe("S5-4 Make creative and the gallery", () => {
       expect(await listChildRuns(b.userId, runId)).toEqual([]);
       expect(await listChildRuns(a.userId, "not-a-uuid")).toEqual([]);
       // Four images at the image price, plus a few tokens' worth for prompts, checks and copy.
-      expect(r.costPence).toBeGreaterThan(4 * imageCostPence("mock", "mock-image", "1K", 1));
+      expect(r.costPence).toBeGreaterThan(4 * imageCostPence("mock", "mock-image", "2K", 1));
       for (const c of r.children) expect((await getRun(a.userId, c.runId))!.input).toMatchObject({ parentRunId: runId, campaignId: id });
     });
 
@@ -196,24 +196,25 @@ describe("S5-4 Make creative and the gallery", () => {
         const repair = costPence(m.provider, m.model, input + m.maxOutputTokens + REPAIR_OVERHEAD_TOKENS, m.maxOutputTokens);
         return first + repair;
       };
-      const image = imageCostPence("google", "gemini-nano-banana-2.1", "1K", 1);
+      const image = imageCostPence("google", "gemini-nano-banana-2.1", "2K", 1);
       const worst =
         2 * IMAGE_COUNT * (image + call("imageCheck", TYPICAL_TOKENS.imageCheck.input)) +
         call("imagery", TYPICAL_TOKENS.imagery.input) +
         call("copy", TYPICAL_TOKENS.copyAll.input);
       expect(estimate.worstPence).toBeCloseTo(worst, 3);
-      // Honestly above the refined 20p: the redraws alone are four more pictures.
+      // Honestly above the refined 20p: the redraws alone are four more pictures (2K from C7-1, Q1: about 41p).
       expect(estimate.worstPence).toBeGreaterThan(20);
-      expect(estimate.worstPence).toBeLessThan(35);
+      expect(estimate.worstPence).toBeLessThan(45);
       expect(estimate.label).toBe(`about ${Math.ceil(estimate.pence)}p, at most ${Math.ceil(estimate.worstPence)}p`);
       // With the copy already written, the copy's share comes off both.
       const noCopy = makeCreativeEstimate({ writesCopy: false }, real);
       expect(noCopy.pence).toBeLessThan(estimate.pence);
       expect(noCopy.worstPence).toBeCloseTo(worst - call("copy", TYPICAL_TOKENS.copyAll.input), 3);
       expect(g.makeCreative.estimate.label).toMatch(/^about \d+p, at most \d+p$/);
-      expect(newPictureEstimate(real).label).toBe("about 3p");
+      expect(newPictureEstimate(real).label).toBe("about 4p"); // one 2K picture (3.98p) and its check
       expect(newWordsEstimate(real).label).toMatch(/^(about \d+p|under 1p)$/);
-      expect(g.estimates.newPicture.label).toBe("about 3p");
+      // The gallery's estimate uses the configured (mock) models, whose picture check costs a little more: 4.0p.
+      expect(g.estimates.newPicture.label).toBe(newPictureEstimate().label);
       expect(aboutPence(0.4)).toBe("under 1p");
       expect(aboutPence(2.66)).toBe("about 3p");
     });
@@ -354,7 +355,7 @@ describe("S5-4 Make creative and the gallery", () => {
       expect(run.steps.map((s) => s.name)).toEqual(["Read the ad", "Draw a new picture", "Check the new picture for text", "Save the new ad"]);
       expect(mockBehaviour.imageCalls).toBe(1);
       const draw = run.steps.find((s) => s.name === "Draw a new picture")!;
-      expect(Number(draw.cost_pence)).toBeCloseTo(imageCostPence("mock", "mock-image", "1K", 1), 4);
+      expect(Number(draw.cost_pence)).toBeCloseTo(imageCostPence("mock", "mock-image", "2K", 1), 4);
 
       const after = await view(id);
       expect(after.variants).toHaveLength(12);
@@ -546,8 +547,8 @@ describe("S5-4 Make creative and the gallery", () => {
   it("with the cap nearly reached, Make creative stops at the cap, keeps what it made and composes from it, with a clear status", async () => {
     const id = await signedOff();
     const before = await spendPosition(a.userId, a.workspaceId);
-    // Room for the prompts, the copy and two pictures with their checks, but not a third picture.
-    process.env.WORKSPACE_DAILY_CAP_PENCE = String(before.workspace + 6.6);
+    // Room for the prompts, the copy and two pictures with their checks, but not a third picture (2K pictures are 3.98p each).
+    process.env.WORKSPACE_DAILY_CAP_PENCE = String(before.workspace + 10.6);
     const { status, run } = await make(id);
     expect(status).toBe("stopped_cap");
     expect(run.error).toMatch(/^Daily AI cap reached: 6 ads from 2 pictures and 3 sets of words\. What was made is kept\. Pictures: stopped at the daily AI cap\./);
@@ -556,7 +557,7 @@ describe("S5-4 Make creative and the gallery", () => {
     expect(g.variants).toHaveLength(6);
     expect(g.runs[0]).toMatchObject({ kind: "make", status: "stopped_cap" });
     expect(g.runs[0].children.find((c) => c.agent === "imagery")!.status).toBe("stopped_cap");
-    expect((await spendPosition(a.userId, a.workspaceId)).workspace).toBeLessThanOrEqual(before.workspace + 6.6);
+    expect((await spendPosition(a.userId, a.workspaceId)).workspace).toBeLessThanOrEqual(before.workspace + 10.6);
     expect(await asUser(a.userId, (tx) => tx`select 1 from public.spend_reservations`)).toHaveLength(0);
   });
 

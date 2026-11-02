@@ -148,9 +148,16 @@ function badgesFor(checks: RenderChecks<DrawLayoutId>, size: SizeSpec): Extract<
  * Every size of an ad's channel, drawn (or recalled) with its badges or its
  * refusal: what the Sizes view shows. Null when the user can't see the ad.
  */
-export async function adSizes(userId: string, variantId: string): Promise<{ variantId: string; channel: string; sizes: SizeView[] } | null> {
+export async function adSizes(
+  userId: string,
+  variantId: string,
+): Promise<{ variantId: string; campaignId: string; channel: string; headline: string; sizes: SizeView[] } | null> {
   const v = await drawableVariant(userId, variantId);
   if (!v) return null;
+  const [row] = await asUser(userId, (tx) => tx`
+    select v.campaign_id, s.set ->> 'headline' as headline
+    from public.ad_variants v join public.copy_sets s on s.id = v.copy_set_id where v.id = ${v.id}`);
+  if (!row) return null;
   const sizes = sizesFor(v.channel);
   let parts: VariantParts | null | undefined;
   const views: SizeView[] = [];
@@ -165,7 +172,7 @@ export async function adSizes(userId: string, variantId: string): Promise<{ vari
         : { ...base, ok: false, reason: sentence(d.refused) },
     );
   }
-  return { variantId: v.id, channel: v.channel, sizes: views };
+  return { variantId: v.id, campaignId: row.campaign_id as string, channel: v.channel, headline: (row.headline as string) ?? "", sizes: views };
 }
 
 /** "the legal lines don't fit ..." as a sentence for people. */

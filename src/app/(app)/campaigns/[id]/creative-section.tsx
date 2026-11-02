@@ -233,6 +233,9 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
           Ad {number}
         </h3>
         <span className="text-sm text-ink-2">{v.layoutName}</span>
+        <TextLink href={`/campaigns/${view.campaignId}/ads/${v.id}/sizes`} className="text-sm" data-ad-sizes="">
+          Sizes<span className="sr-only"> of ad {number}</span>
+        </TextLink>
         {v.picked && (
           <Pill tone="active" dot className="ml-auto">
             Picked

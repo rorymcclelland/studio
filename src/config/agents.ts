@@ -35,11 +35,13 @@ export type ImageSize = "1K" | "2K";
 export type ImageModelConfig = { provider: ProviderId; model: string; size: ImageSize };
 
 /**
- * The image model (S5-1, Q1: Nano Banana 2.1 at 1K, plenty for a 1080 px ad).
+ * The image model: Nano Banana 2.1 (S5-1), at 2K from Sprint 7 (C7-1, Q1), so
+ * a 9:16 or 1.91:1 crop of the square picture isn't enlarged (at 1K it was
+ * about 1.9 times). Pictures made at 1K before still render in every size.
  * IMAGE_MODEL="provider:model" overrides it; MODEL_PROVIDER_OVERRIDE=mock uses
  * the mock image model, which draws palette shapes and spends nothing real.
  */
-export const IMAGE_MODEL: ImageModelConfig = { provider: "google", model: "gemini-nano-banana-2.1", size: "1K" };
+export const IMAGE_MODEL: ImageModelConfig = { provider: "google", model: "gemini-nano-banana-2.1", size: "2K" };
 
 export function resolveImageModel(env: Env = process.env): ImageModelConfig {
   const base: ImageModelConfig = { ...IMAGE_MODEL };

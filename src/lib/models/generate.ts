@@ -187,7 +187,8 @@ const ATTEMPTS = 2; // one retry (S1-4 #5)
 const TIMEOUT_MS = 60_000;
 const SEARCH_TIMEOUT_MS = 180_000;
 const IMAGE_TIMEOUT_MS = 120_000;
-// A 1K picture is about 1,400 input tokens to Claude (width x height / 750); estimated generously.
+// A 1K picture is about 1,400 input tokens to Claude (width x height / 750); estimated generously. A 2K
+// picture (C7-1) is reduced by the API to about 1.15 megapixels first, so it costs about the same.
 const TOKENS_PER_IMAGE_INPUT = 1_600;
 
 /**

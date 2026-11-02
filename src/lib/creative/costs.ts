@@ -3,7 +3,7 @@ import { IMAGE_COUNT } from "@/lib/agents/imagery";
 import { costPence, imageCostPence } from "@/lib/models/cost";
 
 // S5-4 (rule 3): what a button will cost in AI pence, shown before the click
-// ("about 3p"). Worked out from prices.ts and the configured models, with
+// ("about 4p"). Worked out from prices.ts and the configured models, with
 // the token counts below as estimates of a typical call (they are not
 // measured per brief). The cap still decides at call time.
 //
@@ -32,13 +32,13 @@ export type Estimate = { pence: number; worstPence: number; label: string };
 
 type Env = Record<string, string | undefined>;
 
-/** "about 3p", "about 14p", "under 1p": whole pence, rounded up. */
+/** "about 4p", "about 20p", "under 1p": whole pence, rounded up. */
 export function aboutPence(pence: number): string {
   if (pence < 1) return "under 1p";
   return `about ${Math.ceil(pence - 1e-9)}p`;
 }
 
-/** "about 14p, at most 31p": the typical and the worst case, both rounded up. */
+/** "about 20p, at most 41p": the typical and the worst case, both rounded up (2K pictures from C7-1; 14p and 31p at 1K). */
 export function aboutAndAtMost(pence: number, worstPence: number): string {
   return `${aboutPence(pence)}, at most ${Math.max(1, Math.ceil(worstPence - 1e-9))}p`;
 }
