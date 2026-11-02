@@ -4,6 +4,7 @@ import { audienceAgent } from "./audience";
 import { briefAgent } from "./brief";
 import { copyAgent } from "./copy";
 import { imageCheckAgent, imageryAgent } from "./imagery";
+import { localiseAgent } from "./localise";
 import { marketAgent } from "./market";
 import { personaAgent } from "./persona";
 import { testPlanAgent } from "./testplan";
@@ -19,6 +20,7 @@ export const AGENTS = {
   market: marketAgent,
   copy: copyAgent,
   imagery: imageryAgent,
+  localise: localiseAgent,
 } as const;
 
 // Definitions that run inside another agent's workflow, never as runs of their own (S5-1: the picture check).

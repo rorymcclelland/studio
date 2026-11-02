@@ -10,6 +10,9 @@ const nextConfig: NextConfig = {
     "/**": [
       "./node_modules/@fontsource/inter/files/inter-latin-{400,600,700}-normal.woff",
       "./node_modules/@fontsource/source-serif-4/files/source-serif-4-latin-{400,600,700}-normal.woff",
+      // C7-2: latin-ext beside each Latin file, for the next Latin-script languages.
+      "./node_modules/@fontsource/inter/files/inter-latin-ext-{400,600,700}-normal.woff",
+      "./node_modules/@fontsource/source-serif-4/files/source-serif-4-latin-ext-{400,600,700}-normal.woff",
     ],
   },
   partialPrefetching: true,

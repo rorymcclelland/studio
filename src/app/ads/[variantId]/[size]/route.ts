@@ -11,5 +11,6 @@ import { adSizeResponse } from "@/lib/creative/ad-serve";
 export async function GET(request: NextRequest, ctx: RouteContext<"/ads/[variantId]/[size]">) {
   const { variantId, size } = await ctx.params;
   const user = await getCurrentUser();
-  return adSizeResponse(user?.id ?? null, variantId, size, request.headers.get("if-none-match"));
+  // C7-2: ?lang=fr-FR (or de-DE, es-ES) draws the ad in that language, when it has a current translation.
+  return adSizeResponse(user?.id ?? null, variantId, size, request.headers.get("if-none-match"), request.nextUrl.searchParams.get("lang"));
 }

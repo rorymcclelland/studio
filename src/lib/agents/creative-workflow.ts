@@ -115,7 +115,7 @@ async function prepareMake(ctx: StepContext): Promise<MakePrepared> {
     const existing = (agent: string) => children.find((r) => r.agent === agent)?.id as string | undefined;
     const [sets] = await tx`
       select count(*)::int as n from public.copy_sets
-      where campaign_id = ${campaignId} and brief_version = ${version} and discarded_at is null`;
+      where campaign_id = ${campaignId} and brief_version = ${version} and discarded_at is null and lang = 'en-GB'`;
     const child = async (agent: string, agentVersion: number, input: Record<string, unknown>, label: string) => {
       const [r] = await tx`
         insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)

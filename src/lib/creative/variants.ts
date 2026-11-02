@@ -272,7 +272,7 @@ export async function composeVariants(
     const sets = await tx`
       select s.id, s.channel, s.segment_ref, s.segment_title from public.copy_sets s
       where s.campaign_id = ${campaignId} and s.brief_version = ${version} and s.discarded_at is null
-        and s.channel in ('paid social', 'display') and not ${WAITING(tx)}
+        and s.channel in ('paid social', 'display') and s.lang = 'en-GB' and not ${WAITING(tx)}
       order by s.created_at, s.id`;
     const existing = await tx`
       select image_asset_id, copy_set_id from public.ad_variants

@@ -5,6 +5,7 @@ import { parseBrandInput } from "@/lib/brands/schema";
 import { sanitizeLogoSvg } from "@/lib/brands/svg";
 import { DEMO_BRIEFS } from "./briefs";
 import { generateDemoBrand } from "./generate";
+import { insertDemoLanguages } from "@/lib/creative/languages";
 
 export class DemoAlreadyLoadedError extends Error {}
 
@@ -97,6 +98,8 @@ async function load(member: Member, datasets: ReturnType<typeof generateDemoBran
       for (const part of chunks(lines)) await tx`insert into public.order_lines ${tx(part)}`;
 
       await syncBrandContext(tx, brandId);
+      // C7-2 (Q4): French, German and Spanish, with legal lines and banned terms written by Claude for the demo, marked so.
+      await insertDemoLanguages(tx, member, brandId, k.slug);
       names.push(k.name);
     }
     return names;

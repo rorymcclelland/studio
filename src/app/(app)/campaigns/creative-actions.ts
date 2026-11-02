@@ -29,6 +29,8 @@ import {
   unpickVariant,
 } from "@/lib/creative/gallery";
 import { discardDoneMessage, type DiscardWhy } from "@/lib/creative/messages";
+import { discardTranslation, startTranslate, TranslateError } from "@/lib/creative/translate";
+import { LANG_NAMES, type Lang } from "@/lib/creative/languages";
 import type { BriefActionState } from "./actions";
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -37,7 +39,7 @@ function known(err: unknown): BriefActionState | null {
   if (err instanceof CopyEditError) {
     return { error: "The words weren't saved. Fix the problems below.", problems: err.problems, fieldErrors: err.fieldErrors };
   }
-  if (err instanceof CreativeError || err instanceof CopyError || err instanceof StartRunError) return { error: err.message };
+  if (err instanceof CreativeError || err instanceof CopyError || err instanceof StartRunError || err instanceof TranslateError) return { error: err.message };
   return null;
 }
 
@@ -170,5 +172,29 @@ export async function restoreSet(campaignId: string, setId: string): Promise<Bri
   return act(campaignId, "restoreSet", "Couldn't restore those words. Nothing was changed; try again.", async (member) => {
     await restoreCopySet(member, setId);
     return "Words restored.";
+  });
+}
+
+/** C7-2: Translate one picked ad's words into the brand's languages (a Localise run; the cost was on the button). */
+export async function translateAd(campaignId: string, variantId: string): Promise<BriefActionState> {
+  return act(campaignId, "translateAd", "Couldn't start the translation. Nothing was started; try again.", async (member) => {
+    await startTranslate(member, campaignId, [variantId], sendEvent);
+    return "Translating. Each language appears under the ad, as a machine translation, when it is checked.";
+  });
+}
+
+/** C7-2: Translate every picked ad's words into the brand's languages. */
+export async function translatePicked(campaignId: string): Promise<BriefActionState> {
+  return act(campaignId, "translatePicked", "Couldn't start the translation. Nothing was started; try again.", async (member) => {
+    await startTranslate(member, campaignId, "picked", sendEvent);
+    return "Translating the picked ads. Each language appears under its ad, as a machine translation, when it is checked.";
+  });
+}
+
+/** C7-2: discards one translation, so its language can be translated again (Translate shows it as still to write). */
+export async function discardAdTranslation(campaignId: string, setId: string): Promise<BriefActionState> {
+  return act(campaignId, "discardAdTranslation", "Couldn't discard the translation. Nothing was changed; try again.", async (member) => {
+    const { lang } = await discardTranslation(member, setId);
+    return `${LANG_NAMES[lang as Lang] ?? "The"} translation discarded. Translate writes it again.`;
   });
 }

@@ -22,6 +22,8 @@ export const TYPICAL_TOKENS = {
   copyAll: { input: 4_000, output: 3_000 },
   /** New words for one set. */
   copyOne: { input: 4_000, output: 300 },
+  /** C7-2: one set's words into one language (the prompt is the kit's lists and the English words). */
+  localiseOne: { input: 1_800, output: 250 },
 } as const;
 
 /** What a repair prompt adds to the first prompt besides the previous reply: the issues and the instructions. */
@@ -47,7 +49,7 @@ const round = (p: number) => Math.round(p * 10_000) / 10_000;
 /** A button that shows the typical cost only; the worst case is kept for any check against the cap. */
 const est = (pence: number, worstPence: number): Estimate => ({ pence: round(pence), worstPence: round(worstPence), label: aboutPence(pence) });
 
-type ModelAgent = "imagery" | "imageCheck" | "copy";
+type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise";
 
 function modelCall(agent: ModelAgent, tokens: { input: number; output: number }, env: Env): number {
   const m = resolveAgentModel(agent, env);
@@ -95,4 +97,16 @@ export function makeCreativeEstimate(opts: { writesCopy: boolean } = { writesCop
   const worstCopy = opts.writesCopy ? worstModelCall("copy", TYPICAL_TOKENS.copyAll.input, env) : 0;
   const worstPence = worstPictures + worstPrompts + worstCopy;
   return { pence: round(pence), worstPence: round(worstPence), label: aboutAndAtMost(pence, worstPence) };
+}
+
+/**
+ * C7-2: Translate, for a number of sets and languages: one Localise call per
+ * set and language. The worst case repairs every one once (a field too long
+ * for a size, or a rule broken), each call writing its full output allowance.
+ */
+export function translateEstimate(translations: number, env: Env = process.env): Estimate {
+  const n = Math.max(0, translations);
+  const pence = n * modelCall("localise", TYPICAL_TOKENS.localiseOne, env);
+  const worstPence = n * worstModelCall("localise", TYPICAL_TOKENS.localiseOne.input, env);
+  return { pence: round(pence), worstPence: round(worstPence), label: n === 0 ? "nothing to translate" : aboutAndAtMost(pence, worstPence) };
 }

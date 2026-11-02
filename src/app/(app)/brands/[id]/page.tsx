@@ -14,6 +14,7 @@ import { Pill } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatPrice } from "@/lib/format";
 import { mapBrandFont } from "@/lib/creative/render/fonts";
+import { listBrandLanguages } from "@/lib/creative/languages";
 import { BrandLogo } from "../brand-logo";
 import { ContextSearch, MAX_QUERY } from "./context-search";
 import { CustomerSummary } from "./customer-summary";
@@ -30,7 +31,7 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
   if (!brand) notFound();
 
   const query = (typeof q === "string" ? q : "").trim().slice(0, MAX_QUERY);
-  const [products, summary, hits, segments, runs, campaigns, marketNotes] = await Promise.all([
+  const [products, summary, hits, segments, runs, campaigns, marketNotes, languages] = await Promise.all([
     listProducts(member.userId, brand.id),
     getCustomerSummary(member.userId, brand.id),
     query ? searchContext(member.userId, { query, brandId: brand.id, limit: 10 }) : Promise.resolve([]),
@@ -38,6 +39,7 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
     listRuns(member.userId, 50, brand.id),
     listCampaigns(member.userId, brand.id),
     listMarketNotes(member.userId, brand.id),
+    listBrandLanguages(member.userId, brand.id),
   ]);
   const audienceRun = runs.find((r) => r.agent === "audience") ?? null;
   const marketRun = runs.find((r) => r.agent === "market") ?? null;
@@ -184,6 +186,15 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
           <Sub title="Claims that need evidence">
             <Rules items={brand.evidenceClaims} label="Claims that need evidence" />
           </Sub>
+        </div>
+        <div className="mt-6 border-t border-line pt-4" data-brand-languages="">
+          <h3 className="font-strong">Languages</h3>
+          <p className="mt-1 max-w-prose text-ink-2">
+            {languages.length
+              ? `Ads can be translated into ${languages.map((l) => l.name).join(", ").replace(/, ([^,]*)$/, " and $1")}, each with its own legal lines${languages.some((l) => l.writtenForDemo) ? " (written by Claude for the demo)" : ""}.`
+              : "English only. Choose languages, with the legal lines for each, to translate picked ads."}{" "}
+            <TextLink href={`/brands/${brand.id}/languages`}>{languages.length ? "Languages and their legal lines" : "Choose languages"}</TextLink>
+          </p>
         </div>
       </Card>
 

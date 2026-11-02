@@ -6,7 +6,8 @@ import { CHANNEL_LIMITS, EDIT_COPY, figuresAddedByPerson, setProblems, type AnyC
 // S5-2: a campaign's copy sets. Reading them, a person's hand edit (a new
 // row, after the same checks as the agent's words), discarding and restoring,
 // and starting the Copy agent: for the whole signed-off brief, or for new
-// words on one set. Server actions and the UI call these (S5-4).
+// words on one set. Server actions and the UI call these (S5-4). C7-2: the
+// lists are the English sets; translations are shown on their ads.
 
 export { CHANNEL_LIMITS, NOT_SIGNED_OFF };
 export type { AnyCopy, CopyByChannel, CopyChannel };
@@ -78,7 +79,7 @@ export async function listCopySets(userId: string, campaignId: string): Promise<
     const runList: CopyRun[] = runs.map((r) => ({ runId: r.id, status: r.status, mode: r.input.mode, setId: r.input.setId ?? null, error: r.error, createdAt: r.created_at }));
     if (!ctx) return { ...empty(campaignId), runs: runList };
     const rows = await tx`
-      select * from public.copy_sets where campaign_id = ${campaignId} and brief_version = ${ctx.version}
+      select * from public.copy_sets where campaign_id = ${campaignId} and brief_version = ${ctx.version} and lang = 'en-GB'
       order by created_at, id`;
     const pool = rulesFor(ctx).pool;
     const current = new Set(rows.filter((r) => !r.discarded_at).map((r) => r.id as string));
@@ -115,7 +116,7 @@ export async function startCopyRun(member: Member, campaignId: string, send: Sen
   if (!UUID.test(campaignId)) throw new CopyError("That campaign isn't in your workspace.");
   const [c] = await asUser(member.userId, (tx) => tx`
     select c.id, c.brand_id, c.status, c.approved_version, b.name,
-      (select count(*)::int from public.copy_sets s where s.campaign_id = c.id and s.brief_version = c.approved_version and s.discarded_at is null) as sets,
+      (select count(*)::int from public.copy_sets s where s.campaign_id = c.id and s.brief_version = c.approved_version and s.discarded_at is null and s.lang = 'en-GB') as sets,
       (select count(*)::int from public.agent_runs r where r.agent = 'copy' and r.status in ('queued', 'running')
          and r.input ->> 'campaignId' = ${campaignId} and r.input ->> 'mode' = 'all') as running
     from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`);

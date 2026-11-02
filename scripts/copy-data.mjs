@@ -2,7 +2,7 @@
 // Copies production's data from Supabase into an empty, fully migrated Neon
 // database (N-6). Run once, from the "Copy production data" Action; removed in N-7.
 //
-//   node scripts/copy-data.mjs --from SUPABASE_DB_URL --to TARGET_DB_URL [--batch N]
+//   node scripts/copy-data.mjs --from SUPABASE_DB_URL --to TARGET_DB_URL [--batch N] [--dir PATH]
 //
 // --from and --to name environment variables holding the connection strings,
 // so no string is typed on a command line or printed (rule 6).
@@ -344,14 +344,14 @@ export const unnormalisedMessage = (n) =>
   "so they would be split from their workspace. Fix them on the source first " +
   "(update auth.users set email = lower(btrim(email)), after checking no two collide).";
 
-/** Fails if the target's ledger is not exactly db/migrations. */
-async function checkLedger(target) {
+/** Fails if the target's ledger is not exactly db/migrations (or `dir`: the tests' cutover-era folder, since C7-2 changed the schema after the copy). */
+async function checkLedger(target, dir) {
   const [{ t }] = await target`select to_regclass('public.schema_migrations') as t`;
   if (!t) throw new CopyError("Refusing to copy: the target has no schema_migrations ledger. Migrate it first (scripts/db-migrate.mjs).");
   const applied = await target.unsafe(APPLIED_QUERY);
   let pending;
   try {
-    pending = pendingFrom(readMigrations(), applied);
+    pending = pendingFrom(readMigrations(dir), applied);
   } catch (e) {
     throw new CopyError(`Refusing to copy: ${e.message}`);
   }
@@ -368,8 +368,8 @@ async function checkLedger(target) {
  * @param {import("postgres").Sql} target
  * @param {{ batch?: number, log?: (line: string) => void }} [options]
  */
-export async function copyData(source, target, { batch = 500, log = console.log } = {}) {
-  await checkLedger(target);
+export async function copyData(source, target, { batch = 500, log = console.log, dir = undefined } = {}) {
+  await checkLedger(target, dir);
   const [srcCat, tgtCat] = [await catalogue(source), await catalogue(target)];
   const problems = shapeProblems(srcCat, tgtCat);
   if (problems.length) throw new CopyError(`Refusing to copy: the two sides differ:\n  ${problems.join("\n  ")}`);
@@ -524,10 +524,11 @@ async function main(args) {
   if (process.env[from] && process.env[from] === process.env[to]) throw new CopyError(`${from} and ${to} hold the same connection string.`);
   const batch = Number(arg(args, "--batch") ?? 500);
   if (!Number.isInteger(batch) || batch < 1) throw new CopyError("--batch must be a whole number above 0.");
+  const dir = arg(args, "--dir");
   const source = connectFromEnv(from);
   const target = connectFromEnv(to);
   try {
-    await copyData(source, target, { batch });
+    await copyData(source, target, { batch, dir });
   } finally {
     await Promise.all([source.end(), target.end()]);
   }

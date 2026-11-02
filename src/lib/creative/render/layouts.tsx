@@ -1,7 +1,7 @@
 /* eslint-disable @next/next/no-img-element -- Satori (ImageResponse) draws plain <img> elements; next/image does not apply. */
 import type { CSSProperties, ReactElement } from "react";
 import { relativeLuminance, rgba } from "./colour";
-import type { BundledFamily, FontWeight } from "./fonts";
+import { fontStack, type BundledFamily, type FontWeight } from "./fonts";
 import type { LogoImage } from "./logo";
 import { SIZES, SQUARE, type DrawLayoutId, type SizeId, type SizeSpec } from "./sizes";
 
@@ -368,7 +368,7 @@ function Lines(props: { lines: string[]; size: number; lineHeight: number; style
             height,
             alignItems: "center",
             whiteSpace: "nowrap",
-            fontFamily: props.style.family,
+            fontFamily: fontStack(props.style.family),
             fontWeight: props.style.weight,
             fontSize: props.size,
             letterSpacing: `${props.style.letterSpacing}em`,
@@ -403,7 +403,7 @@ function Button({ p }: { p: DrawProps }) {
         borderRadius: p.spec.cta.height / 2,
         background: p.colours.button,
         color: p.colours.buttonText,
-        fontFamily: p.cta.style.family,
+        fontFamily: fontStack(p.cta.style.family),
         fontWeight: p.cta.style.weight,
         fontSize: p.cta.size,
         letterSpacing: `${p.cta.style.letterSpacing}em`,
@@ -682,7 +682,7 @@ function SimulatedLabel({ style, box }: { style: TextStyle; box: LayoutSpec["lab
         borderRadius: box.height / 2,
         background: SIMULATED_LABEL_COLOURS.fill,
         color: SIMULATED_LABEL_COLOURS.text,
-        fontFamily: style.family,
+        fontFamily: fontStack(style.family),
         fontWeight: style.weight,
         fontSize: box.size,
         whiteSpace: "nowrap",
