@@ -228,7 +228,9 @@ function card(size: SizeSpec): LayoutSpec {
     imageWidth,
     gap,
     radius: r(36),
-    shadow: `0 ${r(18)}px ${r(48)}px rgba(0, 0, 0, 0.28)`,
+    // The square's soft shadow under the picture costs about 0.4 s to draw in a tall canvas (Satori's shadow
+    // filter covers the whole box), which would take 9:16 past a second; Card's panel is dark, where it barely shows.
+    shadow: mode === "square" ? `0 ${r(18)}px ${r(48)}px rgba(0, 0, 0, 0.28)` : "none",
     legalGap: r(40),
     logoGap: r(40),
     bodyGap: r(22),
@@ -571,7 +573,7 @@ function Card(p: DrawProps): ReactElement {
   return (
     <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, padding: g.pad, background: p.colours.panel }}>
       <div style={{ display: "flex", height: topHeight }}>
-        <div style={{ display: "flex", width: image.width, height: image.height, borderRadius: g.radius, overflow: "hidden", boxShadow: g.shadow }}>
+        <div style={{ display: "flex", width: image.width, height: image.height, borderRadius: g.radius, overflow: "hidden", ...(g.shadow === "none" ? {} : { boxShadow: g.shadow }) }}>
           <Picture p={p} box={image} />
         </div>
         <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", width: column, marginLeft: gap }}>
@@ -602,7 +604,7 @@ function CardStacked(p: DrawProps, g: Extract<Geometry, { kind: "card" }>, topHe
     <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, padding: g.pad, background: p.colours.panel }}>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: topHeight }}>
         <div style={{ display: "flex", justifyContent: "center" }}>
-          <div style={{ display: "flex", width: box.width, height: box.height, borderRadius: g.radius, overflow: "hidden", boxShadow: g.shadow }}>
+          <div style={{ display: "flex", width: box.width, height: box.height, borderRadius: g.radius, overflow: "hidden", ...(g.shadow === "none" ? {} : { boxShadow: g.shadow }) }}>
             <Picture p={p} box={box} />
           </div>
         </div>

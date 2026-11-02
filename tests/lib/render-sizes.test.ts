@@ -1,6 +1,6 @@
 // C7-1 Sizes at the renderer: test cases 1 to 5 and 8 (6, the square, is
 // render-golden.test.ts; 7 and the route are tests/db/ad-sizes.test.ts).
-// RENDER_SAMPLES=1 writes every size to docs/design/sprint-7-sizes/.
+// RENDER_SAMPLES=1 writes a sample of each size to docs/design/sprint-7-sizes/.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
@@ -14,6 +14,20 @@ import { drawMockImage } from "@/lib/models/mock-image";
 
 const SAMPLES = process.env.RENDER_SAMPLES === "1";
 const SAMPLE_DIR = join(process.cwd(), "docs/design/sprint-7-sizes");
+/** One drawing per size (and the tall Card), kept in the repo as the design record; RENDER_SAMPLES=1 rewrites them. */
+const SAMPLE_SET = new Set([
+  "quillmoor-1080x1080-card",
+  "quillmoor-1080x1350-split",
+  "quillmoor-1080x1920-full-bleed",
+  "fernhollow-1080x1920-card",
+  "fernhollow-1200x628-split",
+  "fernhollow-300x250-banner",
+  "fernhollow-300x600-banner",
+  "fernhollow-728x90-banner",
+]);
+const sample = (name: string, png: Buffer) => {
+  if (SAMPLES && SAMPLE_SET.has(name)) writeFileSync(join(SAMPLE_DIR, `${name}.png`), png);
+};
 
 const COPY = {
   fernhollow: { headline: "Made for the long way round", body: "A three-layer shell for wet days on high ground, built to be mended rather than replaced.", cta: "Shop jackets" },
@@ -109,7 +123,7 @@ describe("C7-1 #1: a paid-social ad renders in all four social sizes with every 
           expect(r.checks.size).toBe(size.id);
           expect(r.checks.layout).toBe(layout);
           expectWhole(r.checks, key, { body: true });
-          if (SAMPLES) writeFileSync(join(SAMPLE_DIR, `${key}-${size.id}-${layout}.png`), r.png);
+          sample(`${key}-${size.id}-${layout}`, r.png);
         });
       }
     }
@@ -123,7 +137,7 @@ describe("C7-1 #2: a display ad renders in the banner sizes with headline, butto
       expect(await dims(r.png)).toEqual(["png", size.width, size.height]);
       expectWhole(r.checks, "fernhollow", { body: false });
       expect(r.checks.fit.legal.size).toBeGreaterThanOrEqual(BANNER_LEGAL_MIN);
-      if (SAMPLES) writeFileSync(join(SAMPLE_DIR, `fernhollow-${size.id}-banner.png`), r.png);
+      sample(`fernhollow-${size.id}-banner`, r.png);
     });
   }
   it("the social layouts aren't drawn in a banner, and the banner isn't drawn in a social size", async () => {
