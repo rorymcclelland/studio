@@ -220,3 +220,9 @@ A picked ad becomes a launch pack: every size each channel needs, in English and
 | Q7 | (a) In Sprint 7 if it runs to 12 November, with a scheduled reminder on the 12th either way | N-7a as written; reminder set |
 
 No acceptance criteria changed beyond C7-2's languages list.
+
+**While building (Rory, 2 November 2026):**
+- F-28: the upstream report is not posted (postgres.js 4.0.0 rewrote that code and similar issues are closed); trying 4.0.0 is F-31 in the backlog.
+- C7-2: Translate runs from a click with its cost shown, like New words (no approval step; it replaces and publishes nothing; the daily cap applies).
+- C7-2: a language needs legal lines only when the English ad has them.
+- C7-2: the demo brands' French, German and Spanish legal lines and banned terms, written by Claude and marked "written for the demo", stay; Rory reviews them in the test pack.
