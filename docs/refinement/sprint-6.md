@@ -1,6 +1,6 @@
 # Sprint 6 refinement: move from Supabase to Neon
 
-Refined 27 October 2026, from the code at `5cf136f`. Status: **all eight items Ready, Sprint 6** (Rory's answers at the end; six as recommended, Q4 changed). Not started until Sprint 5 is closed and Rory says go. Creative II moves to Sprint 7, and every later roadmap sprint moves back one.
+Refined 27 October 2026, from the code at `5cf136f`. **Closed 2 November 2026:** all eight items done, with N-7 split (the clean-up that must wait for Supabase's 14 days, N-7a, returned to the backlog). Production moved to Neon on 29 October. Review evidence, test-pack results and the cutover-day notes are at the end. Creative II moves to Sprint 7, and every later roadmap sprint moves back one.
 
 ## Sprint goal
 
@@ -268,3 +268,41 @@ The refinement was written from `5cf136f`. Sprint 5 then closed with four more c
 - **CI:** the real-Supabase job is required since 27 Oct, so N-4 replaces a required job; it must be green on its first Neon run or it blocks CI.
 - **After-deploy Action:** waits for the commit, then syncs Inngest with three tries. N-6's cutover step "run the after-deploy sync" is that Action; nothing to add.
 - **Google key:** the image model needs a Google project with billing on (Sprint 5, third production run). Unrelated to the move, but N-7's `docs/hosting.md` rewrite should keep that note.
+
+## Changed while building
+
+- **N-1 (28 Oct):** the connector's migration tool splits on every `;` and breaks on function bodies, so files are applied with `run_sql_transaction`, one file per call with its `schema_migrations` row last (`scripts/neon-statements.mjs`). Each branch is checked against a local build with `scripts/schema-fingerprint.sql`: every kind of object and the ledger match, apart from Postgres 17's `MAINTAIN` privilege, which local Postgres 16 lacks.
+- **N-4 (28 Oct):** the agent tests run on plain Postgres in the first job, not on Neon: the runner is in the US and the branch in London, and they time out. Database, auth and model tests run on Neon. The dropped-connection tests (decision 0016) also stay on plain Postgres, because Neon can't see the endpoint through their local relay.
+- **N-6 (28 Oct):** Neon can't branch from a branch with an expiry date, so the rehearsal's tests get a second branch, copied and checked the same way. GitHub's required reviewers aren't available on this plan for a private repository; the safeguards are the manual start and the typed confirmation.
+- **N-7:** split. Removing the one-off copy Action, its scripts and secrets, Supabase's Vercel variables and both Supabase projects waits until 12 November (Q6), as N-7a.
+
+## Review evidence (closed 2 November 2026)
+
+- **Tests:** 532 unit, database and agent tests and 55 end-to-end specs passing; CI's Neon job green (database, auth and model tests as the non-superuser owner on Postgres 17, on a throwaway branch that is always deleted).
+- **Fresh-eyes review (28 Oct):** one must-fix (production's password shared with branches made from it, and the database host on the public health check) and six should-fix findings, plus notes. All fixed before the switch: production's password reset, the host hidden, a post-switch `check` target, email-case and `created_at` checks in the copy, daily sign-in limits and `request_sign_in` taken off the anonymous role (migration `20261029000002`), no addresses in logs, dead session cookies cleared, runbook steps. Two notes became backlog rows (F-29, F-30).
+- **Rehearsals:** two runs into scratch branches. The first copied and matched but couldn't make the tests' branch (fixed); the second was green end to end: copy 94 s, "Copy matches", tests green on the copied data, 19 MB.
+- **Migrations:** 26 files; applied by Claude through the connector to `preview` first, then `production`; both fingerprint-identical to a local build.
+- **Decisions:** 0015 (Neon and Studio's own sign-in), 0016 (dropped database connections).
+
+### Rory's test pack (`docs/testing/sprint-6-test-pack.md`), 29 October and 2 November
+
+| Case | Story | Result |
+| --- | --- | --- |
+| TC-1 Previews on Neon | N-5 | Partly checked: Claude confirmed a preview's health check names the `preview` branch and runs the mock model; Rory's sign-in on a preview was not reported |
+| TC-2 Resend ready | N-3 #7 | Pass: `mail.mcclelland.info` verified, every DNS record ticked. (The pack first asked for a test send from Resend's dashboard, which doesn't exist; corrected) |
+| TC-3 Copy into Neon | N-6 #2 | Pass: 68 s, "Copy matches"; 2 users, 2 workspaces, 2 campaigns, 14 variants, 7 pictures (every hash matching), 24 runs, 38 ledger rows, 11,087 orders; every trigger on again; 18 MB |
+| TC-4 Switch and deploy | N-6 | Pass: production on the merge (`925fd6b`), after-deploy sync green |
+| TC-5 Nothing written to Supabase meanwhile | N-6 #2 | Not run: Studio was in use before it could be, so it would only have shown the new activity. Supabase showed no runs or approvals in flight when the copy began |
+| TC-6 Sign in by email | N-3 #1, #7 | Pass: link used about a minute after it was asked for; inbox, not spam |
+| TC-7 A campaign from before the move | N-6 #3 | Pass |
+| TC-8 New picture against the cap | N-6 #4 | Pass: the picture was made and charged 2.67p; the page then failed on the connection bug below (fixed) |
+| TC-9 Invitee | N-6 #5, N-3 #2 | Pass on 2 Nov: workspace intact; emailed link used 29 s after it was asked for. On 29 Oct the email did not arrive (see below) |
+| TC-10 Sign-out | N-2 #4 | Pass |
+| TC-11 Speed and storage | N-6 #6, #7 | Pass: warm 3 to 72 ms (Supabase 3 ms); first query after Neon was idle 0.1 to 0.8 s (Supabase 94 ms); 18 MB of 0.5 GB. Rory: fine once warm |
+
+## Cutover-day notes (29 October 2026)
+
+- **Pages hung about 10 minutes after the switch.** A transaction was left open holding one member's workspace lock in `ensure_workspace`, and every signed-in page waited behind it until Neon ended it (5 minutes). Fixed the same morning: existing members take no lock (migration `20261029000003`), the member check runs once per request, and idle transactions end after 15 seconds on `production` and `preview`.
+- **The cause: two bugs in `postgres` 3.4.9** (decision 0016). When the server closes a connection mid-transaction, the client writes the rollback to a socket that has gone, which throws where nothing can catch it and kills the function; the dead connection then hangs the next connect for 30 s. An independent review found a third path in the same code, where a refused reconnect left a query waiting for ever. All three are patched (`patches/postgres+3.4.9.patch`, applied on every install), connections are short-lived, and a request whose connection fails before its work starts is retried. Live from 12:41. Not verified: behaviour under a real Vercel suspension (F-28).
+- **Sign-in emails didn't arrive for a while.** No link was recorded and nothing was logged: the background step was silent unless it threw. After the connection fix and address-free step logs (13:05), every request has worked: 0.3 s from request to Resend, links used within 30 s. The earlier failures are most likely the connection bug killing the background step, but the logs don't reach back far enough to prove it.
+- **TC-9's first retry** used /invites' New sign-in link, which is never emailed (decision 0010), so it proved the workspace but not email; the emailed retry on 2 Nov passed.

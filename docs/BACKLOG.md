@@ -127,35 +127,52 @@ Evidence: 418 unit, database and agent tests and 51 end-to-end specs passing; mo
 | F-27 | Several audiences: the gallery shows the first audience's ads, and New words isn't offered on other audiences' words | Sprint 5 build | Backlog, from Sprint 5 review |
 | F-16a | Folded: add today's Imagery production replies (the cut-off reply, the ruled-out face, the aspect wording) to the real-model eval regression cases | Sprint 5 production check | Folded into F-16a |
 
-## Sprint 6: move from Supabase to Neon (refined and confirmed 27 October 2026; starts after Sprint 5 closes)
+## Sprint 6: move from Supabase to Neon (closed 2 November 2026)
 
-Supabase's free plan allows two active projects and Studio uses both, so no other demo app can run. Creative II moves to Sprint 7. Checked against Sprint 5 as delivered at its close (no story changed; see the refinement's last section). Detail: `docs/refinement/sprint-6.md`.
+Supabase's free plan allows two active projects and Studio used both, so no other demo app could run. Production moved to Neon on 29 October. Detail: `docs/refinement/sprint-6.md`.
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| N-1 | Neon project in London; the shim becomes a real baseline migration (`auth.users`, `auth.uid()`, roles); `db:migrate` with a record of applied files; migrations applied by Claude through the Neon connector | M | Ready, Sprint 6 |
-| N-2 | Studio's own sign-in: hashed session tokens in an httpOnly cookie; invites start a session directly; Supabase packages removed | M | Ready, Sprint 6 |
-| N-3 | Sign in by email through Resend from a mcclelland.info subdomain, rate limited (closes F-18) | M | Ready, Sprint 6 |
-| N-4 | CI's required real-stack job runs on a throwaway Neon branch | S | Ready, Sprint 6 |
-| N-5 | Previews on a long-lived Neon `preview` branch with demo data (replaces F-8's second Supabase project) | S | Ready, Sprint 6 |
-| N-6 | Production cutover: data copied by a one-off Action, row counts and asset hashes checked, rehearsed first; Supabase kept 14 days as the way back | M | Ready, Sprint 6 |
-| N-7 | Clean-up: keep-awake cron, Supabase variables and code removed; hosting docs, CLAUDE.md, decision 0015, a new-demo-app guide | S | Ready, Sprint 6 |
-| N-8 | Test pack for Rory's hand checks | S | Ready, Sprint 6 |
+| N-1 | Neon project in London; the shim becomes a real baseline migration (`auth.users`, `auth.uid()`, roles); `db:migrate` with a record of applied files; migrations applied by Claude through the Neon connector | M | Done, Sprint 6 (26 files on `production` and `preview`, each fingerprint-identical to a local build; the connector's migration tool can't handle function bodies, so files go through `run_sql_transaction` with `scripts/neon-statements.mjs`) |
+| N-2 | Studio's own sign-in: hashed session tokens in an httpOnly cookie; invites start a session directly; Supabase packages removed | M | Done, Sprint 6 (TC-10; dead cookies are cleared after the review) |
+| N-3 | Sign in by email through Resend from a mcclelland.info subdomain, rate limited (closes F-18) | M | Done, Sprint 6 (TC-6, TC-9; daily limits of 10 per address and 80 in all added after the review). Residual: some links on cutover day were never sent, most likely the connection bug (decision 0016); step logs now show every request |
+| N-4 | CI's required real-stack job runs on a throwaway Neon branch | S | Done, Sprint 6 (green; the agent tests stay on plain Postgres because a US runner times out against London) |
+| N-5 | Previews on a long-lived Neon `preview` branch with demo data (replaces F-8's second Supabase project) | S | Done, Sprint 6 (health check on the `preview` branch, mock model). Residual: Rory's sign-in on a preview (TC-1) not reported |
+| N-6 | Production cutover: data copied by a one-off Action, row counts and asset hashes checked, rehearsed first; Supabase kept 14 days as the way back | M | Done, Sprint 6 (29 Oct: copy 68 s, "Copy matches", 18 MB). Residual: the post-switch check (TC-5) wasn't run, as Studio was already in use; two production fixes the same day (workspace lock, dropped connections, decision 0016) |
+| N-7 | Clean-up: keep-awake cron, Supabase code removed; hosting docs, CLAUDE.md, decision 0015, a new-demo-app guide | S | Done, Sprint 6, split: what must wait for Supabase's 14 days became N-7a |
+| N-8 | Test pack for Rory's hand checks | S | Done, Sprint 6 (`docs/testing/sprint-6-test-pack.md` and `.pdf`; nine of eleven pass, TC-1 partly checked, TC-5 not run) |
+
+Evidence: 532 unit, database and agent tests and 55 end-to-end specs; CI green on Neon; fresh-eyes review with one must-fix and six should-fix findings, all fixed before the switch; two rehearsals; the connection fix reviewed separately and its three findings fixed before deploy; decisions 0015 and 0016.
+
+## Where the Sprint 6 review items now live
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| N-7a | After 12 November (Q6): remove the one-off copy Action, `scripts/copy-data.mjs`, `scripts/check-copy.mjs` and their test; the `cutover` environment and its secrets; Supabase's three Vercel variables; then pause and delete both Supabase projects (Rory) | N-7 split | Backlog, returned from Sprint 6 |
+| F-28 | The `postgres` 3.4.9 patch (decision 0016): report the three bugs upstream, drop the patch when a release fixes them, and watch production's logs for connection errors for a week (behaviour under a real Vercel suspension is unverified) | Cutover day | Backlog, from Sprint 6 review |
+| F-29 | `NEON_API_KEY` is a repository secret, so CI on any branch can fetch any branch's connection string, production's included. Move the CI job to a GitHub environment or use a narrower key | Sprint 6 review, note | Backlog, from Sprint 6 review |
+| F-30 | A database error caught inside an `asUser` callback could let later statements run on a connection that has reconnected, outside the transaction and its role. Don't swallow database errors there; optionally make a transaction refuse statements after its connection closes | Connection-fix review, note | Backlog, from Sprint 6 review |
+| F-23 | Folded: on this plan GitHub doesn't enforce required checks or reviewers on a private repository, so F-23 needs Vercel's own "wait for checks" or a plan change | Sprint 6 review | Folded into F-23 |
 
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 5 close. Sprint 6 (the Neon move) is already refined and confirmed; Sprint 7 is Creative II (adaptation and assembly), refined at Sprint 6's close.
+Re-ranked at the Sprint 6 close. Sprint 7 is Creative II (adaptation, localisation and assembly), refined next.
 
-1. F-16a First real-model eval report and regression cases, with Sprint 5's Imagery replies (S): the agents are now all live, and every production fix this week was something a real-model eval would have caught
-2. F-24 Ask the picture check about faces for finance brands (S): small, and makes rule 8's companion check visible in the trail; good with Sprint 7's compliance work
-3. F-23 Gate production deploys on the checks, before real users arrive (S): touches CI, which N-4 changes; can join Sprint 6 if Rory wants
-4. F-27 Several audiences in the gallery (M): needed before a multi-audience brief is demoed; Sprint 7's adaptation touches the same code
-5. F-26 Redraw ads with the current kit (S): pairs with Sprint 7's sizes, which redraw every ad anyway
-6. F-20 Persona facts check compares age and region (S)
-7. F-19 Withdrawn sign-offs get their own state (S)
-8. F-25 A cheaper worst case for Make creative (S): typical cost is on target; low until volume grows
-9. F-9 Dark theme, once the light design system has settled
-10. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+1. Creative II (roadmap): every size from one hero, three languages, a launch pack per channel (L): the next roadmap sprint and the 60-asset demo
+2. F-26 Redraw ads with the current kit (S): Sprint 7's sizes redraw every ad anyway; propose for Sprint 7
+3. F-27 Several audiences in the gallery (M): Sprint 7's adaptation and assembly touch the same code, and a launch pack needs every audience; propose for Sprint 7
+4. N-7a Remove the cutover pieces and Supabase, after 12 November (S): small, dated, keeps rule 6's secret count down; propose for Sprint 7
+5. F-28 Watch and report the database-driver bugs (S): the patch is ours to carry until upstream fixes it; the week's watching fits Sprint 7
+6. F-16a First real-model eval report and regression cases (S): every production fix would have been caught by one
+7. F-23 Gate production deploys on the checks, before real users arrive (S)
+8. F-29 Narrow the Neon API key (S)
+9. F-30 Don't swallow database errors inside transactions (S)
+10. F-24 Ask the picture check about faces for finance brands (S): with Sprint 8's compliance work
+11. F-20 Persona facts check compares age and region (S)
+12. F-19 Withdrawn sign-offs get their own state (S)
+13. F-25 A cheaper worst case for Make creative (S)
+14. F-9 Dark theme, once the light design system has settled
+15. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -171,3 +188,6 @@ Re-ranked at the Sprint 5 close. Sprint 6 (the Neon move) is already refined and
 | 26 Oct 2026 | Sprint 5 refined: Nano Banana 2.1 at 1K; images kept in Postgres; Copy on Sonnet, Imagery and vision checks on Haiku; vision check for text now; SVG and PNG logos; bundled open fonts; no testimonials; Market stays on Sonnet |
 | 27 Oct 2026 | Sprint 6 refined: move to Neon (London), Studio's own sign-in, migrations recorded and applied by Claude through the Neon connector, Resend for sign-in links (folds in F-18), previews and CI on Neon branches, Supabase kept 14 days; starts after Sprint 5 closes |
 | 27 Oct 2026 | Sprint 5 closed: all nine items done; a signed-off brief becomes 12 checked ads in 37 s for about 14.7p; three Imagery fixes and a full-size view from the production check; the real-Supabase CI job is required; Sprint 6 (Neon) confirmed to start next |
+| 28 Oct 2026 | Sprint 6 built and reviewed; production's database password reset so no branch shares it; migrations applied by the connector one file per transaction, checked by schema fingerprint |
+| 29 Oct 2026 | Production moved to Neon (copy 68 s, "Copy matches"); the same day, a workspace-lock hang and dropped-connection crashes fixed (decision 0016: `postgres` 3.4.9 patched); idle transactions end after 15 s |
+| 2 Nov 2026 | Sprint 6 closed: all eight items done, N-7 split (N-7a after 12 Nov); new rows F-28 to F-30; Sprint 7 (Creative II) to be refined |

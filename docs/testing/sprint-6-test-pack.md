@@ -1,5 +1,7 @@
 # Sprint 6 test pack: the move to Neon and Studio's own sign-in
 
+**Results (29 October and 2 November 2026):** all cases pass apart from TC-1 (partly checked) and TC-5 (not run); detail in `docs/refinement/sprint-6.md`, "Review evidence".
+
 **For Rory, on production, on the day of the switch.** Real email and real (small) AI costs. Contains no passwords or keys: you sign in as yourself, and every connection string stays in Vercel or GitHub, pasted straight from Neon or Supabase.
 
 This pack follows the runbook in `docs/hosting.md` ("Cutover"), step by step. Claude runs alongside you in the chat, checks each run's results and records the timings.
