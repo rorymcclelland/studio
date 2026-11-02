@@ -131,12 +131,14 @@ export function createMockImageModel(): MockImageModelV4 {
       if (mockBehaviour.delayMs > 0) await new Promise((r) => setTimeout(r, mockBehaviour.delayMs));
       const failure = mockBehaviour.imageFailures.shift();
       if (failure) throw typeof failure === "string" ? new Error(failure) : failure;
-      const palette = (options.providerOptions?.mock as { palette?: unknown } | undefined)?.palette;
+      const mock = options.providerOptions?.mock as { palette?: unknown; size?: unknown } | undefined;
+      const palette = mock?.palette;
       const png = await drawMockImage({
         prompt: options.prompt ?? "",
         palette: Array.isArray(palette) ? palette.filter((p): p is string => typeof p === "string") : [],
         aspect: options.aspectRatio ?? "1:1",
         seed: options.seed,
+        size: mock?.size === "2K" ? "2K" : "1K",
       });
       const inputTokens = Math.ceil((options.prompt ?? "").length / 4);
       return {

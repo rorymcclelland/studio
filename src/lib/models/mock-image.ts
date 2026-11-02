@@ -9,12 +9,13 @@ import sharp from "sharp";
 
 const FALLBACK = ["#1F4E79", "#F2C14E", "#6B9080", "#F7F5F0", "#14213D"];
 
-/** Pixel size for an aspect ratio, 1024 on the longer side (1K). */
-export function imageSize(aspect: string): { width: number; height: number } {
+/** Pixel size for an aspect ratio: 1024 on the longer side at 1K, 2048 at 2K (C7-1, Q1), as the real model draws. */
+export function imageSize(aspect: string, size: "1K" | "2K" = "1K"): { width: number; height: number } {
+  const long = size === "2K" ? 2048 : 1024;
   const m = /^(\d+):(\d+)$/.exec(aspect);
   const [w, h] = m ? [Number(m[1]), Number(m[2])] : [1, 1];
-  if (!w || !h) return { width: 1024, height: 1024 };
-  return w >= h ? { width: 1024, height: Math.round((1024 * h) / w) } : { width: Math.round((1024 * w) / h), height: 1024 };
+  if (!w || !h) return { width: long, height: long };
+  return w >= h ? { width: long, height: Math.round((long * h) / w) } : { width: Math.round((long * w) / h), height: long };
 }
 
 function rng(seedText: string): () => number {
@@ -73,11 +74,11 @@ export function stampSvg(scale: number): { svg: string; width: number; height: n
   return { svg, width: Math.ceil(w), height: Math.ceil(h) };
 }
 
-/** A deterministic PNG of soft palette shapes, stamped "Simulated image" bottom right. */
-export async function drawMockImage(opts: { prompt: string; palette?: string[]; aspect?: string; seed?: number }): Promise<Uint8Array> {
+/** A deterministic PNG of soft palette shapes, stamped "Simulated image" bottom right. 1K unless asked for 2K. */
+export async function drawMockImage(opts: { prompt: string; palette?: string[]; aspect?: string; seed?: number; size?: "1K" | "2K" }): Promise<Uint8Array> {
   const palette = (opts.palette ?? []).filter((h) => /^#[0-9a-f]{6}$/i.test(h));
   const colours = palette.length >= 2 ? palette : FALLBACK;
-  const { width, height } = imageSize(opts.aspect ?? "1:1");
+  const { width, height } = imageSize(opts.aspect ?? "1:1", opts.size);
   const rand = rng(`${opts.prompt}|${colours.join(",")}|${opts.seed ?? 0}`);
   const pick = () => colours[Math.floor(rand() * colours.length)];
   const byLight = [...colours].sort((a, b) => lightness(b) - lightness(a));
@@ -96,7 +97,8 @@ export async function drawMockImage(opts: { prompt: string; palette?: string[]; 
     shapes.push(`<ellipse cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" rx="${rx.toFixed(1)}" ry="${ry.toFixed(1)}" fill="url(#g${i})" transform="rotate(${Math.round(rand() * 180)} ${cx.toFixed(1)} ${cy.toFixed(1)})"/>`);
   }
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}"><defs>${defs.join("")}</defs>${shapes.join("")}</svg>`;
-  const picture = await sharp(Buffer.from(svg)).blur(6).png().toBuffer();
+  // The same softness at either size (the 1K picture is unchanged).
+  const picture = await sharp(Buffer.from(svg)).blur((6 * Math.max(width, height)) / 1024).png().toBuffer();
   const stamp = stampSvg(Math.max(2, Math.round(width / 340)));
   const margin = Math.round(width * 0.025);
   const out = await sharp(picture)
