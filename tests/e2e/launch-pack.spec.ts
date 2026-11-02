@@ -1,0 +1,133 @@
+// C7-3 Launch pack through the UI, with the mock models: on a signed-off
+// Quillmoor campaign with ads, the pack says why there is none before anything
+// is picked (test case 4); then the story's demo: pick four paid-social ads,
+// translate them, and the gallery shows the pack's contents and file count
+// (64 ads: four ads × four social sizes × four languages); Build launch pack
+// downloads one zip, which is unzipped and checked entry by entry (test cases
+// 1, 2, 5 and 6). The time from click to a complete download and the zip's size
+// are printed (test case 5's measurement). Each page at 375 px and 1440 px:
+// nothing scrolls sideways, AA contrast. SHOTS_DIR=<folder> saves screenshots.
+import { readFile } from "node:fs/promises";
+import { expect, test, type Page } from "@playwright/test";
+import { strFromU8, unzipSync } from "fflate";
+import { contrastViolations, expectNoHorizontalScroll, settle, signIn } from "./helpers";
+
+const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
+const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
+const creative = (page: Page) => page.locator("[data-creative]");
+const ads = (page: Page) => page.locator("[data-gallery] > li");
+const pack = (page: Page) => page.locator("[data-launch-pack]");
+
+async function checkWidths(page: Page, what: string) {
+  for (const width of [375, 1440]) {
+    await page.setViewportSize({ width, height: 900 });
+    await settle(page);
+    await expectNoHorizontalScroll(page, `${what} at ${width}px`);
+    expect(await contrastViolations(page), `${what} at ${width}px`).toEqual([]);
+    if (process.env.SHOTS_DIR) {
+      await pack(page).scrollIntoViewIfNeeded();
+      await page.screenshot({ path: `${process.env.SHOTS_DIR}/${what.replace(/\W+/g, "-")}-${width}.png` });
+    }
+  }
+  await page.setViewportSize({ width: 1280, height: 900 });
+}
+
+test.beforeEach(async ({ page }) => {
+  await signIn(page);
+});
+
+test("C7-3: the launch pack of four picked social ads in four languages downloads as one zip of 64 ads with its manifests", async ({ page }) => {
+  test.setTimeout(420_000);
+
+  // A signed-off Quillmoor campaign with ads.
+  await page.goto("/campaigns");
+  await settle(page);
+  await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
+  await page.getByLabel("Objective").fill(OBJECTIVE);
+  await page.getByRole("button", { name: "Write the brief" }).click();
+  await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
+  const campaignPath = new URL(page.url()).pathname;
+  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
+  const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
+  await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
+  await expect(toast(page, "Sent for sign-off")).toBeVisible();
+  await panel.getByRole("button", { name: "Approve version 1" }).click();
+  await expect(toast(page, "Version 1 signed off.")).toBeVisible();
+  await creative(page).getByRole("button", { name: /^Make creative/ }).click();
+  await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+
+  // #4: nothing picked yet: the pack says why, and offers no download; the address refuses too.
+  await expect(pack(page).locator("[data-pack-reason]")).toHaveText(
+    "There's no launch pack yet: nothing is picked. Pick the ads to launch in the gallery, then build the pack.",
+  );
+  await expect(pack(page).locator("[data-pack-download]")).toHaveCount(0);
+  const refused = await page.request.get(`${campaignPath}/pack.zip`);
+  expect(refused.status()).toBe(409);
+  await checkWidths(page, "launch pack, nothing picked");
+
+  // The demo: pick four paid-social ads, then translate the pick.
+  const social = page.locator('[data-gallery] > li[data-channel="paid social"]');
+  expect(await social.count()).toBeGreaterThanOrEqual(4);
+  for (let i = 0; i < 4; i++) {
+    const card = social.nth(i);
+    const title = (await card.locator("h3, h4").first().textContent())!.trim();
+    await card.getByRole("button", { name: `Pick ${title.toLowerCase()}` }).click();
+    await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
+  }
+  const bar = page.locator("[data-languages]");
+  await bar.getByRole("button", { name: /^Translate the picked ads/ }).click();
+  for (let i = 0; i < 4; i++) await expect(social.nth(i).locator("[data-translation]")).toHaveCount(3, { timeout: 90_000 });
+
+  // #1: the gallery shows what the pack will hold and its file count before download.
+  await page.reload();
+  await settle(page);
+  await expect(pack(page).locator("[data-pack-count]")).toContainText("64 ads from 4 picked ads");
+  await expect(pack(page).locator("[data-pack-count]")).toContainText("67 files in one zip");
+  await expect(pack(page).locator("[data-pack-language]")).toHaveText(["English: 16", "French: 16", "German: 16", "Spanish: 16"]);
+  const download = pack(page).getByRole("link", { name: "Build launch pack (64 ads)" });
+  await expect(download).toBeVisible();
+  await checkWidths(page, "launch pack, four picked ads");
+
+  // #5: the pack downloads completely; time and size measured.
+  const started = Date.now();
+  const [file] = await Promise.all([page.waitForEvent("download"), download.click()]);
+  expect(file.suggestedFilename()).toMatch(/^quillmoor-money-launch-pack-\d{4}-\d\d-\d\d\.zip$/);
+  const path = await file.path();
+  const seconds = (Date.now() - started) / 1000;
+  const bytes = await readFile(path);
+  console.log(`[pack] 64-ad demo pack: ${seconds.toFixed(1)} s, ${(bytes.length / 1e6).toFixed(1)} MB`);
+
+  // #1, #2, #6: the zip's entries, both manifests and the README.
+  const entries = unzipSync(new Uint8Array(bytes));
+  const names = Object.keys(entries);
+  const pngs = names.filter((n) => n.endsWith(".png"));
+  expect(pngs).toHaveLength(64);
+  expect(names.filter((n) => !n.endsWith(".png")).sort()).toEqual(["README.txt", "manifest.csv", "manifest.json"]);
+  for (const lang of ["en-GB", "fr-FR", "de-DE", "es-ES"]) {
+    for (const size of ["1080x1080", "1080x1350", "1080x1920", "1200x628"]) {
+      expect(pngs.filter((p) => p.startsWith(`paid-social/${lang}/`) && p.includes(`-${size}`)), `${lang} ${size}`).toHaveLength(4);
+    }
+  }
+  for (const p of pngs) {
+    const png = entries[p];
+    // The PNG signature, then the width and height from its header.
+    expect([...png.slice(0, 4)]).toEqual([0x89, 0x50, 0x4e, 0x47]);
+    const view = new DataView(png.buffer, png.byteOffset);
+    const [w, h] = /-(\d+)x(\d+)/.exec(p)!.slice(1).map(Number);
+    expect([view.getUint32(16), view.getUint32(20)], p).toEqual([w, h]);
+  }
+  const manifest = JSON.parse(strFromU8(entries["manifest.json"]));
+  expect(manifest.files.map((f: { file: string }) => f.file).sort()).toEqual([...pngs].sort());
+  expect(manifest.leftOut).toEqual([]);
+  for (const f of manifest.files) {
+    expect(f.labels, f.file).toContain("Simulated image");
+    if (f.language.tag !== "en-GB") expect(f.labels, f.file).toContain("Machine translation (simulated)");
+    expect(f.checks.fit.passed).toBe(true);
+    expect(f.headline.length).toBeGreaterThan(0);
+  }
+  const csvRows = strFromU8(entries["manifest.csv"]).trim().split("\r\n");
+  expect(csvRows).toHaveLength(65);
+  const readme = strFromU8(entries["README.txt"]);
+  expect(readme).toContain("Simulated images: 64 files");
+  expect(readme).toContain("Machine translation: 48 files");
+});

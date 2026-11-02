@@ -137,15 +137,19 @@ async function draw(parts: VariantParts, v: DrawableVariant, size: SizeSpec): Pr
   return { ok: false, refused: [...new Set(reasons)].join("; ") };
 }
 
-/** Draws (or recalls) an ad in one size. */
-export async function drawInSize(userId: string, v: DrawableVariant, size: SizeId, parts?: VariantParts | null): Promise<SizeDrawing> {
+/**
+ * Draws (or recalls) an ad in one size. C7-3: the launch pack passes
+ * `remember: false`, so a pack of 64 drawings streams through without
+ * filling the cache (and pushing out the gallery's) on the way.
+ */
+export async function drawInSize(userId: string, v: DrawableVariant, size: SizeId, parts?: VariantParts | null, opts: { remember?: boolean } = {}): Promise<SizeDrawing> {
   const key = sizeEtag(v, size);
   const hit = cache.map.get(key);
   if (hit) return hit;
   const p = parts ?? (await asUser(userId, (tx) => loadParts(tx, v.imageAssetId, v.copySetId, v.kit)));
   if (!p) return { ok: false, refused: "the picture or the words could not be read" };
   const drawn = await draw(p, v, SIZES[size]);
-  remember(key, drawn);
+  if (opts.remember !== false) remember(key, drawn);
   return drawn;
 }
 

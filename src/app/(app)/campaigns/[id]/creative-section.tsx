@@ -8,6 +8,8 @@
 import type { CopySetView } from "@/lib/creative/copy";
 import { fieldsOf, type AnyCopy, type CopyChannel } from "@/lib/creative/copy-rules";
 import type { Badge, CreativeRunView, CreativeView, VariantView } from "@/lib/creative/gallery";
+import type { PackSummary } from "@/lib/creative/pack";
+import { Suspense } from "react";
 import { agentDisplayName } from "@/lib/agents/names";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
@@ -29,6 +31,7 @@ import {
   TranslateButton,
   type FieldSpec,
 } from "./creative-controls";
+import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
 
 const RUNNING = new Set(["queued", "running"]);
 
@@ -68,7 +71,7 @@ function specFor(channel: CopyChannel, copy: AnyCopy): { fields: FieldSpec[]; va
   };
 }
 
-export function CreativeSection({ view }: { view: CreativeView }) {
+export function CreativeSection({ view, pack }: { view: CreativeView; pack: Promise<PackSummary | null> | null }) {
   const make = view.makeCreative;
   const running = !!make.runningRunId;
   const anyBusy =
@@ -169,6 +172,11 @@ export function CreativeSection({ view }: { view: CreativeView }) {
                 {plural(view.variants.length, "ad")}, {picked} picked. Each shows its checks: contrast, fit and the legal line.
               </p>
               <Languages view={view} />
+              {pack && (
+                <Suspense fallback={<LaunchPackSkeleton />}>
+                  <LaunchPack summary={pack} />
+                </Suspense>
+              )}
               {view.olderKitCount > 0 && (
                 <div
                   className="flex flex-col gap-3 rounded-field bg-review-soft px-4 py-3 text-review-ink sm:flex-row sm:items-center sm:justify-between"
@@ -257,6 +265,7 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
     <li
       aria-labelledby={titleId}
       data-ad={v.id}
+      data-channel={v.channel}
       data-picked={v.picked ? "" : undefined}
       className={cx("flex min-w-0 flex-col gap-3 rounded-card border-2 bg-surface p-3 sm:p-4", v.picked ? "border-primary" : "border-transparent")}
     >
