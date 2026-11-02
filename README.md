@@ -36,6 +36,8 @@ With `MODEL_PROVIDER_OVERRIDE=mock` nothing is spent. To use real models, set `A
 
 CI runs all of these on every push. A git pre-commit hook and Claude Code hooks run the same checks locally.
 
+**Sprint sign-off (decision 0021).** Every agreed test case is in `tests/e2e/cases.ts` with how it is checked. In CI the browser tests are recorded, and each push's results and recordings go to the branch `e2e-results/ci/<branch>`; `node scripts/demo-page.mjs --results <checkout of that branch> --sprint <N> --out <folder>` builds the demo page Rory signs the sprint off from. Locally, `E2E_VIDEO=1 npm run test:e2e` records too, and `node scripts/e2e-results.mjs --out <folder>` gathers a run's results the same way.
+
 ## Project rules
 
 Honest by default; fictional brands only; people approve consequential actions; every agent run is traceable; spend is capped; secrets stay out of the repo; tenancy from day one; the image model never draws text. In full in `CLAUDE.md`.

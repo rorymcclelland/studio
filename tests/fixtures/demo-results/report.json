@@ -1,0 +1,82 @@
+{
+  "config": {},
+  "suites": [
+    {
+      "title": "sample.spec.ts",
+      "file": "sample.spec.ts",
+      "specs": [
+        {
+          "title": "X-1 #1: shows the thing",
+          "file": "sample.spec.ts",
+          "id": "a1",
+          "tests": [
+            {
+              "projectName": "chromium",
+              "status": "expected",
+              "annotations": [{ "type": "case", "description": "X-1.1" }, { "type": "case", "description": "X-1.11" }],
+              "results": [
+                {
+                  "status": "passed",
+                  "duration": 12400,
+                  "steps": [{ "title": "Open the thing" }, { "title": "See it <works>" }],
+                  "attachments": [{ "name": "video", "contentType": "video/webm", "path": "videos/sample-1.webm" }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "X-1 #2: refuses the other thing",
+          "file": "sample.spec.ts",
+          "id": "a2",
+          "tests": [
+            {
+              "projectName": "chromium",
+              "status": "unexpected",
+              "annotations": [{ "type": "case", "description": "X-1.2" }],
+              "results": [
+                {
+                  "status": "failed",
+                  "duration": 3000,
+                  "error": { "message": "\u001b[31mError: expect(locator).toBeVisible() failed\u001b[39m\nLocator: getByText('Refused')" },
+                  "steps": [{ "title": "Try the other thing", "error": { "message": "x" } }],
+                  "attachments": [{ "name": "video", "contentType": "video/webm", "path": "videos/sample-2.webm" }]
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "X-1 #5: flaky but passed",
+          "file": "sample.spec.ts",
+          "id": "a3",
+          "tests": [
+            {
+              "projectName": "chromium",
+              "status": "flaky",
+              "annotations": [{ "type": "case", "description": "X-1.5" }],
+              "results": [
+                { "status": "failed", "duration": 1000, "error": { "message": "first try" }, "steps": [], "attachments": [] },
+                { "status": "passed", "duration": 1100, "steps": [], "attachments": [] }
+              ]
+            }
+          ]
+        },
+        {
+          "title": "X-1 #6: skipped here",
+          "file": "sample.spec.ts",
+          "id": "a4",
+          "tests": [
+            { "projectName": "chromium", "status": "skipped", "annotations": [{ "type": "case", "description": "X-1.6" }], "results": [{ "status": "skipped", "duration": 0, "steps": [], "attachments": [] }] }
+          ]
+        },
+        {
+          "title": "X-1 #7: not tagged",
+          "file": "sample.spec.ts",
+          "id": "a5",
+          "tests": [{ "projectName": "chromium", "status": "expected", "annotations": [], "results": [{ "status": "passed", "duration": 10, "steps": [], "attachments": [] }] }]
+        }
+      ]
+    }
+  ]
+}

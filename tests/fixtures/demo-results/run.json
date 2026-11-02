@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "123456789",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/example/studio/actions/runs/123456789",
+  "repository": "example/studio",
+  "commit": "0fcc4750000000000000000000000000000000aa",
+  "branch": "sprint-7",
+  "date": "2026-11-02T14:30:00.000Z",
+  "checksJob": "success"
+}

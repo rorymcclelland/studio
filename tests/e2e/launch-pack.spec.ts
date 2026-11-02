@@ -10,7 +10,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { contrastViolations, expectNoHorizontalScroll, settle, signIn } from "./helpers";
+import { caption, contrastViolations, expectNoHorizontalScroll, settle, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -36,10 +36,11 @@ test.beforeEach(async ({ page }) => {
   await signIn(page);
 });
 
-test("C7-3: the launch pack of four picked social ads in four languages downloads as one zip of 64 ads with its manifests", async ({ page }) => {
-  test.setTimeout(420_000);
+test("C7-3: the launch pack of four picked social ads in four languages downloads as one zip of 64 ads with its manifests", { annotation: [{ type: "case", description: "C7-3.1" }, { type: "case", description: "C7-3.2" }, { type: "case", description: "C7-3.4" }, { type: "case", description: "C7-3.5" }, { type: "case", description: "C7-3.6" }, { type: "case", description: "C7-2.6" }] }, async ({ page }) => {
+  test.setTimeout(900_000);
 
   // A signed-off Quillmoor campaign with ads.
+  await caption(page, "A signed-off Quillmoor brief, then Make creative (simulated pictures)");
   await page.goto("/campaigns");
   await settle(page);
   await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
@@ -53,9 +54,13 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await expect(toast(page, "Sent for sign-off")).toBeVisible();
   await panel.getByRole("button", { name: "Approve version 1" }).click();
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
+  // Read the signed-off page afresh (as F-26 does): on a slow dev server the action's re-render can lag.
+  await page.reload();
+  await settle(page);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
-  await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
 
+  await caption(page, "C7-3.4: nothing picked yet: the pack says why, and offers no download");
   // #4: nothing picked yet: the pack says why, and offers no download; the address refuses too.
   await expect(pack(page).locator("[data-pack-reason]")).toHaveText(
     "There's no launch pack yet: nothing is picked. Pick the ads to launch in the gallery, then build the pack.",
@@ -66,6 +71,7 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await checkWidths(page, "launch pack, nothing picked");
 
   // The demo: pick four paid-social ads, then translate the pick.
+  await caption(page, "The sprint demo: pick four paid-social ads and translate them into French, German and Spanish");
   const social = page.locator('[data-gallery] > li[data-channel="paid social"]');
   expect(await social.count()).toBeGreaterThanOrEqual(4);
   for (let i = 0; i < 4; i++) {
@@ -76,8 +82,15 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   }
   const bar = page.locator("[data-languages]");
   await bar.getByRole("button", { name: /^Translate the picked ads/ }).click();
-  for (let i = 0; i < 4; i++) await expect(social.nth(i).locator("[data-translation]")).toHaveCount(3, { timeout: 90_000 });
+  await untilShown(
+    page,
+    async () => {
+      for (let i = 0; i < 4; i++) await expect(social.nth(i).locator("[data-translation]")).toHaveCount(3, { timeout: 10_000 });
+    },
+    240_000,
+  );
 
+  await caption(page, "C7-3.1: the gallery shows what the pack holds: 64 ads, 67 files");
   // #1: the gallery shows what the pack will hold and its file count before download.
   await page.reload();
   await settle(page);
@@ -88,6 +101,7 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await expect(download).toBeVisible();
   await checkWidths(page, "launch pack, four picked ads");
 
+  await caption(page, "C7-3.5: Build launch pack downloads one zip; then every file, both manifests and the README are checked");
   // #5: the pack downloads completely; time and size measured.
   const started = Date.now();
   const [file] = await Promise.all([page.waitForEvent("download"), download.click()]);
