@@ -148,31 +148,41 @@ Evidence: 532 unit, database and agent tests and 55 end-to-end specs; CI green o
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
-| N-7a | After 12 November (Q6): remove the one-off copy Action, `scripts/copy-data.mjs`, `scripts/check-copy.mjs` and their test; the `cutover` environment and its secrets; Supabase's three Vercel variables; then pause and delete both Supabase projects (Rory) | N-7 split | Backlog, returned from Sprint 6 |
-| F-28 | The `postgres` 3.4.9 patch (decision 0016): report the three bugs upstream, drop the patch when a release fixes them, and watch production's logs for connection errors for a week (behaviour under a real Vercel suspension is unverified) | Cutover day | Backlog, from Sprint 6 review |
+| N-7a | After 12 November (Q6): remove the one-off copy Action, `scripts/copy-data.mjs`, `scripts/check-copy.mjs` and their test; the `cutover` environment and its secrets; Supabase's three Vercel variables; then pause and delete both Supabase projects (Rory) | N-7 split | Backlog, returned from Sprint 6; Ready, Sprint 7 |
+| F-28 | The `postgres` 3.4.9 patch (decision 0016): report the three bugs upstream, drop the patch when a release fixes them, and watch production's logs for connection errors for a week (behaviour under a real Vercel suspension is unverified) | Cutover day | Backlog, from Sprint 6 review; Ready, Sprint 7 |
 | F-29 | `NEON_API_KEY` is a repository secret, so CI on any branch can fetch any branch's connection string, production's included. Move the CI job to a GitHub environment or use a narrower key | Sprint 6 review, note | Backlog, from Sprint 6 review |
 | F-30 | A database error caught inside an `asUser` callback could let later statements run on a connection that has reconnected, outside the transaction and its role. Don't swallow database errors there; optionally make a transaction refuse statements after its connection closes | Connection-fix review, note | Backlog, from Sprint 6 review |
 | F-23 | Folded: on this plan GitHub doesn't enforce required checks or reviewers on a private repository, so F-23 needs Vercel's own "wait for checks" or a plan change | Sprint 6 review | Folded into F-23 |
 
+## Sprint 7: Creative II, sizes, languages and the launch pack (refined and confirmed 2 November 2026)
+
+A picked ad becomes a launch pack: every size each channel needs, in English and three more languages, checked, in one zip with a manifest. Detail: `docs/refinement/sprint-7.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-26 | Redraw ads with the current kit | S | Ready, Sprint 7 |
+| F-27 | Several audiences in Make creative, the gallery and New words | M | Ready, Sprint 7 |
+| C7-1 | Sizes: four social sizes and three banners from one ad, 2K pictures, attention crop or boxed picture | L | Ready, Sprint 7 |
+| C7-2 | Languages: Localise agent (Sonnet), per-brand languages (French, German, Spanish first), legal lines per language written by a person, overflow checked in every size | L | Ready, Sprint 7 |
+| C7-3 | Launch pack: a streamed zip per campaign with manifest and README, picked ads only | M | Ready, Sprint 7 |
+| F-28 | Report the database-driver bugs upstream and watch production for a week | S | Ready, Sprint 7 |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 7 (reminder on 12 Nov) |
+| N-8b | Test pack | S | Ready, Sprint 7 |
+
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 6 close. Sprint 7 is Creative II (adaptation, localisation and assembly), refined next.
+Re-ranked at the Sprint 6 close. Sprint 7 (Creative II with F-26, F-27, F-28 and N-7a) is refined and confirmed above.
 
-1. Creative II (roadmap): every size from one hero, three languages, a launch pack per channel (L): the next roadmap sprint and the 60-asset demo
-2. F-26 Redraw ads with the current kit (S): Sprint 7's sizes redraw every ad anyway; propose for Sprint 7
-3. F-27 Several audiences in the gallery (M): Sprint 7's adaptation and assembly touch the same code, and a launch pack needs every audience; propose for Sprint 7
-4. N-7a Remove the cutover pieces and Supabase, after 12 November (S): small, dated, keeps rule 6's secret count down; propose for Sprint 7
-5. F-28 Watch and report the database-driver bugs (S): the patch is ours to carry until upstream fixes it; the week's watching fits Sprint 7
-6. F-16a First real-model eval report and regression cases (S): every production fix would have been caught by one
-7. F-23 Gate production deploys on the checks, before real users arrive (S)
-8. F-29 Narrow the Neon API key (S)
-9. F-30 Don't swallow database errors inside transactions (S)
-10. F-24 Ask the picture check about faces for finance brands (S): with Sprint 8's compliance work
-11. F-20 Persona facts check compares age and region (S)
-12. F-19 Withdrawn sign-offs get their own state (S)
-13. F-25 A cheaper worst case for Make creative (S)
-14. F-9 Dark theme, once the light design system has settled
-15. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+1. F-16a First real-model eval report and regression cases (S): every production fix would have been caught by one
+2. F-23 Gate production deploys on the checks, before real users arrive (S)
+3. F-29 Narrow the Neon API key (S)
+4. F-30 Don't swallow database errors inside transactions (S)
+5. F-24 Ask the picture check about faces for finance brands (S): with Sprint 8's compliance work
+6. F-20 Persona facts check compares age and region (S)
+7. F-19 Withdrawn sign-offs get their own state (S)
+8. F-25 A cheaper worst case for Make creative (S)
+9. F-9 Dark theme, once the light design system has settled
+10. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
 
 ## Decisions
 
@@ -191,3 +201,4 @@ Re-ranked at the Sprint 6 close. Sprint 7 is Creative II (adaptation, localisati
 | 28 Oct 2026 | Sprint 6 built and reviewed; production's database password reset so no branch shares it; migrations applied by the connector one file per transaction, checked by schema fingerprint |
 | 29 Oct 2026 | Production moved to Neon (copy 68 s, "Copy matches"); the same day, a workspace-lock hang and dropped-connection crashes fixed (decision 0016: `postgres` 3.4.9 patched); idle transactions end after 15 s |
 | 2 Nov 2026 | Sprint 6 closed: all eight items done, N-7 split (N-7a after 12 Nov); new rows F-28 to F-30; Sprint 7 (Creative II) to be refined |
+| 2 Nov 2026 | Sprint 7 refined and confirmed (all as recommended): 2K pictures; three banners with honest refusals; per-brand languages, French, German and Spanish first; legal lines per language written by a person; Sonnet translates; picked ads in the pack, no approval to download; N-7a on or after 12 Nov |

@@ -1,6 +1,6 @@
 # Sprint 7 refinement: Creative II, sizes, languages and the launch pack
 
-Refined 2 November 2026, from the code at `e4f9cc8` (Sprint 6 closed, production on Neon). Status: **draft, waiting for Rory's answers**. Not started until Rory says go.
+Refined 2 November 2026, from the code at `e4f9cc8` (Sprint 6 closed, production on Neon). Status: **all eight items Ready, Sprint 7** (Rory's answers at the end, all as recommended, 2 November 2026). Not started until Rory says go.
 
 ## Sprint goal
 
@@ -207,6 +207,16 @@ A picked ad becomes a launch pack: every size each channel needs, in English and
 | Q6 | What goes in a pack, and approval | (a) Picked ads only; downloading needs no approval. (b) Picked ads, and the pack waits for an approval like a sign-off | (a): a download publishes nothing; approvals come with launching |
 | Q7 | Supabase clean-up (N-7a) | (a) In this sprint, done on or after 12 November. (b) A scheduled reminder on 12 November, done outside the sprint | (a) if the sprint runs to the 12th, otherwise (b): I'd set the reminder either way |
 
-## Answers
+## Answers (Rory, 2 November 2026)
 
-To be recorded when Rory answers.
+| # | Answer | Effect on the stories |
+| --- | --- | --- |
+| Q1 | (a) 2K pictures, square box where a crop would lose too much | As written (C7-1); Imagery config moves to 2K; Make creative's estimate rises to about 19p |
+| Q2 | (a) 300 × 250, 300 × 600 and 728 × 90; a size the legal lines don't fit is left out with the reason | As written (C7-1 test case 4) |
+| Q3 | (b) Each brand picks its languages; French, German and Spanish for both demo brands | C7-2: the brand kit gains a languages list from the supported set |
+| Q4 | (a) Legal lines and banned terms per language in the kit, written by a person; Claude writes the demo brands' once, marked as written for the demo | As written (C7-2) |
+| Q5 | (a) Sonnet | As written (C7-2) |
+| Q6 | (a) Picked ads only, no approval to download | As written (C7-3) |
+| Q7 | (a) In Sprint 7 if it runs to 12 November, with a scheduled reminder on the 12th either way | N-7a as written; reminder set |
+
+No acceptance criteria changed beyond C7-2's languages list.
