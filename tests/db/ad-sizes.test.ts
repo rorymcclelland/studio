@@ -208,9 +208,16 @@ describe("C7-1 the Sizes view", () => {
 
   it("the thumbnails it lists are answered from the drawings it made (one drawing per size)", async () => {
     const view = (await adSizes(a.userId, ids.social))!;
-    const started = performance.now();
+    // The drawings are cached by key; serving every listed size must reuse them,
+    // not draw again (checked by the cache's entries and bytes, not by time,
+    // which over a slow database link says nothing about drawing).
+    const cache = (globalThis as unknown as { __csAdSizeCache: { map: Map<string, unknown>; bytes: number } }).__csAdSizeCache;
+    const before = [...cache.map.entries()];
+    expect(before.length).toBeGreaterThanOrEqual(view.sizes.length);
     for (const s of view.sizes) expect((await adSizeResponse(a.userId, ids.social, `${s.size}.png`)).status).toBe(200);
-    expect(performance.now() - started).toBeLessThan(1500);
+    // A fresh drawing would store a new object under its key.
+    expect(cache.map.size).toBe(before.length);
+    for (const [key, value] of before) expect(cache.map.get(key), key).toBe(value);
     expect(SIZES["1080x1920"].height).toBe(1920);
   });
 });
