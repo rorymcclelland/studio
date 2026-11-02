@@ -129,7 +129,9 @@ export function unsupportedFigures(text: string, pool: Figure[]): string[] {
 //     The brand's own name after a dash is a sign-off, not an attribution.
 const DOUBLE_QUOTES = /["“”„‟«»‹›]/;
 const SINGLE_QUOTED = /(?:^|[\s([{–—-])['‘](?=[^\s'‘’])[\s\S]*?[^\s]['’](?=$|[\s.,!?;:)\]}–—-])/;
-const FIRST_PERSON = /\bI(?:['’](?:m|ve|d|ll))?\b|\b(?:me|my|mine|myself)\b/i;
+// Word edges by Unicode letters, not ASCII \b: the same check runs on translations (C7-2), where "même" or
+// "cómeme" end in "me" after an accented letter that \b counts as a gap (found by the C7-3 demo pack).
+const FIRST_PERSON = /(?<![\p{L}\p{M}\p{N}_])(?:I(?:['’](?:m|ve|d|ll))?|me|my|mine|myself)(?![\p{L}\p{M}\p{N}_])/iu;
 const ATTRIBUTION = /(?:^|\s)(?:—|–|-{1,2}|~)\s*([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)?)(?:\s*,\s*[\p{L}\d][\p{L}\d\s]*)?\s*$/u;
 const SPEAKER = /\b(customers?|members?|users?|walkers?|savers?|shoppers?|reviewers?|buyers?|parents?|people|someone|everyone|one of (?:you|them|us)|[A-Z][\p{L}'’-]+)\s+(?:(?:have|has|all|often|always|keep|kept)\s+)?(?:say|says|said|tell us|tells us|told us|write|writes|wrote|swear by|swears by|rave about|raves about)\b/gu;
 // After a dash, a month or day is a date, not a person ("Come back - January").

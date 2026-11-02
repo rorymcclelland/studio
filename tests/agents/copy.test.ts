@@ -249,6 +249,11 @@ describe("S5-2 Copy agent", () => {
     expect(voiceProblem("Show me how", { cta: true, own })).toBeNull();
     expect(voiceProblem('"Join now"', { cta: true, own })).not.toBeNull();
     expect(voiceProblem("Show me how", { cta: false, own })).toMatch(/customer's own words/);
+    // Word edges are Unicode letters: French and Spanish words ending in "me" after an accent aren't "me" (C7-3 demo).
+    for (const t of ["Tout est au même endroit, prêt quand vous l'êtes.", "Un thème clair pour votre épargne.", "Le système est simple."]) {
+      expect(voiceProblem(t, { cta: false, own }), t).toBeNull();
+    }
+    expect(voiceProblem("Ça m'a aidé, dit-il à me", { cta: false, own })).toMatch(/\("me"\)/);
   });
 
   it("#3 a brief with email only gives subject and preview sets, and no paid-social sets; out-of-home is skipped with a note", async () => {
