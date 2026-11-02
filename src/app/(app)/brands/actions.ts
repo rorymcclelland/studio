@@ -11,6 +11,7 @@ import { RecentlyRefreshedError, startMarketRun } from "@/lib/strategy/market";
 import { LogoError, PNG_MAX_BYTES, removeBrandLogo, uploadBrandLogo } from "@/lib/brands/logo-upload";
 import { sendEvent } from "@/inngest/client";
 import type { FormState } from "../actions";
+import { addDemoLanguages, langList, LanguageError, saveBrandLanguages, type LanguageInput } from "@/lib/creative/languages";
 
 /** S2-4: adds the two simulated demo brands, or says why it didn't. */
 export async function addDemoBrands(): Promise<FormState> {
@@ -137,4 +138,36 @@ export async function removeLogo(brandId: string): Promise<LogoState> {
   revalidatePath(`/brands/${brandId}/edit`);
   revalidatePath("/brands");
   return { ok: true, done: "Logo removed. Ads already made keep the logo they were drawn with.", logo: null };
+}
+
+/** C7-2: what the Languages page's actions answer. */
+export type LanguagesState = { ok: true; done: string } | { ok: false; error: string; fieldErrors: Record<string, string> };
+
+/** C7-2: saves a brand's languages, with each one's legal lines and banned terms (written by a person, Q4). */
+export async function saveLanguages(brandId: string, languages: LanguageInput[]): Promise<LanguagesState> {
+  const member = await requireMember();
+  try {
+    const saved = await saveBrandLanguages(member, brandId, languages);
+    revalidatePath(`/brands/${brandId}`);
+    revalidatePath(`/brands/${brandId}/languages`);
+    return { ok: true, done: saved.length ? `Saved. Ads can be translated into ${langList(saved.map((l) => l.lang))}.` : "Saved. The brand has no languages, so its ads stay in English." };
+  } catch (err) {
+    if (err instanceof LanguageError) return { ok: false, error: `${err.message} Nothing was saved.`, fieldErrors: err.fieldErrors };
+    console.error("[saveLanguages] couldn't save the languages", { brandId }, err);
+    return { ok: false, error: "Couldn't save the languages. Nothing was changed; try again.", fieldErrors: {} };
+  }
+}
+
+/** C7-2: adds a demo brand's French, German and Spanish, written by Claude for the demo and marked so. */
+export async function addDemoLanguagesAction(brandId: string): Promise<LanguagesState> {
+  const member = await requireMember();
+  try {
+    const added = await addDemoLanguages(member, brandId);
+    revalidatePath(`/brands/${brandId}/languages`);
+    return { ok: true, done: added ? `Added ${added} demo ${added === 1 ? "language" : "languages"}, marked as written for the demo.` : "The demo languages were already there." };
+  } catch (err) {
+    if (err instanceof LanguageError) return { ok: false, error: err.message, fieldErrors: {} };
+    console.error("[addDemoLanguages] couldn't add them", { brandId }, err);
+    return { ok: false, error: "Couldn't add the demo languages. Nothing was changed; try again.", fieldErrors: {} };
+  }
 }

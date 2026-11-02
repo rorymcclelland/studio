@@ -5,6 +5,7 @@ import { asUser, type Tx } from "@/lib/db/scoped";
 import type { PaletteColour } from "./render/colour";
 import { LAYOUT_IDS, LAYOUT_SPECS, type LayoutId } from "./render/layouts";
 import { renderAd, type RenderChecks, type RenderInput } from "./render/render";
+import { SQUARE, type SizeId } from "./render/sizes";
 
 // S5-3 and S5-4: ad variants. A variant is one picture, one paid-social (or
 // display) copy set and one layout, drawn in code by renderAd (rule 8). The
@@ -128,14 +129,43 @@ export function kitHash(kit: KitSnapshot): string {
   return createHash("sha256").update(JSON.stringify(kit)).digest("hex");
 }
 
-/** The ETag of a drawn ad: the renderer's version and its parts' hashes (assets and copy sets never change, so their ids and hashes are enough). */
-export function adEtag(p: { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot; simulated: boolean }): string {
+/** JSON with every object's keys sorted, so a kit read back from jsonb (which reorders keys) compares equal to the same kit built in code. */
+function canonical(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`;
+  if (value && typeof value === "object") {
+    const entries = Object.entries(value as Record<string, unknown>).filter(([, v]) => v !== undefined);
+    return `{${entries.sort(([x], [y]) => (x < y ? -1 : x > y ? 1 : 0)).map(([k, v]) => `${JSON.stringify(k)}:${canonical(v)}`).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+/** F-26: whether an ad's stored kit is the brand's kit as it is now (palette, fonts, brand name, logo). */
+export function sameKit(a: KitSnapshot, b: KitSnapshot): boolean {
+  return canonical(a) === canonical(b);
+}
+
+/** Bump when a size other than the square draws differently (C7-1); the square's ETag doesn't include it. */
+export const SIZES_VERSION = 1;
+
+export type EtagParts = { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot; simulated: boolean };
+
+/**
+ * The ETag of a drawn ad: the renderer's version and its parts' hashes (assets
+ * and copy sets never change, so their ids and hashes are enough). C7-1: a
+ * size other than the 1080 square adds the size, so each size revalidates on
+ * its own; the square's is unchanged (it is the same drawing as before sizes).
+ */
+export function adEtag(p: EtagParts & { size?: SizeId }): string {
+  const sized = p.size && p.size !== SQUARE ? [`size:${p.size}`, `sizes:${SIZES_VERSION}`] : [];
   const h = createHash("sha256")
-    .update([RENDER_VERSION, p.imageSha256, p.copySetId, p.layout, kitHash(p.kit), p.simulated ? "simulated" : "real"].join("|"))
+    .update([RENDER_VERSION, p.imageSha256, p.copySetId, p.layout, kitHash(p.kit), p.simulated ? "simulated" : "real", ...sized].join("|"))
     .digest("hex")
     .slice(0, 40);
   return `"ad-${h}"`;
 }
+
+/** Pictures already converted to PNG, by asset id, so a batch (Redraw all) converts each picture once. */
+export type PictureCache = Map<string, VariantParts["picture"]>;
 
 /** Loads a picture (as PNG) and a set's words into parts, inside a transaction the caller holds. */
 export async function loadParts(
@@ -144,20 +174,27 @@ export async function loadParts(
   copySetId: string,
   kit: KitSnapshot,
   override?: { words: AdWords; legalLines: string[] },
+  pictures?: PictureCache,
 ): Promise<VariantParts | null> {
-  const [img] = await tx`select bytes, sha256, simulated from public.assets where id = ${imageAssetId} and kind = 'image'`;
+  const cached = pictures?.get(imageAssetId);
+  const [img] = cached ? [null] : await tx`select bytes, sha256, simulated from public.assets where id = ${imageAssetId} and kind = 'image'`;
   const [cs] = await tx`select channel, set, legal_lines from public.copy_sets where id = ${copySetId}`;
-  if (!img || !cs) return null;
+  if ((!cached && !img) || !cs) return null;
   const words = override?.words ?? adWords(cs.channel as string, cs.set);
   if (!words) return null;
+  const picture = cached ?? { png: await pictureToPng(img!.bytes as Buffer), sha256: img!.sha256 as string, simulated: img!.simulated === true };
+  pictures?.set(imageAssetId, picture);
   return {
-    picture: { png: await pictureToPng(img.bytes as Buffer), sha256: img.sha256 as string, simulated: img.simulated === true },
+    picture,
     copy: words,
     legalLines: override?.legalLines ?? (cs.legal_lines as string[]),
     kit,
     logoPng: await logoBytes(tx, kit),
   };
 }
+
+/** How a variant came to be: composed by Make creative, a person's new picture, new or edited words, or a redraw with the current kit (F-26). */
+export type VariantOrigin = "composed" | "new picture" | "new words" | "edited words" | "redrawn";
 
 export type NewVariant = {
   workspaceId: string;
@@ -169,7 +206,7 @@ export type NewVariant = {
   layout: LayoutId;
   checks: RenderChecks;
   kit: KitSnapshot;
-  origin: "composed" | "new picture" | "new words" | "edited words";
+  origin: VariantOrigin;
   runId: string | null;
   basedOn: string | null;
   /** A replacement keeps the shortlist mark of the ad it replaces (the person changed part of an ad they picked). */
@@ -188,7 +225,7 @@ export async function insertVariant(tx: Tx, v: NewVariant): Promise<string | nul
 }
 
 export type ComposeResult = {
-  /** Variants made, in gallery order (by picture, then words). */
+  /** Variants made, in gallery order (by audience, then picture, then words). */
   made: { id: string; imageAssetId: string; copySetId: string; layout: LayoutId; channel: AdChannel }[];
   /** Picture and words pairs that refused in every layout: nothing was recorded for them. */
   refused: { imageAssetId: string; copySetId: string; reason: string }[];
@@ -198,8 +235,8 @@ export type ComposeResult = {
   sets: number;
   /** Plain sentences for the run and the gallery ("Ads use the words for ..."). */
   notes: string[];
-  /** The audience whose words were used. */
-  audience: { segmentRef: string | null; title: string } | null;
+  /** The audiences whose words were used, in the brief's order (F-27: every audience; one, segmentRef null, when the brief names none). */
+  audiences: { segmentRef: string | null; title: string }[];
 };
 
 /** Sets that are new words waiting beside the set they would replace (S5-2): a person hasn't chosen them yet. */
@@ -208,17 +245,17 @@ const WAITING = (tx: Tx) => tx`(s.source = 'agent' and s.based_on is not null an
 
 /**
  * Composes variants for a campaign's signed-off version: each current picture
- * (all of them, or those given) with each current ad copy set for the brief's
- * first audience (paid social, and display if the brief has it), in the first
- * layout that renders. A pair that refuses in every layout is reported, not
- * recorded.
+ * (all of them, or those given) with each current ad copy set of every
+ * audience (F-27; paid social, and display if the brief has it), in the first
+ * layout that renders. The pictures are shared by the audiences. A pair that
+ * refuses in every layout is reported, not recorded.
  */
 export async function composeVariants(
   ctx: { userId: string; workspaceId: string },
   campaignId: string,
   opts: { runId?: string | null; imageIds?: string[] } = {},
 ): Promise<ComposeResult> {
-  const empty: ComposeResult = { made: [], refused: [], existing: 0, pictures: 0, sets: 0, notes: [], audience: null };
+  const empty: ComposeResult = { made: [], refused: [], existing: 0, pictures: 0, sets: 0, notes: [], audiences: [] };
   if (!UUID.test(campaignId)) return { ...empty, notes: ["That campaign isn't in this workspace."] };
 
   const loaded = await asUser(ctx.userId, async (tx) => {
@@ -235,7 +272,7 @@ export async function composeVariants(
     const sets = await tx`
       select s.id, s.channel, s.segment_ref, s.segment_title from public.copy_sets s
       where s.campaign_id = ${campaignId} and s.brief_version = ${version} and s.discarded_at is null
-        and s.channel in ('paid social', 'display') and not ${WAITING(tx)}
+        and s.channel in ('paid social', 'display') and s.lang = 'en-GB' and not ${WAITING(tx)}
       order by s.created_at, s.id`;
     const existing = await tx`
       select image_asset_id, copy_set_id from public.ad_variants
@@ -247,22 +284,22 @@ export async function composeVariants(
   if (!loaded.kit) return { ...empty, notes: ["The brand no longer exists."] };
   const { version, brief, images, kit } = loaded;
 
-  // The first audience's words (in the brief's order); a brief without audiences has one "everyone" audience (null).
-  const segments = [...new Set(loaded.sets.map((s) => (s.segment_ref as string | null) ?? null))];
-  const firstRef = brief.audiences.map((a) => a.segmentRef).find((r) => segments.includes(r)) ?? segments[0] ?? null;
-  const sets = loaded.sets.filter((s) => ((s.segment_ref as string | null) ?? null) === firstRef);
-  const audience = sets[0] ? { segmentRef: firstRef, title: sets[0].segment_title as string } : null;
+  // F-27: every audience's words, the audiences in the brief's order (any the brief no longer names after them);
+  // a brief without audiences has one "everyone" audience (null).
+  const refOf = (s: { segment_ref?: unknown }) => (s.segment_ref as string | null) ?? null;
+  const order = audienceOrder(brief.audiences.map((a) => a.segmentRef), loaded.sets.map(refOf));
+  const sets = [...loaded.sets].sort((x, y) => order.indexOf(refOf(x)) - order.indexOf(refOf(y)));
+  const audiences = order.map((ref) => ({ segmentRef: ref, title: sets.find((s) => refOf(s) === ref)!.segment_title as string }));
   const notes: string[] = [];
-  if (segments.length > 1 && audience) {
-    const others = segments.length - 1;
-    notes.push(`Ads use the words for ${audience.title}, the brief's first audience; the words for the other ${others === 1 ? "audience are" : `${others} audiences are`} in the copy lists.`);
-  }
   if (images.length === 0) notes.push("There are no current pictures for this brief version, so no ads were composed.");
   if (sets.length === 0) notes.push("There are no current paid-social or display words for this brief version, so no ads were composed.");
 
   const have = new Set(loaded.existing.map((e) => `${e.image_asset_id}:${e.copy_set_id}`));
-  const result: ComposeResult = { ...empty, pictures: images.length, sets: sets.length, notes, audience };
-  const pairs = images.flatMap((imageAssetId) => sets.map((s) => ({ imageAssetId, set: s })));
+  const result: ComposeResult = { ...empty, pictures: images.length, sets: sets.length, notes, audiences };
+  // By audience, then picture, then words: the gallery's order within each audience's group.
+  const pairs = order.flatMap((ref) =>
+    images.flatMap((imageAssetId) => sets.filter((s) => refOf(s) === ref).map((s) => ({ imageAssetId, set: s }))),
+  );
 
   // Pictures are converted once each and reused across their words.
   const pictures = new Map<string, Promise<VariantParts["picture"] | null>>();
@@ -321,7 +358,23 @@ export async function composeVariants(
   return result;
 }
 
-export type DrawableVariant = { id: string; layout: LayoutId; etag: string; imageAssetId: string; copySetId: string; kit: KitSnapshot };
+/** Audiences in the brief's order, then any others in the order they first appear; each once. */
+export function audienceOrder(briefRefs: (string | null)[], seen: (string | null)[]): (string | null)[] {
+  const present = new Set(seen);
+  return [...new Set([...briefRefs.filter((r) => present.has(r)), ...seen])];
+}
+
+export type DrawableVariant = {
+  id: string;
+  layout: LayoutId;
+  etag: string;
+  imageAssetId: string;
+  copySetId: string;
+  kit: KitSnapshot;
+  /** C7-1: the words' channel decides the sizes; the ETag's parts make each size's ETag. */
+  channel: AdChannel;
+  etagParts: EtagParts;
+};
 
 /**
  * A variant that can be drawn for the signed-in user, or null: another
@@ -332,20 +385,23 @@ export type DrawableVariant = { id: string; layout: LayoutId; etag: string; imag
 export async function drawableVariant(userId: string, variantId: string): Promise<DrawableVariant | null> {
   if (!UUID.test(variantId)) return null;
   const [v] = await asUser(userId, (tx) => tx`
-    select v.id, v.layout, v.kit, v.image_asset_id, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, s.discarded_at as words_discarded
+    select v.id, v.layout, v.kit, v.image_asset_id, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, s.discarded_at as words_discarded, s.channel
     from public.ad_variants v
     join public.assets a on a.id = v.image_asset_id
     join public.copy_sets s on s.id = v.copy_set_id
     where v.id = ${variantId}`);
   if (!v || v.image_discarded || v.words_discarded) return null;
   const kit = v.kit as KitSnapshot;
+  const etagParts: EtagParts = { imageSha256: v.sha256 as string, copySetId: v.copy_set_id as string, layout: v.layout as string, kit, simulated: v.simulated === true };
   return {
     id: v.id as string,
     layout: v.layout as LayoutId,
     imageAssetId: v.image_asset_id as string,
     copySetId: v.copy_set_id as string,
     kit,
-    etag: adEtag({ imageSha256: v.sha256 as string, copySetId: v.copy_set_id as string, layout: v.layout as string, kit, simulated: v.simulated === true }),
+    channel: v.channel as AdChannel,
+    etagParts,
+    etag: adEtag(etagParts),
   };
 }
 

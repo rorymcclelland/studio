@@ -45,6 +45,11 @@ try {
 
 execFileSync("node", ["scripts/db-reset.mjs"], { stdio: ["ignore", "ignore", "inherit"], env: { ...process.env, DATABASE_URL: base } });
 
+// Mock calls cost nothing real, so a mock run gets a cap that covers every
+// agent's cases (2K pictures, C7-1, took the full mock run past £1), whatever
+// .env.local says; a real run keeps £1 unless DAILY_CAP_PENCE says otherwise.
+const cap = mock ? "1000" : (process.env.DAILY_CAP_PENCE ?? "100");
+
 const env = {
   ...process.env,
   DATABASE_URL: base,
@@ -52,10 +57,10 @@ const env = {
   EVAL_MODE: mock ? "mock" : "real",
   EVAL_CONFIRMED: yes ? "1" : "",
   EVAL_CARRIED_PENCE: String(carried),
-  DAILY_CAP_PENCE: process.env.DAILY_CAP_PENCE ?? "100",
+  DAILY_CAP_PENCE: cap,
   // The eval database has one workspace, so it may use the whole cap (decision 0010's
   // per-workspace limit is for production's invited workspaces).
-  WORKSPACE_DAILY_CAP_PENCE: process.env.DAILY_CAP_PENCE ?? "100",
+  WORKSPACE_DAILY_CAP_PENCE: cap,
   OWNER_RESERVE_PENCE: "0",
 };
 if (mock) env.MODEL_PROVIDER_OVERRIDE = "mock";

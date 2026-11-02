@@ -5,11 +5,16 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   // Ads are drawn with bundled open fonts read from node_modules at runtime
   // (src/lib/creative/render/fonts.ts). The path is computed, so tracing can't
-  // see it: include the six woff files in every server function that may render.
+  // see it: include the twelve woff files (Inter and Source Serif 4, three
+  // weights each, in the Latin and latin-ext subsets) in every server function
+  // that may render.
   outputFileTracingIncludes: {
     "/**": [
       "./node_modules/@fontsource/inter/files/inter-latin-{400,600,700}-normal.woff",
       "./node_modules/@fontsource/source-serif-4/files/source-serif-4-latin-{400,600,700}-normal.woff",
+      // C7-2: latin-ext beside each Latin file, for the next Latin-script languages.
+      "./node_modules/@fontsource/inter/files/inter-latin-ext-{400,600,700}-normal.woff",
+      "./node_modules/@fontsource/source-serif-4/files/source-serif-4-latin-ext-{400,600,700}-normal.woff",
     ],
   },
   partialPrefetching: true,

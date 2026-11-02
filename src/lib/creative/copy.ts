@@ -1,12 +1,14 @@
 import { createRun, type Member, type SendEvent } from "@/lib/agents/runs";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { loadCopyContext, NOT_SIGNED_OFF, rulesFor } from "./copy-context";
+import { LANG_NAMES, type Lang } from "./languages";
 import { CHANNEL_LIMITS, EDIT_COPY, figuresAddedByPerson, setProblems, type AnyCopy, type CopyByChannel, type CopyChannel } from "./copy-rules";
 
 // S5-2: a campaign's copy sets. Reading them, a person's hand edit (a new
 // row, after the same checks as the agent's words), discarding and restoring,
 // and starting the Copy agent: for the whole signed-off brief, or for new
-// words on one set. Server actions and the UI call these (S5-4).
+// words on one set. Server actions and the UI call these (S5-4). C7-2: the
+// lists are the English sets; translations are shown on their ads.
 
 export { CHANNEL_LIMITS, NOT_SIGNED_OFF };
 export type { AnyCopy, CopyByChannel, CopyChannel };
@@ -78,7 +80,7 @@ export async function listCopySets(userId: string, campaignId: string): Promise<
     const runList: CopyRun[] = runs.map((r) => ({ runId: r.id, status: r.status, mode: r.input.mode, setId: r.input.setId ?? null, error: r.error, createdAt: r.created_at }));
     if (!ctx) return { ...empty(campaignId), runs: runList };
     const rows = await tx`
-      select * from public.copy_sets where campaign_id = ${campaignId} and brief_version = ${ctx.version}
+      select * from public.copy_sets where campaign_id = ${campaignId} and brief_version = ${ctx.version} and lang = 'en-GB'
       order by created_at, id`;
     const pool = rulesFor(ctx).pool;
     const current = new Set(rows.filter((r) => !r.discarded_at).map((r) => r.id as string));
@@ -115,7 +117,7 @@ export async function startCopyRun(member: Member, campaignId: string, send: Sen
   if (!UUID.test(campaignId)) throw new CopyError("That campaign isn't in your workspace.");
   const [c] = await asUser(member.userId, (tx) => tx`
     select c.id, c.brand_id, c.status, c.approved_version, b.name,
-      (select count(*)::int from public.copy_sets s where s.campaign_id = c.id and s.brief_version = c.approved_version and s.discarded_at is null) as sets,
+      (select count(*)::int from public.copy_sets s where s.campaign_id = c.id and s.brief_version = c.approved_version and s.discarded_at is null and s.lang = 'en-GB') as sets,
       (select count(*)::int from public.agent_runs r where r.agent = 'copy' and r.status in ('queued', 'running')
          and r.input ->> 'campaignId' = ${campaignId} and r.input ->> 'mode' = 'all') as running
     from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`);
@@ -138,8 +140,15 @@ async function setIn(tx: Tx, setId: string) {
     from public.copy_sets s join public.campaigns c on c.id = s.campaign_id join public.brands b on b.id = c.brand_id
     where s.id = ${setId}`;
   if (!s) throw new CopyError("That copy set isn't in your workspace.");
+  // Review fix 3: the copy lists act on English words only. A translation is the Localise agent's, checked in every size.
+  if (s.lang !== "en-GB") throw new CopyError(TRANSLATION_NOT_EDITABLE);
   return s;
 }
+
+export const TRANSLATION_NOT_EDITABLE = "Translations can't be edited or rewritten; discard it and translate again.";
+
+const translationAlreadyCurrent = (lang: string) =>
+  `There is already a current ${LANG_NAMES[lang as Lang] ?? lang} translation of these words. Discard it first to restore this one.`;
 
 /**
  * Discards the agent's new words still waiting to replace a set, once that set
@@ -228,10 +237,27 @@ export async function discardCopySet(member: Member, setId: string): Promise<voi
   });
 }
 
-/** Undoes a discard. */
+/**
+ * Undoes a discard. A translation comes back only while its language has no
+ * current translation of the same words (one at a time, review fix 3); the
+ * refusal says so instead of the unique index's error.
+ */
 export async function restoreCopySet(member: Member, setId: string): Promise<void> {
   if (!UUID.test(setId)) throw new CopyError("That copy set isn't in your workspace.");
-  const rows = await asUser(member.userId, (tx) => tx`
-    update public.copy_sets set discarded_at = null where id = ${setId} and discarded_at is not null returning id`);
+  const rows = await asUser(member.userId, async (tx) => {
+    const [s] = await tx`select translated_from, lang from public.copy_sets where id = ${setId} and discarded_at is not null`;
+    if (s?.translated_from) {
+      const [current] = await tx`
+        select 1 from public.copy_sets where translated_from = ${s.translated_from} and lang = ${s.lang} and discarded_at is null limit 1`;
+      if (current) throw new CopyError(translationAlreadyCurrent(s.lang as string));
+    }
+    try {
+      return await tx`update public.copy_sets set discarded_at = null where id = ${setId} and discarded_at is not null returning id`;
+    } catch (err) {
+      // Two restores at once: the second meets copy_sets_translation_once.
+      if ((err as { code?: string }).code === "23505" && s) throw new CopyError(translationAlreadyCurrent(s.lang as string));
+      throw err;
+    }
+  });
   if (rows.length === 0) throw new CopyError("That copy set isn't in your workspace, or isn't discarded.");
 }

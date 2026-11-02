@@ -5,6 +5,7 @@ import { executeBriefRun } from "./brief-workflow";
 import { executeCopyRun } from "./copy-workflow";
 import { executeCreativeRun } from "./creative-workflow";
 import { executeImageryRun } from "./imagery-workflow";
+import { executeLocaliseRun } from "./localise-workflow";
 import { executeMarketRun } from "./market-workflow";
 import { executePersonaRun, executeTestPlanRun } from "./review-workflows";
 import { executeTaglineRun, type StepTools } from "./workflow";
@@ -24,6 +25,8 @@ export const WORKFLOWS: Record<string, Workflow> = {
   market: executeMarketRun,
   copy: executeCopyRun,
   imagery: executeImageryRun,
+  // C7-2: Translate (the Localise agent, with the fit check in every size).
+  localise: executeLocaliseRun,
   // S5-4: not a model agent of its own; runs the Imagery and Copy workflows, then composes ads in code.
   creative: executeCreativeRun,
 };

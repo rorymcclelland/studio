@@ -8,6 +8,7 @@ import { getSignoffState } from "@/lib/approvals/repo";
 import { getReviews } from "@/lib/strategy/reviews";
 import { listMarketNotes, type MarketNote } from "@/lib/strategy/market";
 import { getCreative } from "@/lib/creative/gallery";
+import { packSummary, planPack } from "@/lib/creative/pack";
 import { daysSince } from "@/components/format-day";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
@@ -52,6 +53,17 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
     getCreative(member.userId, campaign.id),
   ]);
   if (viewing !== null && !old) notFound();
+  // C7-3: what the launch pack will hold, fitted without drawing; it streams in beside the gallery.
+  const pack =
+    creative && viewing === null && creative.signedOff && creative.variants.length > 0
+      ? planPack(member.userId, campaign.id, creative).then(
+          (p) => (p ? packSummary(p) : null),
+          (err: unknown) => {
+            console.error("[pack] the launch pack couldn't be planned", err instanceof Error ? err.message : String(err));
+            return null;
+          },
+        )
+      : null;
 
   // Titles for every item a brief here can cite: the current brief and
   // proposals (from getCampaign), and an old version (from the store).
@@ -138,7 +150,7 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
           />
           <PersonasSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
           <TestPlanSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
-          {creative && <CreativeSection view={creative} />}
+          {creative && <CreativeSection view={creative} pack={pack} />}
         </>
       )}
 

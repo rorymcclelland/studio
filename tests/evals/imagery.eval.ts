@@ -29,7 +29,7 @@ const audiences = new Set<string>();
 const mod: EvalModule<In, Out, Ctx> = {
   agent: "imagery",
   // Real mode: up to eight pictures (four, each redrawn once) and eight checks per case.
-  extraPencePerCase: imageCostPence("google", "gemini-nano-banana-2.1", "1K", 2 * IMAGE_COUNT) + 2 * IMAGE_COUNT * 0.1,
+  extraPencePerCase: imageCostPence("google", "gemini-nano-banana-2.1", "2K", 2 * IMAGE_COUNT) + 2 * IMAGE_COUNT * 0.1,
   cases: [
     { name: "Quillmoor win-back brief", input: { brand: "quillmoor", objective: "Bring lapsed savers back to the Plus plan in January" } },
     { name: "Quillmoor sign-ups", input: { brand: "quillmoor", objective: "Grow Plus sign-ups among customers aged 25 to 34" } },

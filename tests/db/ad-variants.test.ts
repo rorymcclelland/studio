@@ -62,6 +62,16 @@ const insertVariant = (m: Member, workspaceId: string, f: Partial<Fixture> & Pic
     return v.id as string;
   });
 
+/** Another paid-social set on the fixture's campaign, so a test has its own picture and words pair. */
+const adSet = (m: Member, f: Fixture, headline: string) =>
+  asUser(m.userId, async (tx) => {
+    const [s] = await tx`
+      insert into public.copy_sets (workspace_id, campaign_id, brief_version, run_id, channel, segment_title, set, source, created_by)
+      values (${m.workspaceId}, ${f.campaign}, 1, null, 'paid social', 'Everyone', ${tx.json({ headline, body: "A calm look.", cta: "Go" })}, 'agent', ${m.userId})
+      returning id`;
+    return s.id as string;
+  });
+
 describe("ad_variants tenancy and rules", () => {
   let va: string;
   beforeAll(async () => {
@@ -118,6 +128,29 @@ describe("ad_variants tenancy and rules", () => {
     await expect(getSql()`update public.ad_variants set image_asset_id = ${fb.image} where id = ${va}`).rejects.toThrow(/marks and layout/);
     await asUser(a.userId, (tx) => tx`update public.ad_variants set discarded_at = now() where id = ${va}`);
     await asUser(a.userId, (tx) => tx`update public.ad_variants set discarded_at = null where id = ${va}`);
+  });
+
+  it("F-26: a redrawn variant (origin 'redrawn', based on the old one) is allowed; an unknown origin isn't; the kit still never changes in place", async () => {
+    const old = await insertVariant(a, a.workspaceId, { ...fa, set: await adSet(a, fa, "Redraw me") });
+    const newKit = { ...kit, palette: [{ name: "Moss", hex: "#2F5D50" }] };
+    const redrawn = await asUser(a.userId, async (tx) => {
+      const [o] = await tx`update public.ad_variants set discarded_at = now() where id = ${old} returning image_asset_id, copy_set_id`;
+      const [v] = await tx`
+        insert into public.ad_variants (workspace_id, campaign_id, brief_version, image_asset_id, copy_set_id, layout, checks, kit, origin, based_on, created_by)
+        values (${a.workspaceId}, ${fa.campaign}, 1, ${o.image_asset_id}, ${o.copy_set_id}, 'full-bleed', ${tx.json(checks)}, ${tx.json(newKit as never)}, 'redrawn', ${old}, ${a.userId})
+        returning id, origin, based_on`;
+      return v;
+    });
+    expect(redrawn).toMatchObject({ origin: "redrawn", based_on: old });
+    await expect(asUser(a.userId, (tx) => tx`update public.ad_variants set kit = ${tx.json(kit as never)} where id = ${redrawn.id}`)).rejects.toThrow();
+    await expect(getSql()`update public.ad_variants set kit = ${getSql().json(kit as never)} where id = ${redrawn.id}`).rejects.toThrow(/marks and layout/);
+    await expect(getSql()`update public.ad_variants set origin = 'composed' where id = ${redrawn.id}`).rejects.toThrow(/marks and layout/);
+    const unknownSet = await adSet(a, fa, "Unknown origin");
+    await expect(
+      asUser(a.userId, (tx) => tx`
+        insert into public.ad_variants (workspace_id, campaign_id, brief_version, image_asset_id, copy_set_id, layout, checks, kit, origin, created_by)
+        values (${a.workspaceId}, ${fa.campaign}, 1, ${fa.image}, ${unknownSet}, 'full-bleed', ${tx.json(checks)}, ${tx.json(kit as never)}, 'repainted', ${a.userId})`),
+    ).rejects.toThrow(/ad_variants_origin_check/);
   });
 
   it("a deleted run leaves its variants, without the run", async () => {

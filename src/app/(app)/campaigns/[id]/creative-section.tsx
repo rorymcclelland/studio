@@ -3,9 +3,13 @@
 // (each a PNG drawn in code from a picture, a set of words and a layout), the
 // words for text-only channels, the discarded ads and words, and the AI cost
 // so far with its runs. Mock pictures are badged "Simulated image" (rule 1).
+// F-27: the gallery is grouped by audience when the brief has several. F-26:
+// ads made with an older kit say so and offer a redraw with the current kit.
 import type { CopySetView } from "@/lib/creative/copy";
 import { fieldsOf, type AnyCopy, type CopyChannel } from "@/lib/creative/copy-rules";
 import type { Badge, CreativeRunView, CreativeView, VariantView } from "@/lib/creative/gallery";
+import type { PackSummary } from "@/lib/creative/pack";
+import { Suspense } from "react";
 import { agentDisplayName } from "@/lib/agents/names";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
@@ -18,12 +22,16 @@ import { formatPence, formatWhen } from "@/lib/format";
 import {
   AdControls,
   CopySetControls,
+  DiscardTranslationButton,
   KeepSetButtons,
   KeepWordsButtons,
   MakeCreativeButton,
+  RedrawAllButton,
   RestoreButton,
+  TranslateButton,
   type FieldSpec,
 } from "./creative-controls";
+import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
 
 const RUNNING = new Set(["queued", "running"]);
 
@@ -35,6 +43,7 @@ const RUN_KIND: Record<CreativeRunView["kind"], string> = {
   words: "New words",
   imagery: "Imagery agent",
   copy: "Copy agent",
+  translate: "Translate",
 };
 
 const CHANNEL_NAME: Record<string, string> = {
@@ -62,19 +71,23 @@ function specFor(channel: CopyChannel, copy: AnyCopy): { fields: FieldSpec[]; va
   };
 }
 
-export function CreativeSection({ view }: { view: CreativeView }) {
+export function CreativeSection({ view, pack }: { view: CreativeView; pack: Promise<PackSummary | null> | null }) {
   const make = view.makeCreative;
   const running = !!make.runningRunId;
   const anyBusy =
     running ||
     view.variants.some((v) => v.busy.picture || v.busy.words) ||
     Object.keys(view.busySets).length > 0 ||
-    view.runs.some((r) => RUNNING.has(r.status));
+    view.runs.some((r) => RUNNING.has(r.status)) ||
+    !!view.translate.runningRunId;
   const lastMake = view.runs.find((r) => r.kind === "make") ?? null;
   const makeProblem = lastMake && !RUNNING.has(lastMake.status) && lastMake.status !== "completed" ? lastMake : null;
   const usedIn = new Map<string, number>();
   for (const v of view.variants) usedIn.set(v.words.setId, (usedIn.get(v.words.setId) ?? 0) + 1);
   const picked = view.variants.filter((v) => v.picked).length;
+  // Ads are numbered through the whole gallery, across the audiences' headings, so each name is unique.
+  const numbers = new Map(view.variants.map((v, i) => [v.id, i + 1]));
+  const grouped = view.audiences.length > 1;
 
   return (
     <section id="creative" aria-labelledby="creative-heading" className="scroll-mt-6 space-y-5" data-creative="">
@@ -158,21 +171,41 @@ export function CreativeSection({ view }: { view: CreativeView }) {
               <p className="text-ink-2" data-gallery-summary="">
                 {plural(view.variants.length, "ad")}, {picked} picked. Each shows its checks: contrast, fit and the legal line.
               </p>
-              {view.audienceNote && (
-                <p className="max-w-prose rounded-field bg-surface px-4 py-3" data-audience-note="">
-                  {view.audienceNote}
-                </p>
+              <Languages view={view} />
+              {pack && (
+                <Suspense fallback={<LaunchPackSkeleton />}>
+                  <LaunchPack summary={pack} />
+                </Suspense>
               )}
-              {/* Wider than the page column on large screens, so four ads sit side by side at a readable size. */}
-              <ul
-                aria-label={`Ads (${view.variants.length})`}
-                data-gallery=""
-                className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:mx-[calc(50%-min(50vw-3rem,38rem))] xl:grid-cols-4"
-              >
-                {view.variants.map((v, i) => (
-                  <AdCard key={v.id} view={view} v={v} number={i + 1} usedIn={usedIn.get(v.words.setId) ?? 1} />
-                ))}
-              </ul>
+              {view.olderKitCount > 0 && (
+                <div
+                  className="flex flex-col gap-3 rounded-field bg-review-soft px-4 py-3 text-review-ink sm:flex-row sm:items-center sm:justify-between"
+                  data-older-kit=""
+                >
+                  <p className="max-w-prose">
+                    <span className="font-semibold">
+                      {view.olderKitCount === view.variants.length && view.olderKitCount > 1
+                        ? `All ${view.olderKitCount} ads were made with an older kit.`
+                        : `${plural(view.olderKitCount, "ad was", "ads were")} made with an older kit.`}
+                    </span>{" "}
+                    The brand&apos;s palette, fonts or logo have changed since. Redrawing keeps each ad&apos;s picture, words and
+                    layout, costs nothing in AI, and can be undone under Discarded.
+                  </p>
+                  <RedrawAllButton campaignId={view.campaignId} count={view.olderKitCount} />
+                </div>
+              )}
+              {grouped ? (
+                view.audiences.map((g, i) => (
+                  <section key={g.segmentRef ?? "all"} aria-labelledby={`audience-${i}`} className="space-y-3 pt-2" data-audience-group="">
+                    <h3 id={`audience-${i}`} className="text-xl font-strong tracking-tight wrap-anywhere">
+                      For {g.title} <span className="text-base font-normal text-ink-2">({plural(g.variants.length, "ad")})</span>
+                    </h3>
+                    <Gallery view={view} variants={g.variants} label={`Ads for ${g.title} (${g.variants.length})`} numbers={numbers} usedIn={usedIn} level={4} />
+                  </section>
+                ))
+              ) : (
+                <Gallery view={view} variants={view.variants} label={`Ads (${view.variants.length})`} numbers={numbers} usedIn={usedIn} level={3} />
+              )}
             </div>
           ) : (
             !running && (
@@ -195,13 +228,44 @@ export function CreativeSection({ view }: { view: CreativeView }) {
   );
 }
 
-function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantView; number: number; usedIn: number }) {
+function Gallery({
+  view,
+  variants,
+  label,
+  numbers,
+  usedIn,
+  level,
+}: {
+  view: CreativeView;
+  variants: VariantView[];
+  label: string;
+  numbers: Map<string, number>;
+  usedIn: Map<string, number>;
+  level: 3 | 4;
+}) {
+  return (
+    // Wider than the page column on large screens, so four ads sit side by side at a readable size.
+    <ul
+      aria-label={label}
+      data-gallery=""
+      className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:mx-[calc(50%-min(50vw-3rem,38rem))] xl:grid-cols-4"
+    >
+      {variants.map((v) => (
+        <AdCard key={v.id} view={view} v={v} number={numbers.get(v.id) ?? 0} usedIn={usedIn.get(v.words.setId) ?? 1} level={level} />
+      ))}
+    </ul>
+  );
+}
+
+function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: VariantView; number: number; usedIn: number; level: 3 | 4 }) {
   const titleId = `ad-${v.id}-title`;
+  const Heading = level === 3 ? "h3" : "h4";
   const { fields } = specFor(v.channel, { headline: v.words.headline, body: v.words.body, cta: v.words.cta });
   return (
     <li
       aria-labelledby={titleId}
       data-ad={v.id}
+      data-channel={v.channel}
       data-picked={v.picked ? "" : undefined}
       className={cx("flex min-w-0 flex-col gap-3 rounded-card border-2 bg-surface p-3 sm:p-4", v.picked ? "border-primary" : "border-transparent")}
     >
@@ -229,10 +293,13 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
         </span>
       </a>
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1.5">
-        <h3 id={titleId} className="font-strong">
+        <Heading id={titleId} className="font-strong">
           Ad {number}
-        </h3>
+        </Heading>
         <span className="text-sm text-ink-2">{v.layoutName}</span>
+        <TextLink href={`/campaigns/${view.campaignId}/ads/${v.id}/sizes`} className="text-sm" data-ad-sizes="">
+          Sizes<span className="sr-only"> of ad {number}</span>
+        </TextLink>
         {v.picked && (
           <Pill tone="active" dot className="ml-auto">
             Picked
@@ -269,6 +336,7 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
           <KeepWordsButtons campaignId={view.campaignId} variantId={v.id} usedIn={usedIn} />
         </div>
       )}
+      <Translations view={view} v={v} number={number} />
       <AdControls
         campaignId={view.campaignId}
         variantId={v.id}
@@ -282,6 +350,7 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
         words={{ headline: v.words.headline, body: v.words.body, cta: v.words.cta }}
         fields={fields}
         pendingWords={!!v.pendingWords}
+        olderKit={v.olderKit}
       />
       <details className="group text-sm">
         <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
@@ -305,9 +374,28 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
             <span className="font-semibold text-ink">Words:</span> {v.words.source === "person" ? "edited by a person" : "by the Copy agent"},
             for {v.words.audience.title}.
           </li>
+          {v.origin === "redrawn" && (
+            <li>
+              <span className="font-semibold text-ink">Redrawn</span> with a newer kit, from an ad made with an older one (the same
+              picture, words and layout).
+            </li>
+          )}
           {v.words.legalLines.length > 0 && (
             <li className="wrap-anywhere">
               <span className="font-semibold text-ink">Legal line:</span> {v.words.legalLines.join(" ")}
+            </li>
+          )}
+          {v.translations.map((t) => (
+            <li key={t.lang} className="wrap-anywhere" data-translation-words={t.lang}>
+              <span className="font-semibold text-ink">
+                {t.name} ({t.badge.label.toLowerCase()}):
+              </span>{" "}
+              {t.headline}. {t.body} Button: {t.cta}. {t.legalLines.length > 0 && <>Legal lines: {t.legalLines.join(" ")}</>}
+            </li>
+          ))}
+          {v.translations.length > 0 && (
+            <li className="wrap-anywhere">
+              <span className="font-semibold text-ink">{v.translations[0].badge.label}:</span> {v.translations[0].badge.detail}
             </li>
           )}
           <li className="flex flex-wrap gap-x-3 gap-y-1">
@@ -318,6 +406,130 @@ function AdCard({ view, v, number, usedIn }: { view: CreativeView; v: VariantVie
         </ul>
       </details>
     </li>
+  );
+}
+
+/**
+ * C7-2: the brand's languages and Translate on the whole pick. Each language
+ * is allowed, or refused with the reason (no legal lines for it); the cost is
+ * on the button (rule 3).
+ */
+function Languages({ view }: { view: CreativeView }) {
+  const t = view.translate;
+  const running = !!t.runningRunId;
+  const demo = t.languages.some((l) => l.writtenForDemo);
+  return (
+    <div className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" data-languages="">
+      <div className="min-w-0 max-w-prose space-y-1.5">
+        <p className="font-semibold">Languages</p>
+        {t.languages.length === 0 ? (
+          <p className="text-sm text-ink-2">
+            The brand has no languages yet.{" "}
+            <TextLink href={`/brands/${view.brandId}/languages`}>Choose them on the brand&apos;s Languages page</TextLink>, with the legal lines
+            for each.
+          </p>
+        ) : (
+          <>
+            <ul aria-label="The brand's languages" className="flex flex-wrap gap-1.5">
+              {t.languages.map((l) => (
+                <li key={l.lang} data-language={l.lang} title={l.reason ?? undefined}>
+                  <Pill tone={l.allowed ? "neutral" : "attention"} wrap>
+                    {l.name}
+                    {l.allowed ? "" : ": no legal lines"}
+                  </Pill>
+                </li>
+              ))}
+            </ul>
+            <p className="text-sm text-ink-2">
+              The Localise agent translates the words of picked ads; each translation is checked in every size and badged
+              &ldquo;Machine translation&rdquo;. Legal lines are the brand&apos;s own for each language
+              {demo ? " (written by Claude for the demo)" : ""}, never machine-translated.{" "}
+              <TextLink href={`/brands/${view.brandId}/languages`}>Languages page</TextLink>
+            </p>
+          </>
+        )}
+        {running && (
+          <p role="status" className="text-sm text-primary">
+            Translating. <TextLink href={`/runs/${t.runningRunId}`}>See the run</TextLink>
+          </p>
+        )}
+      </div>
+      {t.languages.length > 0 && (
+        <TranslateButton
+          campaignId={view.campaignId}
+          label="Translate the picked ads"
+          estimate={t.picked.estimate}
+          reason={t.picked.reason}
+          note={t.refusedNote}
+          running={running}
+          align="end"
+        />
+      )}
+    </div>
+  );
+}
+
+/** C7-2: an ad's translations, each a thumbnail that opens its sizes, badged "Machine translation" (rule 1); Translate on a picked ad. */
+function Translations({ view, v, number }: { view: CreativeView; v: VariantView; number: number }) {
+  if (v.translations.length === 0 && !v.picked) return null;
+  const running = !!view.translate.runningRunId;
+  return (
+    <div className="space-y-2" data-translations="">
+      {v.translations.length > 0 && (
+        <ul aria-label={`Ad ${number} in other languages`} className="grid grid-cols-3 gap-2">
+          {v.translations.map((t) => (
+            <li key={t.lang} data-translation={t.lang} className="min-w-0">
+              <a
+                href={t.sizesHref}
+                title={`${t.name}: every size, with its checks`}
+                className="block rounded-field focus-visible:outline-3 focus-visible:outline-offset-2 focus-visible:outline-primary"
+              >
+                {t.thumb ? (
+                  // The first size these words fit, at its own width and height (review fix 8).
+                  // eslint-disable-next-line @next/next/no-img-element -- a drawn PNG behind the session, not a static asset
+                  <img
+                    src={t.thumb.src}
+                    width={t.thumb.width}
+                    height={t.thumb.height}
+                    loading="lazy"
+                    alt={`Ad ${number} in ${t.name}, a machine translation, opens its sizes. Headline: ${t.headline}. Button: ${t.cta}.`}
+                    className="block h-auto w-full rounded-field bg-surface-2"
+                  />
+                ) : (
+                  <span className="block rounded-field bg-surface-2 p-2 text-sm text-ink-2 wrap-anywhere" data-translation-reason="">
+                    {t.thumbReason}
+                  </span>
+                )}
+                <span className="mt-1 block text-sm font-semibold">{t.name}</span>
+              </a>
+              <DiscardTranslationButton campaignId={view.campaignId} setId={t.setId} what={`the ${t.name} translation of ad ${number}`} />
+            </li>
+          ))}
+        </ul>
+      )}
+      {v.translations.length > 0 && (
+        <p className="flex flex-wrap items-center gap-1.5" data-badge="translation" title={v.translations[0].badge.detail}>
+          <Pill tone="review" wrap>
+            {v.translations.some((t) => t.simulated) ? "Machine translation (simulated)" : "Machine translation"}
+          </Pill>
+        </p>
+      )}
+      {v.picked && v.translate.todo > 0 && (
+        <TranslateButton
+          campaignId={view.campaignId}
+          variantId={v.id}
+          label={v.translations.length ? "Translate the rest" : "Translate"}
+          estimate={v.translate.estimate}
+          reason={v.translate.reason}
+          running={running}
+        />
+      )}
+      {v.picked && v.translate.todo === 0 && v.translations.length === 0 && v.translate.reason && (
+        <p className="text-sm text-ink-2 wrap-anywhere" data-translate-reason="">
+          {v.translate.reason}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -339,11 +551,12 @@ function WordsRow({ label, now, next }: { label: string; now: string; next: stri
   );
 }
 
-/** The words for text-only channels, and for other audiences, as lists beside the gallery. */
+/** The words for text-only channels, and ad words with no ads in the gallery, as lists beside the gallery. */
 function CopyLists({ view }: { view: CreativeView }) {
   const textSets = view.textSets.filter((s) => !s.replaces);
-  const waiting = new Map(view.textSets.filter((s) => s.replaces).map((s) => [s.replaces as string, s]));
-  if (textSets.length === 0 && view.otherAudienceSets.length === 0) return null;
+  const adSets = view.setsWithoutAds.filter((s) => !s.replaces);
+  const waiting = new Map([...view.textSets, ...view.setsWithoutAds].filter((s) => s.replaces).map((s) => [s.replaces as string, s]));
+  if (textSets.length === 0 && adSets.length === 0) return null;
   return (
     <div className="space-y-5">
       {textSets.length > 0 && (
@@ -359,14 +572,18 @@ function CopyLists({ view }: { view: CreativeView }) {
           </ul>
         </section>
       )}
-      {view.otherAudienceSets.length > 0 && (
-        <section aria-labelledby="other-audiences" className="space-y-3">
-          <h3 id="other-audiences" className="text-xl font-strong tracking-tight">
-            Ad words for the other audiences
+      {adSets.length > 0 && (
+        <section aria-labelledby="sets-without-ads" className="space-y-3">
+          <h3 id="sets-without-ads" className="text-xl font-strong tracking-tight">
+            Ad words without ads
           </h3>
-          <ul aria-label="Ad words for the other audiences" className="grid gap-4 md:grid-cols-2">
-            {view.otherAudienceSets.map((s) => (
-              <CopySetCard key={s.id} view={view} set={s} replacement={null} newWords={false} />
+          <p className="max-w-prose text-ink-2">
+            Paid-social and display words with no ad in the gallery: every ad on them was discarded, or the ads were made
+            before each audience got its own.
+          </p>
+          <ul aria-label="Ad words without ads" className="grid gap-4 md:grid-cols-2">
+            {adSets.map((s) => (
+              <CopySetCard key={s.id} view={view} set={s} replacement={waiting.get(s.id) ?? null} newWords />
             ))}
           </ul>
         </section>
@@ -464,8 +681,9 @@ function Discarded({ view }: { view: CreativeView }) {
                 <p className="font-semibold wrap-anywhere">Ad: {v.words.headline}</p>
                 <p className="text-sm text-ink-2">
                   {v.layoutName}
-                  {v.discardedAt ? `, discarded ${formatWhen(v.discardedAt)}` : ""}
+                  {v.discardedAt ? `, ${v.redrawnBy ? "redrawn with the current kit" : "discarded"} ${formatWhen(v.discardedAt)}` : ""}
                   {v.restore.reason ? `. ${v.restore.reason}` : ""}
+                  {v.redrawnBy && v.restore.allowed ? ". Restoring it brings back the older kit and discards the redrawn ad." : ""}
                 </p>
               </div>
               {v.restore.allowed && <RestoreButton campaignId={view.campaignId} id={v.id} kind="ad" what={what} />}

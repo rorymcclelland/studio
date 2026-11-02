@@ -129,7 +129,9 @@ export function unsupportedFigures(text: string, pool: Figure[]): string[] {
 //     The brand's own name after a dash is a sign-off, not an attribution.
 const DOUBLE_QUOTES = /["“”„‟«»‹›]/;
 const SINGLE_QUOTED = /(?:^|[\s([{–—-])['‘](?=[^\s'‘’])[\s\S]*?[^\s]['’](?=$|[\s.,!?;:)\]}–—-])/;
-const FIRST_PERSON = /\bI(?:['’](?:m|ve|d|ll))?\b|\b(?:me|my|mine|myself)\b/i;
+// Word edges by Unicode letters, not ASCII \b: the same check runs on translations (C7-2), where "même" or
+// "cómeme" end in "me" after an accented letter that \b counts as a gap (found by the C7-3 demo pack).
+const FIRST_PERSON = /(?<![\p{L}\p{M}\p{N}_])(?:I(?:['’](?:m|ve|d|ll))?|me|my|mine|myself)(?![\p{L}\p{M}\p{N}_])/iu;
 const ATTRIBUTION = /(?:^|\s)(?:—|–|-{1,2}|~)\s*([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)?)(?:\s*,\s*[\p{L}\d][\p{L}\d\s]*)?\s*$/u;
 const SPEAKER = /\b(customers?|members?|users?|walkers?|savers?|shoppers?|reviewers?|buyers?|parents?|people|someone|everyone|one of (?:you|them|us)|[A-Z][\p{L}'’-]+)\s+(?:(?:have|has|all|often|always|keep|kept)\s+)?(?:say|says|said|tell us|tells us|told us|write|writes|wrote|swear by|swears by|rave about|raves about)\b/gu;
 // After a dash, a month or day is a date, not a person ("Come back - January").
@@ -202,4 +204,89 @@ export function setProblems(channel: CopyChannel, copy: AnyCopy, rules: CopyRule
 /** The figures a person typed that the brief's evidence doesn't hold, by field, so the page can mark them. */
 export function figuresAddedByPerson(channel: CopyChannel, copy: AnyCopy, pool: Figure[]): { field: string; figure: string }[] {
   return fieldsOf(channel, copy).flatMap((f) => unsupportedFigures(f.text, pool).map((figure) => ({ field: f.field, figure })));
+}
+
+// C7-2: checks for a translation (the Localise agent's words, one repair).
+// The same rules as English words where they carry over: the channel limits
+// in characters (a soft hyphen is a break point, not a character), figures
+// only as the English words have them, the banned terms for the language and
+// the English ones (a phrase left in English is still banned), the claims
+// that need evidence, real company names from the market notes, no
+// quotation marks or customer's voice (first person in the language too), and
+// no legal line repeated. The patterns for attributions, quantities in words
+// and capitalised names were written for English and catch less in other
+// languages (stated in the "Machine translation" badge); capitalised names are
+// not checked in German, where every noun has a capital.
+
+const SHY_CHAR = "­";
+const visible = (s: string) => s.split(SHY_CHAR).join("");
+
+/** Folds accents and ß so terms match whatever the keyboard ("Rücksendung", "rucksendung"). */
+export function foldText(s: string): string {
+  return visible(s).normalize("NFD").replace(/\p{M}+/gu, "").replace(/ß/g, "ss").replace(/[’‘]/g, "'");
+}
+
+// Word edges are Unicode letters (commit 34ad87a), so "même" isn't "me". French
+// elides je and me before a vowel ("J'ai", "m'a"), with a straight or curly
+// apostrophe: the elided form is followed by a letter, not a word edge.
+const FIRST_PERSON_BY_LANG: Record<string, RegExp> = {
+  "fr-FR": /(?:^|[^\p{L}])(?:(?:je|moi|mon|ma|mes|me)(?=[^\p{L}]|$)|[jm]['’](?=\p{L}))/iu,
+  "de-DE": /(?:^|[^\p{L}])(?:ich|mich|mir|mein|meine|meinen|meinem|meiner|meines|meins)(?=[^\p{L}]|$)/iu,
+  "es-ES": /(?:^|[^\p{L}])(?:yo|mí|mi|mis|me|conmigo|mío|mía|míos|mías)(?=[^\p{L}]|$)/iu,
+};
+
+export type TranslationRules = {
+  lang: string;
+  /** "German", for problems ("the German headline ..."). */
+  langName: string;
+  brandName: string;
+  products: string[];
+  places: string[];
+  /** The language's banned terms (from the kit, written by a person) and the English ones. */
+  bannedTerms: string[];
+  evidenceClaims: string[];
+  realNames: string[];
+  /** The language's legal lines: code attaches them, the words never repeat them. */
+  legalLines: string[];
+  /** Figures in the English words: a translation keeps the same figures and adds none. */
+  pool: Figure[];
+};
+
+/** Problems with one translated set's words. `where` names the set ("the German paid-social set"). */
+export function translationProblems(channel: CopyChannel, copy: AnyCopy, rules: TranslationRules, opts: { where: string }): string[] {
+  const problems: string[] = [];
+  const own = [rules.brandName, ...rules.products, ...rules.places].join(" ").match(/[\p{L}0-9']+/gu) ?? [];
+  for (const f of fieldsOf(channel, copy)) {
+    const text = visible(f.text);
+    const folded = foldText(f.text);
+    const at = `${opts.where} ${f.label}`;
+    if (text.length > f.limit) problems.push(`${at} is ${text.length} characters; ${channel} ${plural(f.label.replace(/ \d$/, ""))} are at most ${f.limit}`);
+    // Values only: the unit is a word in another language ("12 Monaten" for "12 months").
+    for (const fig of figuresIn(text)) {
+      if (!rules.pool.some((p) => p.value === fig.value)) {
+        problems.push(`${at} says ${fig.value}, which the English words don't; keep the English figures as they are and add none`);
+      }
+    }
+    for (const t of rules.bannedTerms) if (containsTerm(folded, foldText(t))) problems.push(`${at} uses the banned term "${t}"`);
+    for (const c of rules.evidenceClaims) if (containsTerm(folded, foldText(c))) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
+    for (const n of rules.realNames) {
+      if (containsTerm(folded, foldText(n))) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
+    }
+    if (rules.lang !== "de-DE") {
+      for (const n of undeclaredNames(text, rules.realNames, { brandName: rules.brandName, category: "", products: rules.products, places: rules.places })) {
+        problems.push(`${at} names "${n}", which looks like another brand; name only ${rules.brandName} and its products, and write in sentence case`);
+      }
+    }
+    const v = voiceProblem(text, { cta: f.cta, own });
+    if (v) problems.push(`${at} ${v}`);
+    const mine = FIRST_PERSON_BY_LANG[rules.lang];
+    if (!v && !f.cta && mine) {
+      const m = mine.exec(text);
+      if (m) problems.push(`${at} reads as a customer's own words ("${m[0].trim()}"); copy speaks as the brand to the reader, and never invents a customer's voice`);
+    }
+    for (const l of rules.legalLines) {
+      if (flat(l).length >= 12 && flat(foldText(f.text)).includes(flat(foldText(l)))) problems.push(`${at} repeats a legal line; code adds the legal lines under every set, so leave them out`);
+    }
+  }
+  return problems;
 }

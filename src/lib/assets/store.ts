@@ -10,6 +10,12 @@ const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export const WEBP_QUALITY = 82;
 
+/** The assets table's limit on a picture's bytes (2 MB, db/migrations/20261028000002_assets_and_images.sql). */
+export const ASSET_MAX_BYTES = 2 * 1024 * 1024;
+/** C7-1: if a 2K picture doesn't fit at WEBP_QUALITY, these qualities are tried, then these sizes (longest side) at the last quality. */
+const FALLBACK_QUALITIES = [72, 60];
+const FALLBACK_SIDES = [1536, 1024];
+
 export type AssetRow = {
   id: string;
   kind: "image" | "logo";
@@ -28,10 +34,24 @@ export type AssetRow = {
   createdAt: Date;
 };
 
-/** Re-encodes a picture as WebP (metadata is not carried over) and measures it. */
-export async function toWebp(bytes: Uint8Array): Promise<{ data: Buffer; width: number; height: number }> {
-  const { data, info } = await sharp(bytes).webp({ quality: WEBP_QUALITY }).toBuffer({ resolveWithObject: true });
-  return { data, width: info.width, height: info.height };
+/**
+ * Re-encodes a picture as WebP (metadata is not carried over) and measures it.
+ * C7-1 (Q1): pictures are 2K from Sprint 7, and the table holds at most 2 MB.
+ * A photo-like 2K picture is about 1 MB at quality 82; a very grainy one can
+ * be more, so lower qualities are tried, then a smaller picture, rather than
+ * failing the insert after the picture was paid for.
+ */
+export async function toWebp(bytes: Uint8Array): Promise<{ data: Buffer; width: number; height: number; quality: number }> {
+  for (const quality of [WEBP_QUALITY, ...FALLBACK_QUALITIES]) {
+    const { data, info } = await sharp(bytes).webp({ quality }).toBuffer({ resolveWithObject: true });
+    if (data.length <= ASSET_MAX_BYTES) return { data, width: info.width, height: info.height, quality };
+  }
+  const quality = FALLBACK_QUALITIES[FALLBACK_QUALITIES.length - 1];
+  for (const side of FALLBACK_SIDES) {
+    const { data, info } = await sharp(bytes).resize(side, side, { fit: "inside", withoutEnlargement: true }).webp({ quality }).toBuffer({ resolveWithObject: true });
+    if (data.length <= ASSET_MAX_BYTES) return { data, width: info.width, height: info.height, quality };
+  }
+  throw new Error(`The picture is too large to store, even at ${FALLBACK_SIDES[FALLBACK_SIDES.length - 1]} px.`);
 }
 
 export type NewImage = {

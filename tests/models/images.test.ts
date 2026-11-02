@@ -18,7 +18,7 @@ const draw = (m: Member, over: Partial<Parameters<typeof generateImage>[0]> = {}
   generateImage({ agent: "imagery", userId: m.userId, workspaceId: m.workspaceId, prompt: "A calm still life in deep blue tones", aspect: "1:1", palette: PALETTE, ...over });
 const ledger = (m: Member) => asUser(m.userId, (tx) => tx`select * from public.usage_ledger order by id`);
 const reservations = (m: Member) => asUser(m.userId, (tx) => tx`select * from public.spend_reservations`);
-const MOCK_IMAGE_PENCE = 0.0336 * 0.79 * 100;
+const MOCK_IMAGE_PENCE = 0.0504 * 0.79 * 100; // 2K (C7-1, Q1)
 
 describe("S5-1 generateImage()", () => {
   beforeEach(async () => {
@@ -30,10 +30,10 @@ describe("S5-1 generateImage()", () => {
   it("draws a mock picture, charges one image at the mock price and leaves no reservation", async () => {
     const m = await createMember();
     const img = await draw(m);
-    expect(img).toMatchObject({ provider: "mock", model: "mock-image", size: "1K", simulated: true, mediaType: "image/png" });
+    expect(img).toMatchObject({ provider: "mock", model: "mock-image", size: "2K", simulated: true, mediaType: "image/png" });
     const meta = await sharp(img.bytes).metadata();
-    expect(meta).toMatchObject({ format: "png", width: 1024, height: 1024 });
-    expect(imageCostPence("mock", "mock-image", "1K", 1)).toBeCloseTo(MOCK_IMAGE_PENCE, 6);
+    expect(meta).toMatchObject({ format: "png", width: 2048, height: 2048 });
+    expect(imageCostPence("mock", "mock-image", "2K", 1)).toBeCloseTo(MOCK_IMAGE_PENCE, 6);
     expect(img.costPence).toBeCloseTo(MOCK_IMAGE_PENCE, 6);
     const [row] = await ledger(m);
     expect(row).toMatchObject({ agent: "imagery", provider: "mock", model: "mock-image", images: 1, output_tokens: 0 });
@@ -95,13 +95,14 @@ describe("S5-1 generateImage()", () => {
     expect(await reservations(m)).toHaveLength(0);
   });
 
-  it("the image model is Nano Banana 2.1 at 1K, overridable, and the mock in tests", () => {
-    expect(resolveImageModel({})).toEqual({ provider: "google", model: "gemini-nano-banana-2.1", size: "1K" });
+  it("the image model is Nano Banana 2.1 at 2K (C7-1, Q1), overridable, and the mock in tests", () => {
+    expect(resolveImageModel({})).toEqual({ provider: "google", model: "gemini-nano-banana-2.1", size: "2K" });
     expect(resolveImageModel({ IMAGE_MODEL: "google:gemini-3.1-flash-image" })).toMatchObject({ provider: "google", model: "gemini-3.1-flash-image" });
     expect(resolveImageModel({ MODEL_PROVIDER_OVERRIDE: "mock" })).toMatchObject({ provider: "mock", model: "mock-image" });
     expect(resolveImageModel()).toMatchObject({ provider: "mock" });
     expect(() => resolveImageModel({ IMAGE_MODEL: "nonsense" })).toThrow(/IMAGE_MODEL/);
     expect(imageCostPence("google", "gemini-nano-banana-2.1", "1K", 4)).toBeCloseTo(4 * 0.0336 * 79, 6);
+    expect(imageCostPence("google", "gemini-nano-banana-2.1", "2K", 4)).toBeCloseTo(4 * 0.0504 * 79, 6);
     expect(() => imageCostPence("google", "unknown-model", "1K", 1)).toThrow(/No image price/);
   });
 });

@@ -115,7 +115,7 @@ async function prepareMake(ctx: StepContext): Promise<MakePrepared> {
     const existing = (agent: string) => children.find((r) => r.agent === agent)?.id as string | undefined;
     const [sets] = await tx`
       select count(*)::int as n from public.copy_sets
-      where campaign_id = ${campaignId} and brief_version = ${version} and discarded_at is null`;
+      where campaign_id = ${campaignId} and brief_version = ${version} and discarded_at is null and lang = 'en-GB'`;
     const child = async (agent: string, agentVersion: number, input: Record<string, unknown>, label: string) => {
       const [r] = await tx`
         insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)
@@ -210,13 +210,14 @@ async function executeMake(ctx: StepContext, step: StepTools): Promise<string> {
       "Compose the ads",
       made > 0,
       { pictures: pictures.length },
-      composed ? { made: composed.made, refused: composed.refused, existing: composed.existing, notes, audience: composed.audience } : null,
+      composed ? { made: composed.made, refused: composed.refused, existing: composed.existing, notes, audiences: composed.audiences } : null,
       made > 0 ? null : composeError ?? (composed ? `No ad could be composed.${refusedNote} ${notes.join(" ")}`.trim() : "Nothing to compose: the pictures or the words weren't made."),
       t,
     );
 
     const capped = imagery?.status === "stopped_cap" || copy?.status === "stopped_cap";
-    const what = `${made} ad${made === 1 ? "" : "s"} from ${pictures.length} picture${pictures.length === 1 ? "" : "s"} and ${composed?.sets ?? 0} set${composed?.sets === 1 ? "" : "s"} of words`;
+    const audienceCount = composed?.audiences.length ?? 0;
+    const what = `${made} ad${made === 1 ? "" : "s"} from ${pictures.length} picture${pictures.length === 1 ? "" : "s"} and ${composed?.sets ?? 0} set${composed?.sets === 1 ? "" : "s"} of words${audienceCount > 1 ? `, for ${audienceCount} audiences` : ""}`;
     const output = {
       summary: `${what}.${refusedNote}${notes.length ? ` ${notes.join(" ")}` : ""}`.trim(),
       variants: made,
@@ -224,7 +225,7 @@ async function executeMake(ctx: StepContext, step: StepTools): Promise<string> {
       sets: composed?.sets ?? 0,
       notes,
       refused: composed?.refused ?? [],
-      audience: composed?.audience ?? null,
+      audiences: composed?.audiences ?? [],
       children: { imagery, copy },
       campaignId: prepared.campaignId,
       briefVersion: prepared.version,
