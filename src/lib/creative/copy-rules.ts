@@ -226,10 +226,13 @@ export function foldText(s: string): string {
   return visible(s).normalize("NFD").replace(/\p{M}+/gu, "").replace(/ß/g, "ss").replace(/[’‘]/g, "'");
 }
 
+// Word edges are Unicode letters (commit 34ad87a), so "même" isn't "me". French
+// elides je and me before a vowel ("J'ai", "m'a"), with a straight or curly
+// apostrophe: the elided form is followed by a letter, not a word edge.
 const FIRST_PERSON_BY_LANG: Record<string, RegExp> = {
-  "fr-FR": /(?:^|[^\p{L}])(?:je|j['’]|moi|mon|ma|mes|me|m['’])(?=[^\p{L}]|$)/iu,
-  "de-DE": /(?:^|[^\p{L}])(?:ich|mich|mir|mein|meine|meinen|meinem|meiner|meines)(?=[^\p{L}]|$)/iu,
-  "es-ES": /(?:^|[^\p{L}])(?:yo|mí|mi|mis|me|conmigo)(?=[^\p{L}]|$)/iu,
+  "fr-FR": /(?:^|[^\p{L}])(?:(?:je|moi|mon|ma|mes|me)(?=[^\p{L}]|$)|[jm]['’](?=\p{L}))/iu,
+  "de-DE": /(?:^|[^\p{L}])(?:ich|mich|mir|mein|meine|meinen|meinem|meiner|meines|meins)(?=[^\p{L}]|$)/iu,
+  "es-ES": /(?:^|[^\p{L}])(?:yo|mí|mi|mis|me|conmigo|mío|mía|míos|mías)(?=[^\p{L}]|$)/iu,
 };
 
 export type TranslationRules = {
