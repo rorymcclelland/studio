@@ -9,6 +9,7 @@ import type { CopySetView } from "@/lib/creative/copy";
 import { fieldsOf, type AnyCopy, type CopyChannel } from "@/lib/creative/copy-rules";
 import type { Badge, CreativeRunView, CreativeView, VariantView } from "@/lib/creative/gallery";
 import type { PackSummary } from "@/lib/creative/pack";
+import type { GalleryCompliance } from "@/lib/compliance/compute";
 import { Suspense } from "react";
 import { agentDisplayName } from "@/lib/agents/names";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -33,6 +34,7 @@ import {
 } from "./creative-controls";
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
 import { PretestBar, PretestScores } from "./pretest-panel";
+import { CompliancePillView } from "./ads/[variantId]/compliance/compliance-view";
 
 const RUNNING = new Set(["queued", "running"]);
 
@@ -73,7 +75,9 @@ function specFor(channel: CopyChannel, copy: AnyCopy): { fields: FieldSpec[]; va
   };
 }
 
-export function CreativeSection({ view, pack }: { view: CreativeView; pack: Promise<PackSummary | null> | null }) {
+type ComplianceP = Promise<GalleryCompliance | null> | null;
+
+export function CreativeSection({ view, pack, compliance = null }: { view: CreativeView; pack: Promise<PackSummary | null> | null; compliance?: ComplianceP }) {
   const make = view.makeCreative;
   const running = !!make.runningRunId;
   const anyBusy =
@@ -174,6 +178,11 @@ export function CreativeSection({ view, pack }: { view: CreativeView; pack: Prom
               <p className="text-ink-2" data-gallery-summary="">
                 {plural(view.variants.length, "ad")}, {picked} picked. Each shows its checks: contrast, fit and the legal line.
               </p>
+              {compliance && (
+                <Suspense fallback={<Skeleton className="h-6 w-72" />}>
+                  <ComplianceSummaryLine compliance={compliance} />
+                </Suspense>
+              )}
               <Languages view={view} />
               <PretestBar view={view} />
               {pack && (
@@ -204,11 +213,11 @@ export function CreativeSection({ view, pack }: { view: CreativeView; pack: Prom
                     <h3 id={`audience-${i}`} className="text-xl font-strong tracking-tight wrap-anywhere">
                       For {g.title} <span className="text-base font-normal text-ink-2">({plural(g.variants.length, "ad")})</span>
                     </h3>
-                    <Gallery view={view} variants={g.variants} label={`Ads for ${g.title} (${g.variants.length})`} numbers={numbers} usedIn={usedIn} level={4} />
+                    <Gallery view={view} variants={g.variants} label={`Ads for ${g.title} (${g.variants.length})`} numbers={numbers} usedIn={usedIn} level={4} compliance={compliance} />
                   </section>
                 ))
               ) : (
-                <Gallery view={view} variants={view.variants} label={`Ads (${view.variants.length})`} numbers={numbers} usedIn={usedIn} level={3} />
+                <Gallery view={view} variants={view.variants} label={`Ads (${view.variants.length})`} numbers={numbers} usedIn={usedIn} level={3} compliance={compliance} />
               )}
             </div>
           ) : (
@@ -239,6 +248,7 @@ function Gallery({
   numbers,
   usedIn,
   level,
+  compliance,
 }: {
   view: CreativeView;
   variants: VariantView[];
@@ -246,6 +256,7 @@ function Gallery({
   numbers: Map<string, number>;
   usedIn: Map<string, number>;
   level: 3 | 4;
+  compliance: ComplianceP;
 }) {
   return (
     // Wider than the page column on large screens, so four ads sit side by side at a readable size.
@@ -255,13 +266,13 @@ function Gallery({
       className="grid grid-cols-1 items-start gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:mx-[calc(50%-min(50vw-3rem,38rem))] xl:grid-cols-4"
     >
       {variants.map((v) => (
-        <AdCard key={v.id} view={view} v={v} number={numbers.get(v.id) ?? 0} usedIn={usedIn.get(v.words.setId) ?? 1} level={level} />
+        <AdCard key={v.id} view={view} v={v} number={numbers.get(v.id) ?? 0} usedIn={usedIn.get(v.words.setId) ?? 1} level={level} compliance={compliance} />
       ))}
     </ul>
   );
 }
 
-function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: VariantView; number: number; usedIn: number; level: 3 | 4 }) {
+function AdCard({ view, v, number, usedIn, level, compliance }: { view: CreativeView; v: VariantView; number: number; usedIn: number; level: 3 | 4; compliance: ComplianceP }) {
   const titleId = `ad-${v.id}-title`;
   const Heading = level === 3 ? "h3" : "h4";
   const { fields } = specFor(v.channel, { headline: v.words.headline, body: v.words.body, cta: v.words.cta });
@@ -305,6 +316,9 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
         <TextLink href={`/campaigns/${view.campaignId}/ads/${v.id}/sizes`} className="text-sm" data-ad-sizes="">
           Sizes<span className="sr-only"> of ad {number}</span>
         </TextLink>
+        <TextLink href={`/campaigns/${view.campaignId}/ads/${v.id}/compliance`} className="text-sm" data-ad-compliance="">
+          Compliance<span className="sr-only"> of ad {number}</span>
+        </TextLink>
         {v.picked && (
           <Pill tone="active" dot className="ml-auto">
             Picked
@@ -312,6 +326,13 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
         )}
       </div>
       <ul aria-label={`Checks for ad ${number}`} className="flex flex-wrap gap-1.5">
+        {compliance && (
+          <li data-badge="compliance">
+            <Suspense fallback={<Skeleton className="h-6 w-24 rounded-full" />}>
+              <CompliancePill compliance={compliance} variantId={v.id} />
+            </Suspense>
+          </li>
+        )}
         {v.badges.map((b) => (
           <li key={b.key} data-badge={b.key}>
             <Pill tone={BADGE_TONE[b.tone]} wrap>
@@ -762,5 +783,29 @@ function Runs({ view }: { view: CreativeView }) {
         </p>
       )}
     </section>
+  );
+}
+
+/** C8-1: an ad's compliance pill (Passes, N to review, Fails), once the gallery's compliance is worked out. */
+async function CompliancePill({ compliance, variantId }: { compliance: NonNullable<ComplianceP>; variantId: string }) {
+  const c = await compliance;
+  const pill = c?.pills[variantId];
+  if (!pill) return null;
+  return (
+    <span data-compliance-pill="" title="Compliance in every size and language: open Compliance for the rules">
+      <CompliancePillView pill={pill} />
+    </span>
+  );
+}
+
+/** C8-1: the picked ads' compliance, over every size and language: "40 ads pass, 6 to review, 2 fail". */
+async function ComplianceSummaryLine({ compliance }: { compliance: NonNullable<ComplianceP> }) {
+  const c = await compliance;
+  if (!c?.summary) return null;
+  return (
+    <p className="text-ink-2" data-compliance-summary="">
+      <span className="font-semibold text-ink">Compliance of the picked ads:</span> {c.summary.text}, over every size and language. Only
+      ads that pass, or whose review items a person accepted, go in the launch pack.
+    </p>
   );
 }

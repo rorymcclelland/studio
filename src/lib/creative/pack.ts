@@ -1,4 +1,6 @@
 import { strToU8, Zip, ZipDeflate, ZipPassThrough } from "fflate";
+import { complianceFor, fileCompliance } from "@/lib/compliance/compute";
+import type { Judged } from "@/lib/compliance/rules";
 import { asUser } from "@/lib/db/scoped";
 import { drawInSize, sentence, translationBadge, upscaleNote } from "./ad-sizes";
 import { clearFitCache, fitBase, fitsFor, logoFor } from "./fit-cache";
@@ -44,6 +46,8 @@ const CHANNEL_FOLDER: Record<AdChannel, string> = { "paid social": "paid-social"
 
 export const NOT_SIGNED_OFF_PACK = "There's no launch pack until the brief is signed off: a pack holds only ads made from a signed-off brief.";
 export const NOTHING_PICKED_PACK = "There's no launch pack yet: nothing is picked. Pick the ads to launch in the gallery, then build the pack.";
+export const NOTHING_PASSES_PACK =
+  "There's no launch pack yet: every size and language of the picked ads fails a compliance rule or awaits review. Each ad's Compliance view says why, and what would fix it.";
 
 /** Words as a file name: ASCII letters and digits in lowercase, joined by hyphens, never a path. */
 export function slugify(text: string, max = 40): string {
@@ -95,7 +99,47 @@ export type PackItem = {
   wordsFrom: { setId: string; source: "agent" | "person"; runId: string | null; model: string | null; simulated: boolean };
   /** Rule 1: every translated file says it is a machine translation. */
   translation: { label: string; detail: string; simulated: boolean; runId: string | null; fromSetId: string } | null;
+  /** C8-1: each rule's status for this file (its own and the ad's don't rules), as the Compliance view shows it, with who accepted any review item. */
+  compliance: PackCompliance;
 };
+
+export type PackCompliance = {
+  /** "passes": every rule passed; "accepted": every review item was accepted by a person. */
+  outcome: "passes" | "accepted";
+  rules: {
+    rule: string;
+    name: string;
+    /** "file" for this size and language; "ad" for a finding about the whole ad (a don't rule). */
+    scope: "file" | "ad";
+    status: "pass" | "review" | "fail" | "not applied";
+    reason: string;
+    acceptedBy: string | null;
+    acceptedAt: string | null;
+    note: string | null;
+  }[];
+};
+
+/** A file's findings as the manifests record them. Only files that pass or are accepted reach the pack. */
+export function packCompliance(findings: Judged[]): PackCompliance {
+  return {
+    outcome: findings.some((f) => f.outcome === "accepted") ? "accepted" : "passes",
+    rules: findings.map((f) => ({
+      rule: f.rule === "dont" ? f.key : f.rule,
+      name: f.rule === "dont" ? `${f.name}: ${f.fix ?? ""}` : f.name,
+      scope: f.size === null ? "ad" : "file",
+      status: f.status === "na" ? "not applied" : f.status,
+      reason: f.reason,
+      acceptedBy: f.outcome === "accepted" ? (f.decision?.decidedByName ?? null) : null,
+      acceptedAt: f.outcome === "accepted" ? (f.decision?.decidedAt.toISOString() ?? null) : null,
+      note: f.outcome === "accepted" ? (f.decision?.note ?? null) : null,
+    })),
+  };
+}
+
+/** Who accepted a file's review items, each once ("" when none needed a person). */
+export function reviewedBy(c: PackCompliance): string {
+  return [...new Set(c.rules.flatMap((r) => (r.acceptedBy ? [r.acceptedBy] : [])))].join("; ");
+}
 
 export type PackLeftOut = {
   adId: string;
@@ -160,6 +204,8 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
   const picked: VariantView[] = view.variants.filter((v) => v.picked && v.briefVersion === view.version);
   if (picked.length === 0) return { refused: NOTHING_PICKED_PACK };
   const ids = picked.map((v) => v.id);
+  // C8-1: the same findings the Compliance view shows (the fits are shared through the fit cache).
+  const compliance = await complianceFor(userId, ids);
 
   return asUser(userId, async (tx) => {
     const [c] = await tx`
@@ -258,10 +304,18 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
         const fits = await fitsFor(setId, fitBase(raw, legalLines, logo, kit), layout, channel, kit);
         const badge = t ? translationBadge(t.simulated === true) : null;
         const legalLinesWrittenForDemo = lang !== ENGLISH && demoLegal(lang, legalLines);
+        // C8-1: files that fail a rule or await review, by reason; one reason for every size of the language is listed once.
+        const held: { size: SizeId; reason: string }[] = [];
+        const ad = compliance.get(v.id);
         for (const f of fits) {
           const size = SIZES[f.size];
           if (!f.ok) {
             leftOut.push({ adId: v.id, adNumber: number, channel, audience, headline: words.headline, size: f.size, sizeName: size.name, lang, langName, reason: sentence(f.refused) });
+            continue;
+          }
+          const fc = ad ? fileCompliance(ad, lang, f.size) : null;
+          if (!fc || fc.leftOut) {
+            held.push({ size: f.size, reason: fc?.leftOut ?? "Its compliance checks couldn't be worked out; open the ad's Compliance view." });
             continue;
           }
           items.push({
@@ -287,7 +341,15 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
               ? { setId, source: "agent", runId: (t.run_id as string | null) ?? null, model: null, simulated: t.simulated === true }
               : englishFrom,
             translation: t && badge ? { label: badge.label, detail: badge.detail, simulated: t.simulated === true, runId: (t.run_id as string | null) ?? null, fromSetId: r.copy_set_id as string } : null,
+            compliance: packCompliance(fc.findings),
           });
+        }
+        const fitted = fits.filter((f) => f.ok).length;
+        const reasons = [...new Set(held.map((h) => h.reason))];
+        if (held.length > 1 && held.length === fitted && reasons.length === 1) {
+          leftOut.push({ adId: v.id, adNumber: number, channel, audience, headline: words.headline, size: null, sizeName: null, lang, langName, reason: reasons[0] });
+        } else {
+          for (const h of held) leftOut.push({ adId: v.id, adNumber: number, channel, audience, headline: words.headline, size: h.size, sizeName: SIZES[h.size].name, lang, langName, reason: h.reason });
         }
       }
     }
@@ -311,7 +373,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
 }
 
 export type PackSummary =
-  | { allowed: false; reason: string }
+  | { allowed: false; reason: string; /** C8-1: when every file is held back, what and why. */ leftOut?: PackLeftOut[] }
   | {
       allowed: true;
       href: string;
@@ -346,6 +408,7 @@ export function packTooLarge(files: number, max = PACK_MAX_FILES): string {
 /** What the gallery shows before download: the counts, what's left out, or why there's no pack. */
 export function packSummary(plan: PackPlan | PackRefusal, maxFiles = PACK_MAX_FILES): PackSummary {
   if ("refused" in plan) return { allowed: false, reason: plan.refused };
+  if (plan.items.length === 0) return { allowed: false, reason: NOTHING_PASSES_PACK, leftOut: plan.leftOut };
   if (plan.items.length > maxFiles) return { allowed: false, reason: packTooLarge(plan.items.length, maxFiles) };
   const langs = [ENGLISH, ...SUPPORTED_LANGS] as PackLang[];
   return {
@@ -441,6 +504,8 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
         logo: i.checks.logo,
         simulatedLabelDrawn: i.checks.simulatedLabel === true,
       },
+      /** C8-1: each compliance rule's status for this file, as the ad's Compliance view shows it, and who accepted any review item. */
+      compliance: i.compliance,
       provenance: {
         picture: pictureProvenance(i),
         pictureAssetId: i.picture.assetId,
@@ -536,8 +601,16 @@ export const CSV_COLUMNS = [
   "words",
   "machine_translation",
   "labels",
+  "compliance",
+  "reviewed_by",
   "reason_left_out",
 ] as const;
+
+/** The CSV's compliance cell: "Passes", or "Passes, 3 review items accepted". */
+export function complianceCell(c: PackCompliance): string {
+  const accepted = c.rules.filter((r) => r.acceptedBy).length;
+  return accepted ? `Passes, ${accepted} review ${accepted === 1 ? "item" : "items"} accepted` : "Passes";
+}
 
 export function manifestCsv(drawn: DrawnItem[], leftOut: PackLeftOut[]): string {
   const rows: (string | number | boolean | null)[][] = [];
@@ -569,6 +642,8 @@ export function manifestCsv(drawn: DrawnItem[], leftOut: PackLeftOut[]): string 
       wordsProvenance(i),
       i.translation ? i.translation.label : "",
       labelsFor(i).join("; "),
+      complianceCell(i.compliance),
+      reviewedBy(i.compliance),
       "",
     ]);
   }
@@ -613,6 +688,7 @@ export function readme(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLeftOut[
     `The ${plan.ads.length === 1 ? "picked ad" : `${plan.ads.length} picked ads`} of this campaign, in every size its channel needs and in ${langs.join(", ").replace(/, ([^,]*)$/, " and $1")}: ${drawn.length} ${drawn.length === 1 ? "ad" : "ads"} as PNG files, each of which passed its checks (contrast, fit, and the legal lines where the brand has them) when this pack was made.`,
     "Folders: one per channel (paid-social, display), then one per language (en-GB, fr-FR, de-DE, es-ES).",
     "Every file is listed in manifest.json and manifest.csv with its words, alt text, checks and where the picture and words came from.",
+    "Compliance: every file passed Studio's compliance rules (text contrast, legal lines, banned terms, logo clear space, text density, the 9:16 platform zones and the simulated label), or a person accepted each item that needed review, including the brand's don't rules, which no code can check; the manifests say who. The thresholds are Studio's own, not any platform's policy. A file that fails a rule or awaits review is left out, with the reason.",
     leftOut.length
       ? `Left out: ${leftOut.length} ${leftOut.length === 1 ? "size or language" : "sizes or languages"}, each listed with the reason in both manifests ("leftOut" in manifest.json; status "left out" in manifest.csv).`
       : "Left out: nothing. Every size and language of every picked ad is here.",
@@ -819,6 +895,7 @@ export async function packResponse(userId: string | null, campaignId: string, ma
   const plan = await planPack(userId, campaignId);
   if (!plan) return NOT_FOUND();
   if ("refused" in plan) return new Response(plan.refused, { status: 409, headers: TEXT_HEADERS });
+  if (plan.items.length === 0) return new Response(NOTHING_PASSES_PACK, { status: 409, headers: TEXT_HEADERS });
   const maxFiles = opts.maxFiles ?? PACK_MAX_FILES;
   if (plan.items.length > maxFiles) return new Response(packTooLarge(plan.items.length, maxFiles), { status: 409, headers: TEXT_HEADERS });
   const release = takePackSlot();

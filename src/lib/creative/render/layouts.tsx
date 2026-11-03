@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- Satori (ImageResponse) draws plain <img> elements; next/image does not apply. */
 import type { CSSProperties, ReactElement } from "react";
+import { COMPLIANCE } from "@/config/compliance";
 import { relativeLuminance, rgba } from "./colour";
 import { fontStack, type BundledFamily, type FontWeight } from "./fonts";
 import type { LogoImage } from "./logo";
@@ -41,7 +42,7 @@ type Common = {
 export type Geometry =
   | (Common & { kind: "full-bleed"; bottomPad: number; bodyGap: number; legalGap: number; fade: number; logoTop: number })
   | (Common & { kind: "split"; mode: "square" | "top" | "side"; band: number; border: number; padTop: number; padBottom: number; bodyGap: number; ctaGap: number; logoTop: number })
-  | (Common & { kind: "card"; mode: "square" | "side" | "stacked"; pad: number; imageWidth: number; gap: number; radius: number; shadow: string; legalGap: number; logoGap: number; bodyGap: number; ctaGap: number; imageGap: number; minPicture: number })
+  | (Common & { kind: "card"; mode: "square" | "side" | "stacked"; pad: number; bottomInset: number; imageWidth: number; gap: number; radius: number; shadow: string; legalGap: number; logoGap: number; bodyGap: number; ctaGap: number; imageGap: number; minPicture: number })
   | (Common & { kind: "banner"; mode: "rectangle" | "half-page" | "leaderboard"; padX: number; padY: number; gap: number; legalGap: number; minPicture: number });
 
 /** The box the picture is drawn in, and how it is fitted: as the square always has (render.ts passes it as it is), cropped to the box around its subject, or whole in a square box. */
@@ -219,12 +220,18 @@ function card(size: SizeSpec): LayoutSpec {
   // The square's picture column is 468 wide (Sprint 5). The landscape's picture is a square as tall as the room
   // above the legal lines; its column is what is left beside the tallest such square.
   const imageWidth = mode === "square" ? 468 : mode === "side" ? c.H - 2 * pad : c.W - 2 * pad;
+  // C8-1 (Q7): in a 9:16 story the platforms' own controls cover the bottom of the screen, so Card keeps its words,
+  // logo and legal lines above the bottom band and its margin (src/config/compliance.ts). The picture may sit near
+  // the top band (it holds no words). Every other size and layout is drawn as before.
+  const zones = COMPLIANCE.platformZones;
+  const bottomInset = size.id === "1080x1920" ? Math.max(0, Math.ceil(c.H * (zones.bottom + zones.near)) - pad) : 0;
   const column = mode === "stacked" ? c.W - 2 * pad : c.W - 2 * pad - imageWidth - gap;
   const g = {
     ...c,
     kind: "card" as const,
     mode,
     pad,
+    bottomInset,
     imageWidth,
     gap,
     radius: r(36),
@@ -238,7 +245,7 @@ function card(size: SizeSpec): LayoutSpec {
     imageGap: r(48),
     minPicture: Math.round(c.W * 0.4),
   } as const;
-  const legalRoom = (h: StackHeights) => c.H - 2 * pad - (h.legal ? h.legal + g.legalGap : 0);
+  const legalRoom = (h: StackHeights) => c.H - 2 * pad - bottomInset - (h.legal ? h.legal + g.legalGap : 0);
   const plated = (h: StackHeights) => (h.logo ? h.logo + 2 * c.plate.padY : 0);
   const stackedText = (h: StackHeights) => accentHeight(c) + h.headline + g.bodyGap + h.body + g.ctaGap + Math.max(h.cta, plated(h));
   return {
@@ -564,7 +571,7 @@ function Card(p: DrawProps): ReactElement {
   const g = p.spec.geo as Extract<Geometry, { kind: "card" }>;
   const legalHeight = linesHeight(p.legal.paragraphs.flat().length, p.legal.size, p.spec.legal.lineHeight);
   const legalGap = legalHeight > 0 ? g.legalGap : 0;
-  const topHeight = g.H - 2 * g.pad - legalHeight - legalGap;
+  const topHeight = g.H - 2 * g.pad - g.bottomInset - legalHeight - legalGap;
   const lightPanel = relativeLuminance(p.colours.panel) > 0.55;
   if (g.mode === "stacked") return CardStacked(p, g, topHeight, legalGap, lightPanel);
   const image = g.mode === "square" ? { width: g.imageWidth, height: topHeight } : p.pictureBox;
@@ -600,8 +607,10 @@ function Card(p: DrawProps): ReactElement {
 /** Card in a portrait canvas: the square picture whole on top, the words below, the logo beside the button. */
 function CardStacked(p: DrawProps, g: Extract<Geometry, { kind: "card" }>, topHeight: number, legalGap: number, lightPanel: boolean): ReactElement {
   const box = p.pictureBox;
+  // C8-1: a 9:16 story keeps clear of the platforms' bottom band (bottomInset; 0 in the 4:5 portrait, drawn as before).
+  const padding = g.bottomInset ? `${g.pad}px ${g.pad}px ${g.pad + g.bottomInset}px` : g.pad;
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, padding: g.pad, background: p.colours.panel }}>
+    <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, padding, background: p.colours.panel }}>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: topHeight }}>
         <div style={{ display: "flex", justifyContent: "center" }}>
           <div style={{ display: "flex", width: box.width, height: box.height, borderRadius: g.radius, overflow: "hidden", ...(g.shadow === "none" ? {} : { boxShadow: g.shadow }) }}>

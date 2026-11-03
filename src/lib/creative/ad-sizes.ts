@@ -1,7 +1,7 @@
 import { asUser } from "@/lib/db/scoped";
 import { ENGLISH, isLang, LANG_NAMES, MACHINE_TRANSLATION, type Lang } from "./languages";
 import type { LayoutId } from "./render/layouts";
-import type { RefusalPart, RenderChecks, RenderInput } from "./render/render";
+import type { AdPlan, RefusalPart, RenderChecks, RenderInput } from "./render/render";
 import { fitAd, renderAd } from "./render/render";
 import { isSizeId, layoutsToTry, sizesFor, SIZES, SQUARE, UPSCALE_NOTE_ABOVE, type DrawLayoutId, type SizeId, type SizeSpec } from "./render/sizes";
 import { adEtag, drawableVariant, loadParts, renderInputFor, type DrawableVariant, type VariantParts } from "./variants";
@@ -97,7 +97,7 @@ export async function sizedVariant(userId: string | null, variantId: string, siz
   return lang === ENGLISH ? v : translatedVariant(userId, v, lang);
 }
 
-export type SizeFit = { size: SizeId; ok: true; layout: DrawLayoutId } | { size: SizeId; ok: false; refused: string; part: RefusalPart };
+export type SizeFit = { size: SizeId; ok: true; layout: DrawLayoutId; plan: AdPlan } | { size: SizeId; ok: false; refused: string; part: RefusalPart };
 
 /**
  * C7-2: whether words fit each size of a channel for an ad, decided as
@@ -110,16 +110,16 @@ export async function fitInSizes(base: Omit<RenderInput, "image" | "layout" | "s
   for (const size of sizesFor(channel)) {
     const layouts: DrawLayoutId[] = size.id === SQUARE ? [own] : layoutsToTry(size, own);
     const refusals: { refused: string; part: RefusalPart }[] = [];
-    let fitted: DrawLayoutId | null = null;
+    let fitted: { layout: DrawLayoutId; plan: AdPlan } | null = null;
     for (const layout of layouts) {
       const r = await fitAd({ ...base, layout, size: size.id });
       if (r.ok) {
-        fitted = layout;
+        fitted = { layout, plan: r.plan };
         break;
       }
       refusals.push({ refused: r.refused, part: r.part });
     }
-    out.push(fitted ? { size: size.id, ok: true, layout: fitted } : { size: size.id, ok: false, refused: [...new Set(refusals.map((r) => r.refused))].join("; "), part: refusals[0].part });
+    out.push(fitted ? { size: size.id, ok: true, layout: fitted.layout, plan: fitted.plan } : { size: size.id, ok: false, refused: [...new Set(refusals.map((r) => r.refused))].join("; "), part: refusals[0].part });
   }
   return out;
 }

@@ -40,6 +40,17 @@ describe("the case list", () => {
     expect(CASES.filter((c) => c.sprint === 7).map((c) => c.id)).toEqual(expected);
   });
 
+  it("has every agreed C8-1 case, once each, in order, with a CI or browser check each", () => {
+    const c81 = CASES.filter((c) => c.story === "C8-1");
+    expect(c81.map((c) => c.id)).toEqual(Array.from({ length: 11 }, (_, i) => `C8-1.${i + 1}`));
+    for (const c of c81) {
+      expect(c.sprint, c.id).toBe(8);
+      expect(["browser", "ci"], c.id).toContain(caseKind(c));
+    }
+    // The browser parts the refinement names: cases 1, 2, 3, 8, 9 and 11.
+    expect(c81.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["C8-1.1", "C8-1.2", "C8-1.3", "C8-1.8", "C8-1.9", "C8-1.11"]);
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);
