@@ -219,7 +219,9 @@ describe("S5-4 Make creative and the gallery", () => {
       expect(noCopy.pence).toBeLessThan(estimate.pence);
       expect(noCopy.worstPence).toBeCloseTo(worst - call("copy", TYPICAL_TOKENS.copyAll.input), 3);
       expect(g.makeCreative.estimate.label).toMatch(/^about \d+p, at most \d+p$/);
-      expect(newPictureEstimate(real).label).toBe("about 4p"); // one 2K picture (3.98p) and its check
+      // One 2K picture (3.98p) and its check: about 0.03p since C8-2 (faces and the don't rules too), so 4.01p, rounded up.
+      expect(newPictureEstimate(real).pence).toBeCloseTo(4.01, 2);
+      expect(newPictureEstimate(real).label).toBe("about 5p");
       expect(newWordsEstimate(real).label).toMatch(/^(about \d+p|under 1p)$/);
       // The gallery's estimate uses the configured (mock) models, whose picture check costs a little more: 4.0p.
       expect(g.estimates.newPicture.label).toBe(newPictureEstimate().label);

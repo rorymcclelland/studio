@@ -3,12 +3,21 @@
 // file from the renderer at 1db34b0 (before C7-1), with GOLDEN_WRITE=1; they
 // hash the decoded pixels (RGBA), not the PNG bytes, so only a change a person
 // could see (or a pixel's value) fails it.
+//
+// Sprint 8 review nit 9: the 4:5 portrait, the 1.91:1 landscape (1200 × 628)
+// and the leaderboard (728 × 90) have golden hashes too, in
+// tests/fixtures/sizes-golden.json. Unlike the square's, they were taken from
+// the renderer as it was at Sprint 8 (s8-fixes, after C8-1's banner and 9:16
+// changes), with GOLDEN_WRITE=1: they don't prove those drawings match an older
+// one, they guard them against any later change. A drawing that changes on
+// purpose writes them again and says so in its decision record.
 import { createHash } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 import { renderAd, type RenderInput } from "@/lib/creative/render/render";
+import { SIZES, type DrawLayoutId, type SizeId } from "@/lib/creative/render/sizes";
 import { FERNHOLLOW, QUILLMOOR } from "@/lib/demo/briefs";
 import { drawMockImage } from "@/lib/models/mock-image";
 
@@ -84,4 +93,48 @@ describe("C7-1 #6: the 1080 square is pixel-identical to today's ad", () => {
     });
   }
   if (WRITE) it("writes the fixture", () => writeFileSync(FIXTURE, `${JSON.stringify(golden, null, 2)}\n`));
+});
+
+const SIZES_FIXTURE = join(process.cwd(), "tests/fixtures/sizes-golden.json");
+const OTHER_SIZES = ["1080x1350", "1200x628", "728x90"] as const satisfies readonly SizeId[];
+
+const sizeCases: { name: string; size: SizeId; input: () => Promise<RenderInput<DrawLayoutId>> }[] = [];
+for (const [key, brief] of [["quillmoor", QUILLMOOR], ["fernhollow", FERNHOLLOW]] as const) {
+  for (const size of OTHER_SIZES) {
+    for (const layout of SIZES[size].layouts) {
+      sizeCases.push({
+        name: `${key} ${size} ${layout}`,
+        size,
+        input: async () => ({
+          layout,
+          size,
+          image: { bytes: await picture(brief.kit.palette.map((p) => p.hex)), mime: "image/png" },
+          copy: COPY[key],
+          // The leaderboard's row can't hold the demo brands' legal lines (decision 0018), so it is drawn without them.
+          legalLines: size === "728x90" ? [] : brief.kit.legalLines,
+          logo: { svg: brief.kit.logoSvg },
+          palette: brief.kit.palette,
+          fontPrimary: brief.kit.fontPrimary,
+          fontSecondary: brief.kit.fontSecondary,
+          brandName: brief.kit.name,
+          simulated: true,
+        }),
+      });
+    }
+  }
+}
+
+describe("Sprint 8 nit 9: the 4:5, 1200 × 628 and 728 × 90 drawings are unchanged since Sprint 8", () => {
+  const golden: Record<string, string> = WRITE ? {} : JSON.parse(readFileSync(SIZES_FIXTURE, "utf8"));
+  for (const c of sizeCases) {
+    it(c.name, async () => {
+      const r = await renderAd(await c.input());
+      if ("refused" in r) throw new Error(`refused: ${r.refused}`);
+      const { hash, width, height } = await pixelHash(r.png);
+      expect([width, height]).toEqual([SIZES[c.size].width, SIZES[c.size].height]);
+      if (WRITE) golden[c.name] = hash;
+      else expect(hash).toBe(golden[c.name]);
+    });
+  }
+  if (WRITE) it("writes the fixture", () => writeFileSync(SIZES_FIXTURE, `${JSON.stringify(golden, null, 2)}\n`));
 });

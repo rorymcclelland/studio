@@ -64,9 +64,13 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
               {brand.category && <p className="mt-1 text-lg text-ink-2 wrap-anywhere">{brand.category}</p>}
               {brand.description && <p className="mt-4 max-w-prose wrap-anywhere">{brand.description}</p>}
             </div>
-            <ButtonLink href={`/brands/${brand.id}/edit`} className="self-start">
-              Edit brand kit
-            </ButtonLink>
+            <div className="flex flex-wrap gap-3 self-start">
+              <ButtonLink href={`/brands/${brand.id}/edit`}>Edit brand kit</ButtonLink>
+              {/* C8-3: check an ad made outside Studio against this kit. */}
+              <ButtonLink href={`/brands/${brand.id}/check`} variant="quiet">
+                Check an ad
+              </ButtonLink>
+            </div>
           </div>
         </Card>
       </div>

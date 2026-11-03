@@ -145,7 +145,7 @@ export function sameKit(a: KitSnapshot, b: KitSnapshot): boolean {
 }
 
 /** Bump when a size other than the square draws differently (C7-1); the square's ETag doesn't include it. */
-export const SIZES_VERSION = 1;
+export const SIZES_VERSION = 3; // 2: Card keeps clear of a 9:16 story's bottom band; 3: every 9:16 layout keeps clear of both bands, and the two banners' logos sit at 4% (C8-1)
 
 export type EtagParts = { imageSha256: string; copySetId: string; layout: string; kit: KitSnapshot; simulated: boolean };
 

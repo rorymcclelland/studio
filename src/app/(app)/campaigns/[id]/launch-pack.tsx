@@ -8,7 +8,7 @@
 import { buttonClass } from "@/components/ui/button";
 import { Pill } from "@/components/ui/pill";
 import { Skeleton } from "@/components/ui/skeleton";
-import type { PackSummary } from "@/lib/creative/pack";
+import type { PackLeftOut, PackSummary } from "@/lib/creative/pack";
 
 const CHANNEL_NAME: Record<string, string> = { "paid social": "Paid social", display: "Display" };
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -17,6 +17,30 @@ function duration(seconds: number): string {
   if (seconds < 60) return `about ${Math.max(10, Math.round(seconds / 10) * 10)} seconds`;
   const minutes = Math.round(seconds / 60);
   return `about ${plural(minutes, "minute")}`;
+}
+
+/** Everything left out of the pack, each with its reason (a size that doesn't fit, a missing language, or C8-1's compliance). */
+function LeftOut({ items }: { items: PackLeftOut[] }) {
+  return (
+    <details className="group text-sm" data-pack-left-out="">
+      <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
+        <span aria-hidden className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none">
+          ›
+        </span>
+        {plural(items.length, "size or language", "sizes or languages")} left out, with the reasons
+      </summary>
+      <ul className="mt-2 space-y-1.5">
+        {items.map((l, i) => (
+          <li key={i} className="wrap-anywhere">
+            <span className="font-semibold">
+              Ad {l.adNumber}, {l.sizeName ?? "every size"}, {l.langName}:
+            </span>{" "}
+            {l.reason}
+          </li>
+        ))}
+      </ul>
+    </details>
+  );
 }
 
 export function LaunchPackSkeleton() {
@@ -43,9 +67,12 @@ export async function LaunchPack({ summary }: { summary: Promise<PackSummary | n
           Launch pack
         </h3>
         {!pack.allowed ? (
-          <p className="text-sm text-ink-2" data-pack-reason="">
-            {pack.reason}
-          </p>
+          <>
+            <p className="text-sm text-ink-2" data-pack-reason="">
+              {pack.reason}
+            </p>
+            {pack.leftOut && pack.leftOut.length > 0 && <LeftOut items={pack.leftOut} />}
+          </>
         ) : (
           <>
             <p className="text-sm" data-pack-count="">
@@ -78,26 +105,7 @@ export async function LaunchPack({ summary }: { summary: Promise<PackSummary | n
                     : "Machine translations are labelled as such in both manifests and the README."}
               </p>
             )}
-            {pack.leftOut.length > 0 && (
-              <details className="group text-sm" data-pack-left-out="">
-                <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
-                  <span aria-hidden className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none">
-                    ›
-                  </span>
-                  {plural(pack.leftOut.length, "size or language", "sizes or languages")} left out, with the reasons
-                </summary>
-                <ul className="mt-2 space-y-1.5">
-                  {pack.leftOut.map((l, i) => (
-                    <li key={i} className="wrap-anywhere">
-                      <span className="font-semibold">
-                        Ad {l.adNumber}, {l.sizeName ?? "every size"}, {l.langName}:
-                      </span>{" "}
-                      {l.reason}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
+            {pack.leftOut.length > 0 && <LeftOut items={pack.leftOut} />}
           </>
         )}
       </div>

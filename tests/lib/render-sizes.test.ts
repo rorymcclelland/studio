@@ -148,6 +148,8 @@ describe("C7-1 #2: a display ad renders in the banner sizes with headline, butto
 });
 
 /** A picture with a bright red disc near its right edge on a plain grey ground; with markers, a colour in each corner. */
+// The disc sits in the upper part of the picture: since C8-1, a 9:16 Full bleed's words (and so its panel) sit
+// above the platforms' bottom band, and the panel would cover a disc lower down.
 async function subjectPicture(markers: boolean): Promise<Buffer> {
   const corners = markers
     ? `<rect x="0" y="0" width="40" height="40" fill="#00c000"/><rect x="984" y="0" width="40" height="40" fill="#0000e0"/>
@@ -155,7 +157,7 @@ async function subjectPicture(markers: boolean): Promise<Buffer> {
     : "";
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024">
     <rect width="1024" height="1024" fill="#8a8a8a"/>
-    <circle cx="880" cy="420" r="90" fill="#e01010"/>${corners}
+    <circle cx="880" cy="240" r="90" fill="#e01010"/>${corners}
   </svg>`;
   return sharp(Buffer.from(svg)).png().toBuffer();
 }

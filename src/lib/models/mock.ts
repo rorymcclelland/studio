@@ -18,6 +18,9 @@ const DEFAULT_PAGES = [
   { url: "https://walking-news.example.test/season", title: "When people buy winter kit (sample page)", citedText: "Most winter kit is bought between October and December, peaking in the first cold weekend." },
 ];
 
+const noFace = () => ({ present: false, closeUp: false });
+const breaksShapes = (_prompt: string, rule: string) => /\b(abstract|shapes?)\b/i.test(rule);
+
 class MockBehaviour {
   queue: Queued[] = [];
   calls = 0;
@@ -38,6 +41,18 @@ class MockBehaviour {
    * replace it to force a yes, e.g. for one picture by its number in the prompt.
    */
   visionHasText: (prompt: string) => boolean = () => false;
+  /**
+   * C8-2: whether the picture shows a face, and whether it is a close-up. The
+   * mock pictures are soft shapes, so by default there is none. Tests replace it.
+   */
+  visionFace: (prompt: string) => { present: boolean; closeUp: boolean } = noFace;
+  /**
+   * C8-2: whether the picture breaks one of the kit's don't rules. The mock
+   * pictures are soft abstract shapes, so by default it says yes only to a rule
+   * about shapes or abstract pictures (which the browser test adds), and no to
+   * every other rule. Tests replace it.
+   */
+  visionBreaks: (prompt: string, rule: string) => boolean = breaksShapes;
   /** Image calls made, the last image prompt, and queued image failures. */
   imageCalls = 0;
   lastImagePrompt = "";
@@ -53,6 +68,8 @@ class MockBehaviour {
     this.delayMs = 0;
     this.lastImageCount = 0;
     this.visionHasText = () => false;
+    this.visionFace = noFace;
+    this.visionBreaks = breaksShapes;
     this.imageCalls = 0;
     this.lastImagePrompt = "";
     this.imageFailures = [];

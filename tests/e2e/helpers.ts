@@ -1,7 +1,79 @@
 // Shared steps for the end-to-end specs.
 import { existsSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+
+/**
+ * Captions in the recordings (decision 0021): when videos are recorded (in CI,
+ * or with E2E_VIDEO=1), the current step is shown in a strip along the bottom
+ * of the page, so a person watching the recording can follow it. The strip is
+ * in a closed shadow root, so no locator, text search or contrast check sees
+ * it, and it takes no clicks. Without recording it does nothing.
+ */
+export const RECORDING = Boolean(process.env.CI || process.env.E2E_VIDEO);
+
+const captioned = new WeakSet<Page>();
+
+function drawCaption(text: string) {
+  const KEY = "e2e-caption";
+  try {
+    if (text) sessionStorage.setItem(KEY, text);
+  } catch {
+    // about:blank has no storage; the caption shows from the next page on.
+  }
+  const draw = () => {
+    let t = text;
+    try {
+      t = text || sessionStorage.getItem(KEY) || "";
+    } catch {}
+    if (!t || !document.documentElement) return;
+    const w = window as unknown as { __e2eCaption?: HTMLElement };
+    if (!w.__e2eCaption || !w.__e2eCaption.isConnected) {
+      const host = document.createElement("e2e-caption");
+      host.style.cssText = "position:fixed;left:0;right:0;bottom:0;z-index:2147483647;pointer-events:none;display:block";
+      const root = host.attachShadow({ mode: "closed" });
+      const box = document.createElement("div");
+      box.style.cssText =
+        "margin:0 auto 8px;width:fit-content;max-width:calc(100vw - 16px);box-sizing:border-box;padding:6px 12px;border-radius:6px;" +
+        "background:rgba(17,17,17,.88);color:#fff;font:600 15px/1.35 system-ui,sans-serif;text-align:center";
+      root.append(box);
+      document.documentElement.append(host);
+      w.__e2eCaption = host;
+      (host as unknown as { box: HTMLElement }).box = box;
+    }
+    (w.__e2eCaption as unknown as { box: HTMLElement }).box.textContent = t;
+  };
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", draw, { once: true });
+  else draw();
+}
+
+/** Shows a caption in the recording (see RECORDING); it stays on the pages that follow until the next one. */
+export async function caption(page: Page, text: string) {
+  if (!RECORDING) return;
+  if (!captioned.has(page)) {
+    captioned.add(page);
+    await page.addInitScript(drawCaption, "");
+  }
+  await page.evaluate(drawCaption, text).catch(() => undefined);
+}
+
+/**
+ * Saves a screenshot to SHOTS_DIR, when it is set, as <name>.png. The
+ * recording's caption strip is hidden while it is taken, so it never covers
+ * the bottom of the page in a screenshot.
+ */
+export async function saveShot(page: Page, name: string, options: { fullPage?: boolean } = {}) {
+  if (!process.env.SHOTS_DIR) return;
+  await page.screenshot({ path: `${process.env.SHOTS_DIR}/${name.replace(/\W+/g, "-")}.png`, ...options, style: "e2e-caption { display: none !important; }" });
+}
+
+/** A test step with a plain-English name: in the report, and as the recording's caption. */
+export async function step<T>(page: Page, title: string, body: () => Promise<T>): Promise<T> {
+  return test.step(title, async () => {
+    await caption(page, title);
+    return body();
+  });
+}
 
 export const DEV_EMAIL = "dev@example.test";
 
@@ -149,4 +221,77 @@ export async function settle(page: Page) {
   await page.locator("h1").first().waitFor();
   await page.waitForLoadState("networkidle");
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
+}
+
+/** Writes a brief for a demo brand from /campaigns (mock Brief agent) and waits for version 1. Returns the campaign's path. */
+export async function newCampaign(page: Page, brand: "Fernhollow Outfitters" | "Quillmoor Money", objective: string): Promise<string> {
+  await demoBrandId(page, brand);
+  await page.goto("/campaigns");
+  await settle(page);
+  await page.getByLabel("Brand").selectOption({ label: brand });
+  await page.getByLabel("Objective").fill(objective);
+  await page.getByRole("button", { name: "Write the brief" }).click();
+  await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
+  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
+  return new URL(page.url()).pathname;
+}
+
+/** Sends a brief version for sign-off and approves it, as the owner, from the campaign page. */
+export async function signOffVersion(page: Page, version: number) {
+  const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
+  await panel.getByRole("button", { name: `Send version ${version} for sign-off` }).click();
+  await expect(page.locator("[data-toast]").filter({ hasText: "Sent for sign-off" })).toBeVisible();
+  await panel.getByRole("button", { name: `Approve version ${version}` }).click();
+  await expect(page.locator("[data-toast]").filter({ hasText: `Version ${version} signed off.` })).toBeVisible();
+}
+
+/**
+ * Waits for what a background run (Inngest) shows on the page, reloading as it
+ * waits. The page refreshes itself while a run is in progress, but on a slow
+ * dev server a refresh can take longer than the refresh interval, so each one
+ * is overtaken and the page never catches up; a reload always lands.
+ */
+export async function untilShown(page: Page, check: () => Promise<void>, timeout = 300_000) {
+  await expect(async () => {
+    const shown = await check().then(
+      () => true,
+      () => false,
+    );
+    if (shown) return;
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await check();
+  }).toPass({ timeout, intervals: [5_000, 10_000, 15_000] });
+}
+
+/** Presses Make creative on a signed-off brief and waits for the gallery to hold `count` ads. */
+export async function makeCreative(page: Page, count: number) {
+  // Read the signed-off page afresh, so the Make creative button is the current one.
+  await page.reload();
+  await settle(page);
+  await page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ }).click();
+  await expect(page.locator("[data-creative]").getByRole("button", { name: /^Making creative/ })).toBeVisible({ timeout: 30_000 });
+  await untilShown(page, () => expect(page.locator("[data-gallery] > li")).toHaveCount(count, { timeout: 10_000 }));
+}
+
+/**
+ * C8-1: on a campaign's page, accepts each of the brand's don't rules for
+ * every picked ad ("Accept for every picked ad"), one rule at a time as a
+ * person does, waiting for each to show as decided.
+ */
+export async function acceptDontRulesForPicked(page: Page) {
+  await settle(page);
+  await expect(page.locator("[data-bulk-dont-rule]").first()).toBeVisible({ timeout: 60_000 });
+  const open = page.locator('[data-bulk-dont-rule]:not([data-open="0"])');
+  for (let n = await open.count(); n > 0; n--) {
+    await open.first().getByRole("button", { name: /^Accept for every picked ad/ }).click();
+    await expect(open).toHaveCount(n - 1, { timeout: 30_000 });
+  }
+}
+
+/** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is). */
+export async function drawInLayout(page: Page, adNumber: number, layout: "Full bleed" | "Split" | "Card") {
+  const button = page.getByRole("button", { name: `${layout} layout for ad ${adNumber}`, exact: true });
+  if ((await button.getAttribute("aria-pressed")) === "true") return;
+  await button.click();
+  await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
 }

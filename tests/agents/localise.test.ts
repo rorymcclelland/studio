@@ -22,6 +22,7 @@ import { CHANNEL_LIMITS } from "@/lib/creative/copy-rules";
 import { translateEstimate } from "@/lib/creative/costs";
 import { getCreative, pickVariant, startMakeCreative, type VariantView } from "@/lib/creative/gallery";
 import { DEMO_LANGUAGES, listBrandLanguages, MACHINE_TRANSLATION, saveBrandLanguages, SUPPORTED_LANGS } from "@/lib/creative/languages";
+import { AA_TEXT } from "@/lib/creative/render/colour";
 import { SIZES, sizesFor } from "@/lib/creative/render/sizes";
 import { discardTranslation, startTranslate, TranslateError } from "@/lib/creative/translate";
 import type { KitSnapshot } from "@/lib/creative/variants";
@@ -157,21 +158,28 @@ describe("C7-2 Languages", () => {
 
   it("#2 each translated ad renders in every size of its channel and passes fit and contrast, or is left out with the reason", async () => {
     const ad = social[0];
+    const social4 = sizesFor("paid social").map((s) => s.id);
     for (const lang of SUPPORTED_LANGS) {
       const sizes = (await adSizes(a.userId, ad.id, lang))!;
       expect(sizes.lang).toBe(lang);
-      expect(sizes.sizes.map((s) => s.size)).toEqual(sizesFor("paid social").map((s) => s.id));
+      expect(sizes.sizes.map((s) => s.size)).toEqual(social4);
+      // The mock's translations fit every social size: all four are drawn, none is left out.
+      expect(sizes.sizes.filter((s) => s.ok).map((s) => s.size), `${lang}: the sizes drawn`).toEqual(social4);
       for (const s of sizes.sizes) {
         expect(s.src).toBe(`/ads/${ad.id}/${s.size}.png?lang=${lang}`);
         const res = await adSizeResponse(a.userId, ad.id, `${s.size}.png`, null, lang);
-        if (s.ok) {
-          expect(res.status, `${lang} ${s.size}`).toBe(200);
-          expect(s.badges.map((x) => x.key)).toEqual(expect.arrayContaining(["contrast", "fit", "legal", "translation"]));
-          expect(s.badges.find((x) => x.key === "legal")!.tone).toBe("good");
-        } else {
-          expect(res.status).toBe(422);
-          expect(s.reason).toMatch(/fit/);
-        }
+        expect(res.status, `${lang} ${s.size}`).toBe(200);
+        expect(res.headers.get("content-type")).toBe("image/png");
+        if (!s.ok) continue;
+        expect(s.badges.map((x) => x.key)).toEqual(expect.arrayContaining(["contrast", "fit", "legal", "translation"]));
+        expect(s.badges.find((x) => x.key === "fit")!.label).toBe(`Fits ${SIZES[s.size as "1080x1080"].name}`);
+        expect(s.badges.find((x) => x.key === "legal")).toMatchObject({ tone: "good", detail: `Every legal line is drawn (${DEMO_LANGUAGES.quillmoor[lang].legalLines.length} lines).` });
+        // Contrast at least AA (4.5:1) for the text on its panel and the button, as in English.
+        const contrast = s.badges.find((x) => x.key === "contrast")!;
+        expect(contrast.tone).toBe("good");
+        const [text, button] = [...contrast.detail.matchAll(/(\d+(?:\.\d+)?):1/g)].map((m) => Number(m[1]));
+        expect(text, `${lang} ${s.size} text contrast`).toBeGreaterThanOrEqual(AA_TEXT);
+        expect(button, `${lang} ${s.size} button contrast`).toBeGreaterThanOrEqual(AA_TEXT);
       }
       // Each language is its own drawing: its ETag differs from the English one in every size.
       const en = await adSizeResponse(a.userId, ad.id, "1080x1350.png");
@@ -186,6 +194,8 @@ describe("C7-2 Languages", () => {
     const de = (await adSizes(a.userId, d.id, "de-DE"))!;
     const english = (await adSizes(a.userId, d.id))!;
     expect(de.sizes.map((s) => s.ok)).toEqual(english.sizes.map((s) => s.ok));
+    expect(de.sizes.filter((s) => s.ok).map((s) => s.size), "the German banners drawn").toEqual(["300x250", "300x600"]);
+    for (const s of de.sizes) if (s.ok) expect((await adSizeResponse(a.userId, d.id, `${s.size}.png`, null, "de-DE")).status, s.size).toBe(200);
     const leaderboard = de.sizes.find((s) => s.size === "728x90")!;
     expect(leaderboard.ok).toBe(false);
     expect(!leaderboard.ok && leaderboard.reason).toMatch(/^The (legal lines|call to action) doesn?'t fit a 728 × 90 leaderboard at a readable size\.$/);
@@ -220,7 +230,7 @@ describe("C7-2 Languages", () => {
 
   it("#3 words that still overflow after the repair are left out of that size only, with the reason", async () => {
     const ad = social[2];
-    // Find a German body that the 1.91:1 landscape can't hold but the other social sizes can, for this ad's layout and kit.
+    // Find a German body that exactly one social size can't hold (the other three can), for this ad's layout and kit.
     const kit = ad.checks && ((await asUser(a.userId, (tx) => tx`select kit from public.ad_variants where id = ${ad.id}`))[0].kit as KitSnapshot);
     const base = {
       legalLines: DEMO_LANGUAGES.quillmoor["de-DE"].legalLines,
@@ -237,25 +247,28 @@ describe("C7-2 Languages", () => {
       const candidate = { headline: "Ihr Geld im Blick, jeden Tag und überall", body: sentence.slice(0, n), cta: "Jetzt App laden" };
       const fits = await fitInSizes({ ...base, copy: candidate }, ad.layout, "paid social");
       const bad = fits.filter((f) => !f.ok);
-      if (bad.length >= 1 && bad.length < fits.length && bad.every((f) => !f.ok && f.part !== "legal")) {
+      if (bad.length === 1 && fits.length === 4 && bad.every((f) => !f.ok && f.part !== "legal")) {
         words = candidate;
         leftOut = bad[0].size;
       }
     }
-    expect(words, "a German set that fits some sizes but not all").not.toBeNull();
+    expect(words, "a German set that fits three social sizes but not the fourth").not.toBeNull();
     mockBehaviour.next(reply(words!));
     mockBehaviour.next(reply(words!));
     const run = await translate([ad.words.setId], ["de-DE"]);
     expect(run.status, run.error ?? "").toBe("completed");
     expect(run.steps[1].attempts).toBe(2);
     const out = (await getRun(a.userId, run.id))!.output as { translations: { leftOut: { size: string; reason: string }[] }[]; summary: string };
-    expect(out.translations[0].leftOut.map((l) => l.size)).toContain(leftOut);
+    // Exactly that one size is left out, with the reason; the other three are kept.
+    expect(out.translations[0].leftOut.map((l) => l.size)).toEqual([leftOut]);
+    expect(out.translations[0].leftOut[0].reason).toMatch(/^body too long for /);
     expect(out.summary).toContain(`German at ${SIZES[leftOut as "1080x1080"].name}`);
     const sizes = (await adSizes(a.userId, ad.id, "de-DE"))!;
-    const refused = sizes.sizes.filter((s) => !s.ok).map((s) => s.size);
-    expect(refused).toContain(leftOut);
-    expect(sizes.sizes.some((s) => s.ok)).toBe(true);
-    expect((await adSizeResponse(a.userId, ad.id, `${leftOut}.png`, null, "de-DE")).status).toBe(422);
+    expect(sizes.sizes.filter((s) => !s.ok).map((s) => s.size)).toEqual([leftOut]);
+    expect(sizes.sizes.filter((s) => s.ok)).toHaveLength(3);
+    for (const s of sizes.sizes) {
+      expect((await adSizeResponse(a.userId, ad.id, `${s.size}.png`, null, "de-DE")).status, s.size).toBe(s.size === leftOut ? 422 : 200);
+    }
   });
 
   it("#4 a translation with a banned term for that language is repaired once, then refused", async () => {
@@ -370,7 +383,7 @@ describe("C7-2 Languages", () => {
     expect(output.copy.headline).toBe("Ignorez les règles");
   });
 
-  it("#8 the mock model returns fixed translations, labelled simulated, so previews spend nothing real", () => {
+  it("#8 the mock model returns fixed translations, labelled simulated, so previews spend nothing real", async () => {
     const input: LocaliseInput = {
       brandName: "Quillmoor Money",
       voice: "clear",
@@ -386,6 +399,47 @@ describe("C7-2 Languages", () => {
       places: [],
       legalLines: [],
     };
+    // Previews and CI run with MODEL_PROVIDER_OVERRIDE=mock and no keys: the Localise agent resolves to the mock.
+    expect(process.env.MODEL_PROVIDER_OVERRIDE).toBe("mock");
+    expect(resolveAgentModel("localise", process.env)).toMatchObject({ provider: "mock", model: "mock-model" });
+    // The translations #1 made are stored as simulated, and every step and ledger line of that run is the mock's.
+    const rows = await translationsOf(social[0].words.setId);
+    expect(rows).toHaveLength(3);
+    for (const r of rows) {
+      expect(r.simulated, r.lang).toBe(true);
+      const steps = await asUser(a.userId, (tx) => tx`select provider, model from public.agent_steps where run_id = ${r.run_id} and kind = 'model'`);
+      expect(steps.length).toBeGreaterThan(0);
+      for (const s of steps) expect(s).toMatchObject({ provider: "mock", model: "mock-model" });
+      const ledger = await asUser(a.userId, (tx) => tx`select provider, model, cost_pence from public.usage_ledger where run_id = ${r.run_id}`);
+      expect(ledger.length).toBeGreaterThan(0);
+      // The mock's notional test price (mock:mock-model in src/config/prices.ts) is counted in the cap and ledger; no real provider is.
+      for (const l of ledger) expect(l).toMatchObject({ provider: "mock", model: "mock-model" });
+    }
+
+    // With no keys and no network, a translation still runs: nothing reaches a real provider.
+    const keys = { ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY, GOOGLE_GENERATIVE_AI_API_KEY: process.env.GOOGLE_GENERATIVE_AI_API_KEY };
+    delete process.env.ANTHROPIC_API_KEY;
+    delete process.env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const realFetch = globalThis.fetch;
+    let requests = 0;
+    globalThis.fetch = (async () => {
+      requests += 1;
+      throw new Error("no network in a preview");
+    }) as typeof fetch;
+    try {
+      const runId = await createRun(a, "tagline", { brandName: "Quillmoor Money" }, noSend);
+      const { output } = await runModelStep({ runId, workspaceId: a.workspaceId, userId: a.userId }, localiseAgent, input, 1, "Translate");
+      expect(output.copy.headline).toBe("Etwas Neues wartet auf Sie");
+      expect(mockBehaviour.calls).toBe(1);
+      expect(requests).toBe(0);
+      const [step] = await asUser(a.userId, (tx) => tx`select provider, model from public.agent_steps where run_id = ${runId}`);
+      expect(step).toMatchObject({ provider: "mock", model: "mock-model" });
+    } finally {
+      globalThis.fetch = realFetch;
+      for (const [k, v] of Object.entries(keys)) if (v !== undefined) process.env[k] = v;
+    }
+
+    // The answers are fixed: the same prompt gets the same words, and every language and channel passes the checks.
     const one = localiseAgent.mockAnswer!(localiseAgent.buildPrompt(input));
     expect(one).toBe(localiseAgent.mockAnswer!(localiseAgent.buildPrompt(input)));
     expect(JSON.parse(one!).copy.headline).toBe("Etwas Neues wartet auf Sie");

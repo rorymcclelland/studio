@@ -5,7 +5,9 @@ import { paletteWords } from "@/lib/creative/colour-words";
 import { NOT_SIGNED_OFF } from "@/lib/creative/imagery";
 import { asUser } from "@/lib/db/scoped";
 import { CapExceededError, generateImage } from "@/lib/models/generate";
-import { IMAGE_COUNT, imageCheckAgent, imageryAgent, imageryStart, isFinanceCategory, type ImageryInput, type ImageryOutput } from "./imagery";
+import { dontKey } from "@/lib/compliance/rules";
+import { fitVision, META_MARGIN_BYTES, META_MAX_BYTES, VISION_MAX_BYTES, type VisionRecord } from "@/lib/compliance/vision";
+import { IMAGE_COUNT, imageCheckAgent, imageryAgent, imageryStart, isFinanceCategory, MAX_DONT_RULES, type ImageryInput, type ImageryOutput } from "./imagery";
 import { runModelStep, type StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
 
@@ -30,11 +32,21 @@ export type TrailSlot = { seq: number; name: string };
 type Written = { ok: true; output: ImageryOutput; leftOut: string[] } | { ok: false; reason: "cap" | "error"; message: string };
 
 export type Drawn = { ok: true; assetId: string } | { ok: false; reason: "cap" | "error"; message: string };
-export type Checked = { ok: true; hasText: boolean; reason: string } | { ok: false; reason: "cap" | "error"; message: string };
+export type Checked =
+  | {
+      ok: true;
+      hasText: boolean;
+      reason: string;
+      /** A close-up face in a finance brand's picture (F-24); always false for other brands. */
+      closeUpFace: boolean;
+      /** Why the picture is refused: text, or (finance brands) a close-up face; null when it may be kept. */
+      refused: "text" | "face" | null;
+    }
+  | { ok: false; reason: "cap" | "error"; message: string };
 
 export type PictureOutcome =
   | { picture: number; outcome: "kept"; assetId: string; attempts: number; idea: string }
-  | { picture: number; outcome: "dropped"; reasons: string[]; idea: string }
+  | { picture: number; outcome: "dropped"; reasons: string[]; kinds: ("text" | "face")[]; idea: string }
   | { picture: number; outcome: "stopped_cap" | "failed"; message: string; idea: string };
 
 // Trail order: 1 read, 2 prompts, then four slots per picture (draw, check, redraw, check again), then save.
@@ -175,32 +187,93 @@ export async function drawOne(
   }
 }
 
-/** The vision check on one stored picture; a picture with text, or one that couldn't be checked, is discarded. */
-export async function checkOne(ctx: StepContext, assetId: string, picture: number, attempt: number, at?: TrailSlot): Promise<Checked> {
+/** C8-2 (F-24): what a close-up face in a finance brand's picture is called in the trail and the run summary. */
+export const FACE_REFUSAL = "a close-up face (a finance brand's pictures show people only from behind, at a distance or as hands)";
+
+/**
+ * Stores a picture check's result with the picture (assets.meta.vision), within
+ * the meta column's limit: the rest of meta (measured in SQL as jsonb text) and
+ * the record (measured as jsonb prints it) leave META_MARGIN_BYTES spare.
+ */
+async function saveVision(ctx: StepContext, assetId: string, metaBytes: number, record: VisionRecord): Promise<void> {
+  const fitted = fitVision(record, Math.min(VISION_MAX_BYTES, META_MAX_BYTES - META_MARGIN_BYTES - metaBytes));
+  await asUser(ctx.userId, (tx) => tx`select public.set_asset_vision(${assetId}, ${tx.json(fitted as never)})`);
+}
+
+/** Says on the check's step that its paid-for result couldn't be kept with the picture (review fix 6). Never throws. */
+async function noteNotSaved(ctx: StepContext, seq: number, why: string): Promise<void> {
+  const error = `The check's result couldn't be saved with the picture, so its ads show the picture check as not run (${why}).`.slice(0, 1000);
+  await asUser(ctx.userId, (tx) => tx`update public.agent_steps set error = ${error} where run_id = ${ctx.runId} and seq = ${seq}`).catch(() => undefined);
+}
+
+/**
+ * The vision check on one stored picture (C8-2: text, a face and the kit's
+ * don't rules, in one call through runModelStep), with its result stored on
+ * the picture. A picture is refused for text, or (F-24) for a close-up face
+ * when the brand is a finance brand; a face for any other brand is not a
+ * finding. With `discard` (the default, for a picture just drawn) a refused
+ * picture, or one that couldn't be checked, is discarded (rule 8). Check
+ * pictures passes `discard: false`: a picture already in ads is never
+ * replaced without a person (rule 3), so its result becomes a finding instead.
+ */
+export async function checkOne(ctx: StepContext, assetId: string, picture: number, attempt: number, at?: TrailSlot, opts: { discard?: boolean } = {}): Promise<Checked> {
+  const discard = opts.discard ?? true;
   // A read that fails (the database, say) throws and the step is retried, which is free: nothing is paid before
   // the check. A picture that isn't there can't be checked, so it is a failed check, not a retry (review nit).
-  const [a] = await asUser(ctx.userId, (tx) => tx`select bytes, mime from public.assets where id = ${assetId}`);
+  const [a] = await asUser(ctx.userId, (tx) => tx`
+    select a.bytes, a.mime, octet_length((a.meta - 'vision')::text) as meta_bytes, b.category, b.dont_rules
+    from public.assets a join public.brands b on b.id = a.brand_id where a.id = ${assetId}`);
   if (!a?.bytes) return { ok: false, reason: "error", message: `The picture to check is missing (asset ${assetId}).` };
   const image = { data: new Uint8Array(a.bytes as Buffer), mediaType: a.mime as "image/webp" };
+  const finance = isFinanceCategory((a.category as string) ?? "");
+  const rules = [...new Set(((a.dont_rules as string[] | null) ?? []).map((r) => r.trim()).filter(Boolean))].slice(0, MAX_DONT_RULES).map((r) => r.slice(0, 300));
+  const seq = at?.seq ?? seqFor(picture, attempt, "check");
+  const metaBytes = Number(a.meta_bytes ?? 0);
+  const trail = async () => {
+    const [s] = await asUser(ctx.userId, (tx) => tx`select id, provider, model from public.agent_steps where run_id = ${ctx.runId} and seq = ${seq}`);
+    return { stepId: (s?.id as string | undefined) ?? null, provider: (s?.provider as string | null) ?? null, model: (s?.model as string | null) ?? null };
+  };
   try {
     const { output } = await runModelStep(
       ctx,
       imageCheckAgent,
-      { picture, attempt, image },
-      at?.seq ?? seqFor(picture, attempt, "check"),
+      { picture: Math.min(Math.max(1, picture), 99), attempt, image, dontRules: rules },
+      seq,
       at?.name ?? (attempt === 1 ? `Check picture ${picture} for text` : `Check picture ${picture} again`),
     );
-    if (output.hasText) await asUser(ctx.userId, (tx) => discardIn(tx, assetId));
-    return { ok: true, hasText: output.hasText, reason: output.reason };
+    const closeUp = output.face.closeUp;
+    const refused = output.hasText ? "text" : finance && closeUp ? "face" : null;
+    // Review fix 6: the check is paid for and its answer stands. A failure to save it is recorded on the step, not
+    // thrown, so the step isn't retried (a second paid call) and the answer isn't mistaken for a check that failed.
+    const notSaved = await saveVision(ctx, assetId, metaBytes, {
+      status: "checked",
+      checkedAt: new Date().toISOString(),
+      runId: ctx.runId,
+      ...(await trail()),
+      hasText: output.hasText,
+      reason: output.reason,
+      face: { present: output.face.present || closeUp, closeUp },
+      rules: output.dontRules.map((r) => ({ key: dontKey(rules[r.rule - 1]), breaks: r.breaks, reason: r.reason })),
+    }).then(
+      () => null,
+      (err: unknown) => errorText(err),
+    );
+    if (notSaved) await noteNotSaved(ctx, seq, notSaved);
+    if (refused && discard) await asUser(ctx.userId, (tx) => discardIn(tx, assetId));
+    return { ok: true, hasText: output.hasText, reason: output.reason, closeUpFace: finance && closeUp, refused };
   } catch (err) {
+    const reason = reasonOf(err);
+    // Kept with the picture, so its compliance says the check didn't run, and why (never Pass).
+    await saveVision(ctx, assetId, metaBytes, { status: reason, checkedAt: new Date().toISOString(), runId: ctx.runId, ...(await trail()), message: errorText(err).slice(0, 400) }).catch(() => undefined);
     // Rule 8: a picture nobody has checked for text is not kept.
-    await asUser(ctx.userId, (tx) => discardIn(tx, assetId));
-    return { ok: false, reason: reasonOf(err), message: errorText(err) };
+    if (discard) await asUser(ctx.userId, (tx) => discardIn(tx, assetId));
+    return { ok: false, reason, message: errorText(err) };
   }
 }
 
 async function makePicture(ctx: StepContext, step: StepTools, prepared: Extract<Prepared, { ok: true }>, p: Prompt, picture: number): Promise<PictureOutcome> {
   const reasons: string[] = [];
+  const kinds: ("text" | "face")[] = [];
   for (let attempt = 1; attempt <= 2; attempt++) {
     const drawn = await step.run(`draw-${picture}-${attempt}`, () => drawOne(ctx, prepared, p, picture, attempt));
     if (!drawn.ok) return { picture, outcome: drawn.reason === "cap" ? "stopped_cap" : "failed", message: drawn.message, idea: p.idea };
@@ -213,10 +286,21 @@ async function makePicture(ctx: StepContext, step: StepTools, prepared: Extract<
         idea: p.idea,
       };
     }
-    if (!checked.hasText) return { picture, outcome: "kept", assetId: drawn.assetId, attempts: attempt, idea: p.idea };
-    reasons.push(checked.reason);
+    if (!checked.refused) return { picture, outcome: "kept", assetId: drawn.assetId, attempts: attempt, idea: p.idea };
+    // F-24: a close-up face in a finance brand's picture is treated like text: redrawn once, then dropped.
+    reasons.push(checked.refused === "face" ? `The check found ${FACE_REFUSAL}.` : checked.reason);
+    kinds.push(checked.refused);
   }
-  return { picture, outcome: "dropped", reasons, idea: p.idea };
+  return { picture, outcome: "dropped", reasons, kinds, idea: p.idea };
+}
+
+/** What the check found twice in each dropped picture, said once per kind: "Picture 2 was dropped: the check found text twice." */
+function droppedText(dropped: { picture: number; kinds: ("text" | "face")[] }[]): string {
+  const why = (k: ("text" | "face")[]) =>
+    k.every((x) => x === "face") ? `the check found ${FACE_REFUSAL} twice` : k.every((x) => x === "text") ? "the check found text twice" : "the check found text once and a close-up face once";
+  const groups = new Map<string, number[]>();
+  for (const d of dropped) groups.set(why(d.kinds), [...(groups.get(why(d.kinds)) ?? []), d.picture]);
+  return [...groups.entries()].map(([w, ps]) => ` ${ps.length === 1 ? `Picture ${ps[0]} was` : `Pictures ${ps.join(", ")} were`} dropped: ${w}.`).join("");
 }
 
 export async function executeImageryRun(ctx: StepContext, step: StepTools): Promise<string> {
@@ -255,7 +339,7 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
       select coalesce(bool_or(simulated), false) as simulated from public.assets where id = any(${kept.map((k) => k.assetId)}::uuid[])`);
     const record = {
       kept: kept.map((k) => ({ picture: k.picture, assetId: k.assetId, attempts: k.attempts, idea: k.idea })),
-      dropped: dropped.map((d) => ({ picture: d.picture, idea: d.idea, reasons: d.reasons })),
+      dropped: dropped.map((d) => ({ picture: d.picture, idea: d.idea, reasons: d.reasons, found: d.kinds })),
       notMade: stopped.map((s) => ({ picture: s.picture, idea: s.idea, outcome: s.outcome, message: s.message })),
     };
     await asUser(ctx.userId, (tx) => tx`
@@ -264,9 +348,7 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
               ${tx.json({ pictures: outcomes.length } as never)}, ${tx.json(record as never)}, ${Date.now() - started}, now())
       on conflict (run_id, seq) do update set status = excluded.status, output = excluded.output, finished_at = now()`);
 
-    const droppedNote = dropped.length
-      ? ` ${dropped.length === 1 ? `Picture ${dropped[0].picture} was` : `Pictures ${dropped.map((d) => d.picture).join(", ")} were`} dropped: the check found text twice.`
-      : "";
+    const droppedNote = droppedText(dropped);
     const leftOutNote = written.leftOut.length
       ? ` ${written.leftOut.length} ${written.leftOut.length === 1 ? "prompt" : "prompts"} failed the checks twice and ${written.leftOut.length === 1 ? "was" : "were"} left out (see the trail).`
       : "";
@@ -292,7 +374,9 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
       // The same refusal for every picture (a quota, say) is said once.
       const messages = [...new Set(stopped.map((s) => s.message))];
       const why = !stopped.length
-        ? "every picture still had text after a redraw"
+        ? dropped.every((d) => d.kinds.every((k) => k === "text"))
+          ? "every picture still had text after a redraw"
+          : "every picture still had text or a close-up face after a redraw"
         : messages.length === 1
           ? messages[0]
           : stopped.map((s) => `picture ${s.picture}: ${s.message}`).join("; ");

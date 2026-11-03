@@ -6,7 +6,7 @@ import { asUser, type Tx } from "@/lib/db/scoped";
 import { copyAgent } from "./copy";
 import { executeCopyRun } from "./copy-workflow";
 import { imageryAgent } from "./imagery";
-import { checkOne, drawOne, executeImageryRun } from "./imagery-workflow";
+import { checkOne, drawOne, executeImageryRun, FACE_REFUSAL } from "./imagery-workflow";
 import type { StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
 
@@ -340,9 +340,14 @@ async function executePicture(ctx: StepContext, step: StepTools): Promise<string
     return status;
   }
   const checked = await step.run("check", () => checkOne(ctx, drawn.assetId, p.picture, 1, { seq: 3, name: "Check the new picture for text" }));
-  if (!checked.ok || checked.hasText) {
+  if (!checked.ok || checked.refused) {
     const status = !checked.ok && checked.reason === "cap" ? "stopped_cap" : "failed";
-    const why = checked.ok ? `the check found text in it (${checked.reason})` : `it couldn't be checked for text (${checked.message})`;
+    // F-24 (C8-2): a close-up face in a finance brand's picture is refused like text.
+    const why = !checked.ok
+      ? `it couldn't be checked for text (${checked.message})`
+      : checked.refused === "face"
+        ? `the check found ${FACE_REFUSAL}`
+        : `the check found text in it (${checked.reason})`;
     await step.run("stop", () => setRun(ctx, status, { error: `The new picture was discarded because ${why}. The ad keeps its picture; try New picture again.` }));
     return status;
   }

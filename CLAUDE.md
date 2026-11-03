@@ -61,7 +61,7 @@ Local Postgres: `postgres://postgres@localhost:54329/<db>` (see `.env.example`).
 
 ## Definition of done
 
-- The story's agreed test cases exist and pass (write them first).
+- The story's agreed test cases exist and pass (write them first), and each is in `tests/e2e/cases.ts` with how it is checked.
 - `typecheck`, `lint`, `test` and the relevant e2e specs pass; no new `npm audit` high findings.
 - Rules 1 to 8 checked; any new table has `workspace_id`, RLS and a cross-workspace test.
 - UI checked by screenshot at 375 px and 1440 px with AA contrast (light theme only until the dark theme, F-9, is built).
@@ -70,4 +70,13 @@ Local Postgres: `postgres://postgres@localhost:54329/<db>` (see `.env.example`).
 
 ## Working style
 
-Sprints are refined first (`docs/refinement/sprint-N.md`), built only after sign-off, and closed by moving anything unfinished back to the backlog. Use the subagents in `.claude/agents/` for UI work, agent work, tests and review. Use the `add-an-agent` skill to scaffold a new product agent.
+Studio follows Rory's build working agreement (the `build-working-agreement` skill, adopted 2 November 2026, decision 0021). Rory is the product manager and owns the why, the what and the sign-off. Claude is the lead engineer and also QA, platform and release engineering and technical writing.
+
+- Sprints are refined first (`docs/refinement/sprint-N.md`), built only after Rory says go, and closed by moving anything unfinished back to the backlog.
+- Each agreed case says how it is checked: a browser test, another CI check, or by hand with the reason. Every case is in `tests/e2e/cases.ts`.
+- An independent QA agent (one that did not build the work) checks the tests against the agreed cases, and an independent reviewer checks security and correctness, before the demo.
+- Rory signs off from the demo page, which is built from CI's browser-test results and recordings (the `e2e-results/ci/<branch>` branch, `scripts/demo-page`). A case shows Passed only from a browser test that ran in that build.
+- **The live site changes only after sign-off.** Merging to `main` deploys production, so the merge, and the live database migrations with it, waits for Rory's sign-off and his approval of the deploy.
+- **Studio exception:** CI runs the mock model and has no real keys, so anything that needs real AI output (translation quality, crops on real pictures, picture and copy quality) is a hand check on production after the deploy, sent as a Markdown test pack (`docs/testing/`). Hand checks are otherwise the exception.
+
+Use the subagents in `.claude/agents/` for UI work, agent work, tests and review. Use the `add-an-agent` skill to scaffold a new product agent.

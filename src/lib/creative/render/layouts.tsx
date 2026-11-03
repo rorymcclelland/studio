@@ -1,5 +1,6 @@
 /* eslint-disable @next/next/no-img-element -- Satori (ImageResponse) draws plain <img> elements; next/image does not apply. */
 import type { CSSProperties, ReactElement } from "react";
+import { COMPLIANCE } from "@/config/compliance";
 import { relativeLuminance, rgba } from "./colour";
 import { fontStack, type BundledFamily, type FontWeight } from "./fonts";
 import type { LogoImage } from "./logo";
@@ -41,8 +42,8 @@ type Common = {
 export type Geometry =
   | (Common & { kind: "full-bleed"; bottomPad: number; bodyGap: number; legalGap: number; fade: number; logoTop: number })
   | (Common & { kind: "split"; mode: "square" | "top" | "side"; band: number; border: number; padTop: number; padBottom: number; bodyGap: number; ctaGap: number; logoTop: number })
-  | (Common & { kind: "card"; mode: "square" | "side" | "stacked"; pad: number; imageWidth: number; gap: number; radius: number; shadow: string; legalGap: number; logoGap: number; bodyGap: number; ctaGap: number; imageGap: number; minPicture: number })
-  | (Common & { kind: "banner"; mode: "rectangle" | "half-page" | "leaderboard"; padX: number; padY: number; gap: number; legalGap: number; minPicture: number });
+  | (Common & { kind: "card"; mode: "square" | "side" | "stacked"; pad: number; bottomInset: number; imageWidth: number; gap: number; radius: number; shadow: string; legalGap: number; logoGap: number; bodyGap: number; ctaGap: number; imageGap: number; minPicture: number })
+  | (Common & { kind: "banner"; mode: "rectangle" | "half-page" | "leaderboard"; padX: number; padY: number; gap: number; legalGap: number; minPicture: number; logoTop: number; logoLeft: number });
 
 /** The box the picture is drawn in, and how it is fitted: as the square always has (render.ts passes it as it is), cropped to the box around its subject, or whole in a square box. */
 export type PictureBox = { width: number; height: number; fit: "cover" | "whole" | "as before" };
@@ -142,6 +143,20 @@ const accentHeight = (c: Common) => c.accent.height + c.accent.gap;
 
 /** The scale of type and fixed parts in each social size: the portrait sizes keep the square's, the landscape is smaller. */
 const SOCIAL_SCALE: Partial<Record<SizeId, number>> = { "1080x1080": 1, "1080x1350": 1, "1080x1920": 1, "1200x628": 0.72 };
+/**
+ * C8-1 (Rory, while building): in a 9:16 story the platforms' own controls
+ * cover the top and bottom of the screen, so every layout keeps its words,
+ * logo and legal lines below `top` and above `bottom` px from the bottom: the
+ * bands and their margin (src/config/compliance.ts), and a pixel more. The
+ * picture holds no words and may run under them. Zero in every other size,
+ * which is drawn as before.
+ */
+export function storyClearance(size: SizeSpec): { top: number; bottom: number } {
+  if (size.id !== "1080x1920") return { top: 0, bottom: 0 };
+  const z = COMPLIANCE.platformZones;
+  return { top: Math.ceil(size.height * (z.top + z.near)) + 1, bottom: Math.ceil(size.height * (z.bottom + z.near)) + 1 };
+}
+
 /** Full bleed's tallest text panel per size (the square's 580 is Sprint 5's). */
 const FULL_BLEED_PANEL: Partial<Record<SizeId, number>> = { "1080x1080": 580, "1080x1350": 720, "1080x1920": 1000, "1200x628": 400 };
 
@@ -150,7 +165,11 @@ function fullBleed(size: SizeSpec): LayoutSpec {
   const r = scaler(s);
   const c = common(size, s);
   const content = c.W - 2 * c.margin;
-  const g = { ...c, kind: "full-bleed" as const, bottomPad: r(60), bodyGap: r(20), legalGap: r(36), fade: r(220), logoTop: r(64) };
+  // C8-1: a story's words sit above the bottom band and its logo below the top one; its panel grows by the same
+  // amount, so the words have the room they had before.
+  const clear = storyClearance(size);
+  const bottomPad = clear.bottom || r(60);
+  const g = { ...c, kind: "full-bleed" as const, bottomPad, bodyGap: r(20), legalGap: r(36), fade: r(220), logoTop: clear.top ? clear.top - c.plate.padY : r(64) };
   const square = size.id === SQUARE;
   return {
     id: "full-bleed",
@@ -164,7 +183,7 @@ function fullBleed(size: SizeSpec): LayoutSpec {
     logo: { maxWidth: r(280), maxHeight: r(56) },
     stack: (h) => ({
       needed: accentHeight(c) + h.headline + g.bodyGap + Math.max(h.body, h.cta) + (h.legal ? g.legalGap + h.legal : 0) + g.bottomPad,
-      max: FULL_BLEED_PANEL[size.id] ?? Math.round(c.H * 0.54),
+      max: (FULL_BLEED_PANEL[size.id] ?? Math.round(c.H * 0.54)) + (bottomPad - r(60)),
     }),
     picture: () => ({ width: c.W, height: c.H, fit: square ? "as before" : "cover" }),
     refusal: refusalFor(size, "Full bleed"),
@@ -181,9 +200,13 @@ function split(size: SizeSpec): LayoutSpec {
   // The square's picture band is 60% of its height (cropped, as in Sprint 5). Portrait sizes keep the
   // square picture whole in a band at most as tall as the canvas is wide, leaving the square's text room;
   // the landscape puts it whole on the left, as tall as the canvas.
-  const band = mode === "square" ? Math.round(c.H * 0.6) : mode === "top" ? Math.min(c.W, c.H - 432) : c.H;
+  // C8-1: in a story the legal lines sit above the bottom band and the logo below the top one; the picture band gives
+  // up what the bottom takes, so the words keep their room.
+  const clear = storyClearance(size);
+  const padBottom = clear.bottom || r(40);
+  const band = mode === "square" ? Math.round(c.H * 0.6) : mode === "top" ? Math.min(c.W, c.H - 432 - (padBottom - r(40))) : c.H;
   // Beside the picture, the words start below the "Simulated image" pill in the top right corner.
-  const g = { ...c, kind: "split" as const, mode, band, border: r(8), padTop: mode === "side" ? r(72) : r(44), padBottom: r(40), bodyGap: r(14), ctaGap: r(24), logoTop: r(56) } as const;
+  const g = { ...c, kind: "split" as const, mode, band, border: r(8), padTop: mode === "side" ? r(72) : r(44), padBottom, bodyGap: r(14), ctaGap: r(24), logoTop: clear.top ? clear.top - c.plate.padY : r(56) } as const;
   const side = mode === "side";
   const textWidth = side ? c.W - band - g.border - 2 * c.margin : c.W - 2 * c.margin;
   return {
@@ -219,12 +242,18 @@ function card(size: SizeSpec): LayoutSpec {
   // The square's picture column is 468 wide (Sprint 5). The landscape's picture is a square as tall as the room
   // above the legal lines; its column is what is left beside the tallest such square.
   const imageWidth = mode === "square" ? 468 : mode === "side" ? c.H - 2 * pad : c.W - 2 * pad;
+  // C8-1 (Q7): in a 9:16 story the platforms' own controls cover the bottom of the screen, so Card keeps its words,
+  // logo and legal lines above the bottom band and its margin (src/config/compliance.ts). The picture may sit near
+  // the top band (it holds no words). Every other size and layout is drawn as before.
+  const clear = storyClearance(size);
+  const bottomInset = clear.bottom ? Math.max(0, clear.bottom - pad) : 0;
   const column = mode === "stacked" ? c.W - 2 * pad : c.W - 2 * pad - imageWidth - gap;
   const g = {
     ...c,
     kind: "card" as const,
     mode,
     pad,
+    bottomInset,
     imageWidth,
     gap,
     radius: r(36),
@@ -238,7 +267,7 @@ function card(size: SizeSpec): LayoutSpec {
     imageGap: r(48),
     minPicture: Math.round(c.W * 0.4),
   } as const;
-  const legalRoom = (h: StackHeights) => c.H - 2 * pad - (h.legal ? h.legal + g.legalGap : 0);
+  const legalRoom = (h: StackHeights) => c.H - 2 * pad - bottomInset - (h.legal ? h.legal + g.legalGap : 0);
   const plated = (h: StackHeights) => (h.logo ? h.logo + 2 * c.plate.padY : 0);
   const stackedText = (h: StackHeights) => accentHeight(c) + h.headline + g.bodyGap + h.body + g.ctaGap + Math.max(h.cta, plated(h));
   return {
@@ -284,7 +313,21 @@ function banner(size: SizeSpec): LayoutSpec {
     "half-page": { padX: 18, padY: 16, gap: 14, legalGap: 10, headline: [32, 30, 28, 26, 24, 22, 20], hLines: 3, cta: { size: 17, height: 40, padX: 20, maxWidth: 264 }, legal: [12, 11, 10], logo: { maxWidth: 150, maxHeight: 34 }, minPicture: 120 },
     leaderboard: { padX: 14, padY: 8, gap: 12, legalGap: 3, headline: [22, 20, 18, 16, 14], hLines: 1, cta: { size: 14, height: 34, padX: 16, maxWidth: 150 }, legal: [10], logo: { maxWidth: 100, maxHeight: 28 }, minPicture: H },
   }[mode];
-  const g = { ...c, kind: "banner" as const, mode, padX: t.padX, padY: t.padY, gap: t.gap, legalGap: t.legalGap, minPicture: t.minPicture } as const;
+  // C8-1 (Rory, while building): the medium rectangle's and half page's logo sits on the picture's corner with the
+  // logo rule's clear space (4% of the shorter side, and a pixel more) from both edges. The leaderboard's sits in its row.
+  const logoAt = mode === "leaderboard" ? 0 : Math.ceil(Math.min(W, H) * COMPLIANCE.logoClearSpace.pass) + 1;
+  const g = {
+    ...c,
+    kind: "banner" as const,
+    mode,
+    padX: t.padX,
+    padY: t.padY,
+    gap: t.gap,
+    legalGap: t.legalGap,
+    minPicture: t.minPicture,
+    logoTop: logoAt - c.plate.padY,
+    logoLeft: logoAt - c.plate.padX,
+  } as const;
   // The leaderboard is one row: the square picture, the logo, the words and the button. The other two put the
   // logo on the picture's top left corner (as Full bleed does), so the button has its row to itself.
   const logoRoom = t.logo.maxWidth + 2 * c.plate.padX;
@@ -564,7 +607,7 @@ function Card(p: DrawProps): ReactElement {
   const g = p.spec.geo as Extract<Geometry, { kind: "card" }>;
   const legalHeight = linesHeight(p.legal.paragraphs.flat().length, p.legal.size, p.spec.legal.lineHeight);
   const legalGap = legalHeight > 0 ? g.legalGap : 0;
-  const topHeight = g.H - 2 * g.pad - legalHeight - legalGap;
+  const topHeight = g.H - 2 * g.pad - g.bottomInset - legalHeight - legalGap;
   const lightPanel = relativeLuminance(p.colours.panel) > 0.55;
   if (g.mode === "stacked") return CardStacked(p, g, topHeight, legalGap, lightPanel);
   const image = g.mode === "square" ? { width: g.imageWidth, height: topHeight } : p.pictureBox;
@@ -600,8 +643,10 @@ function Card(p: DrawProps): ReactElement {
 /** Card in a portrait canvas: the square picture whole on top, the words below, the logo beside the button. */
 function CardStacked(p: DrawProps, g: Extract<Geometry, { kind: "card" }>, topHeight: number, legalGap: number, lightPanel: boolean): ReactElement {
   const box = p.pictureBox;
+  // C8-1: a 9:16 story keeps clear of the platforms' bottom band (bottomInset; 0 in the 4:5 portrait, drawn as before).
+  const padding = g.bottomInset ? `${g.pad}px ${g.pad}px ${g.pad + g.bottomInset}px` : g.pad;
   return (
-    <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, padding: g.pad, background: p.colours.panel }}>
+    <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, padding, background: p.colours.panel }}>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", height: topHeight }}>
         <div style={{ display: "flex", justifyContent: "center" }}>
           <div style={{ display: "flex", width: box.width, height: box.height, borderRadius: g.radius, overflow: "hidden", ...(g.shadow === "none" ? {} : { boxShadow: g.shadow }) }}>
@@ -650,7 +695,7 @@ function Banner(p: DrawProps): ReactElement {
     <div style={{ display: "flex", flexDirection: "column", width: g.W, height: g.H, background: p.colours.panel }}>
       <div style={{ display: "flex", position: "relative", width: g.W, height: box.height, overflow: "hidden", flexShrink: 0 }}>
         <Picture p={p} box={box} />
-        <Logo p={p} plate style={{ position: "absolute", top: BANNER_LABEL.top, left: BANNER_LABEL.top }} />
+        <Logo p={p} plate style={{ position: "absolute", top: g.logoTop, left: g.logoLeft }} />
       </div>
       <div style={{ display: "flex", flexDirection: "column", justifyContent: "space-between", flexGrow: 1, padding: `${g.padY}px ${g.padX}px` }}>
         <div style={{ display: "flex", flexDirection: "column" }}>

@@ -226,3 +226,19 @@ No acceptance criteria changed beyond C7-2's languages list.
 - C7-2: Translate runs from a click with its cost shown, like New words (no approval step; it replaces and publishes nothing; the daily cap applies).
 - C7-2: a language needs legal lines only when the English ad has them.
 - C7-2: the demo brands' French, German and Spanish legal lines and banned terms, written by Claude and marked "written for the demo", stay; Rory reviews them in the test pack.
+- How Sprint 7 is checked and signed off (2 November, decision 0021): Studio adopts the build working agreement. Every agreed case goes in `tests/e2e/cases.ts` with how it is checked; browser tests are added for C7-1 Sizes and F-27; an independent QA agent checks the tests against these cases; Rory signs off from the demo page built from CI's results (N-8c). The test pack (N-8b) shrinks to the hand checks that need real AI output or Rory's judgement. Sprint 7 had already gone to production with Rory's approval before its demo existed; from Sprint 8 the merge to `main` waits for the sign-off.
+
+## Review evidence (closed 3 November 2026)
+
+- **Demo sign-off:** Rory signed off on 3 November ("All good"), from the demo page built from CI run 41547303603 on commit `68999d5`. Record: `docs/testing/sprint-7-demo.md`.
+- **Cases:** 37 in `tests/e2e/cases.ts`. 22 passed in browser tests that ran in that build, with recordings, and none failed or needed a retry. 9 passed in other CI checks. 5 are by hand: F-28.2, N-7a.1 to .3 and C7-2.Q4. 1 is withdrawn: F-28.1, by Rory's decision.
+- **Suite:** 718 unit, database and agent tests; every CI job green on `52e9d29`, including the Neon job.
+- **Independent QA review** (an agent that built none of the work): 12 findings, all fixed before the demo in `68999d5`:
+  - one browser test that could pass on a broken implementation (C7-2 #2);
+  - two CI tests that didn't assert all of their case;
+  - two cases moved from CI only to browser tests (C7-2 #5, F-27 #4);
+  - F-26 changes the palette through the brand editor instead of SQL;
+  - the launch pack's time and size are now measured on the demo page: 19.7 s and 22.6 MB for 64 ads.
+- **One case checked differently from the agreement (C7-2.3):** the test uses the square, not 4:5. With the layout fallback, 4:5 holds the long German word in the Card layout. The behaviour is as agreed; the demo page says so.
+- **Production:** Sprint 7 deployed on 2 November (`fc52d87`), before its demo, with Rory's approval. Both migrations were applied to preview and production and checked by fingerprint. Since then `sprint-7` has gained tests, CI, scripts and docs, plus one `data-words` attribute on the gallery card for a test.
+- **Still to do by hand** (N-8d), on production: HC-1 to HC-4 in `docs/testing/sprint-7-test-pack.md`. These are crops on real 2K pictures, the demo legal lines, translation quality, and a launch pack from real creative. Rory chose to close the sprint with them open; a failure becomes a bug then.

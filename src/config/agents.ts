@@ -23,10 +23,18 @@ export const AGENT_MODELS = {
   // 4,000 (was 1,500): four detailed prompts ran past 1,500 tokens on the first
   // production run and the reply was cut off mid-JSON (27 Oct 2026).
   imagery: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 4000 },
-  imageCheck: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 200 },
+  // C8-2: the same call also answers the face question and each of up to 20 don't rules with
+  // a short reason, so 1,000 tokens (was 200); a typical check writes about 300.
+  imageCheck: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 1000 },
   // C7-2 (Sprint 7, Q5): Sonnet, not Haiku, as the Copy agent: tone matters in another
   // language, and one set is about 1 to 2p a language. One set's three fields fit in 600 tokens.
   localise: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 600 },
+  // C8-4: the pre-test panel on Haiku with vision (about 0.05p an ad). Four personas, four
+  // scales each, a sentence and a quote per scale: about 800 tokens, at most about 1,800.
+  pretest: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
+  // C8-3: Check an ad reads an uploaded ad on Haiku with vision (about 0.1p a check). Up to
+  // 80 lines of words, each with its box, the logo, the face and up to 20 don't rules.
+  readAd: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 4000 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

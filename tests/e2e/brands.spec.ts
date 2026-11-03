@@ -4,7 +4,9 @@
 // demo-brands.setup.ts, which loads the demo brands these tests use.
 //
 // Fernhollow is only read here (design-system.spec.ts compares its screens
-// between visits); every test that saves edits Quillmoor.
+// between visits); every test that saves edits Quillmoor. F-26
+// (creative.spec.ts) reorders Fernhollow's palette for a moment, and not
+// Quillmoor's, because S2-3 #2 checks that Quillmoor's palette is unchanged.
 //
 // Pages left with Cache Components stay in the document, hidden, so plain
 // locators below are filtered to visible elements.
@@ -60,7 +62,9 @@ function dialogs(page: Page, answers: boolean[] = []) {
   return seen;
 }
 
-test.describe("S2-3 #1: editing the kit", () => {
+// The tests that save Quillmoor's kit are tagged @brand-kit: they run in the brand-kit project (playwright.config.ts),
+// after every other spec and one at a time, as other specs read Quillmoor's kit (its don't rules, its voice).
+test.describe("S2-3 #1: editing the kit", { tag: "@brand-kit" }, () => {
   test("change the tone words and a don't rule, save, reload: the overview shows the change", async ({ page }) => {
     const tag = randomUUID().slice(0, 6);
     const word = `steady-${tag}`;
@@ -89,7 +93,7 @@ test.describe("S2-3 #1: editing the kit", () => {
   });
 });
 
-test.describe("S2-3 #2: validation", () => {
+test.describe("S2-3 #2: validation", { tag: "@brand-kit" }, () => {
   test("messages appear beside the right field, and nothing is saved while any field is invalid", async ({ page }) => {
     test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to check nothing was saved");
     const sql = postgres(process.env.DATABASE_URL!, { max: 1 });
@@ -137,7 +141,7 @@ test.describe("S2-3 #2: validation", () => {
   });
 });
 
-test.describe("S2-3 #3: unsaved changes", () => {
+test.describe("S2-3 #3: unsaved changes", { tag: "@brand-kit" }, () => {
   test("leaving by a link or the back button with unsaved changes asks first; staying keeps them", async ({ page }) => {
     const seen = dialogs(page, [false, false, true]);
     await openEditor(page, quillmoor);

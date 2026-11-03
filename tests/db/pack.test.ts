@@ -12,12 +12,19 @@
 // timed) is the e2e spec's: CI's database is too far away to time here. Review
 // fixes: a ceiling of 200 files and one pack at a time per instance (2), legal
 // lines written for the demo marked (5), the README's claims only where true
-// (6), and each file's picture size and upscale factor (7).
+// (6), and each file's picture size and upscale factor (7). C8-1 #9: a file
+// with a compliance failure or an unaccepted review item is left out with the
+// reason, and the manifests record each rule and who accepted any review item.
+// The C7-3 brands have no don't rules, and every layout passes the geometric
+// rules in every size (Rory's answers while building), so those tests see every
+// size that fits, as before.
 import sharp from "sharp";
 import { unzipSync, strFromU8 } from "fflate";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { insertImage, toWebp } from "@/lib/assets/store";
 import { clearSizeCache } from "@/lib/creative/ad-sizes";
+import { adCompliance, CHANGED_WHILE_PLANNED, decideFinding, fileCompliance } from "@/lib/compliance/compute";
+import { judge, pictureFindings } from "@/lib/compliance/rules";
 import { getCreative } from "@/lib/creative/gallery";
 import { DEMO_LANGUAGES, insertDemoLanguages, MACHINE_TRANSLATION, WRITTEN_FOR_DEMO } from "@/lib/creative/languages";
 import {
@@ -28,17 +35,20 @@ import {
   PACK_BUSY,
   packResponse,
   packSummary,
+  packCompliance,
   packTooLarge,
   planPack,
+  NOTHING_PASSES_PACK,
 } from "@/lib/creative/pack";
 import { SIZES, type SizeId } from "@/lib/creative/render/sizes";
 import { renderAd } from "@/lib/creative/render/render";
 import { loadParts, renderInputFor, type KitSnapshot, type LayoutId } from "@/lib/creative/variants";
-import { closeSql } from "@/lib/db/client";
+import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { QUILLMOOR } from "@/lib/demo/briefs";
 import { drawMockImage } from "@/lib/models/mock-image";
 import { createMember, truncateAll } from "../helpers/db";
+import { checkedVision } from "../helpers/vision";
 
 type Member = { userId: string; workspaceId: string };
 
@@ -80,6 +90,10 @@ let ids: {
   unpicked: string;
   discarded: string;
   oldVersion: string;
+  checked: string;
+  accepted: string;
+  failing: string;
+  waiting: string;
 };
 
 /** A Quillmoor brand with its demo languages; `simulated` as the demo loader marks its brands (is_simulated). */
@@ -116,7 +130,7 @@ function builder(m: Member, brandId: string, campaignId: string) {
   return {
     image: (webp: Awaited<ReturnType<typeof toWebp>>, simulated: boolean, idea: string) =>
       asUser(m.userId, (tx) =>
-        insertImage(tx, { workspaceId: m.workspaceId, userId: m.userId, brandId, campaignId, runId: null, webp, simulated, createdByKind: "agent", meta: { picture: 1, briefVersion: 1, idea, model: simulated ? "mock" : "an image model" } }),
+        insertImage(tx, { workspaceId: m.workspaceId, userId: m.userId, brandId, campaignId, runId: null, webp, simulated, createdByKind: "agent", meta: { picture: 1, briefVersion: 1, idea, model: simulated ? "mock" : "an image model", vision: checkedVision([DONT_RULE]) } }),
       ),
     words: (version: number, channel: string, copy: unknown) =>
       asUser(m.userId, async (tx) => {
@@ -202,8 +216,32 @@ beforeAll(async () => {
   const oneK = await toWebp(await drawMockImage({ prompt: "pack one k", palette: QUILLMOOR.kit.palette.map((p) => p.hex), size: "1K" }));
   await u.ad(1, await u.image(oneK, true, "A 1K picture"), await u.words(1, "paid social", EN), "full-bleed", true);
 
-  ids = { main, draft, nothingPicked, hostile, theirs, upscaled, social1, social2, display1, unpicked, discarded, oldVersion };
-}, 120_000);
+  // C8-1 #9: a brand with a don't rule; one ad whose rule a person accepted, one where a person marked it not
+  // acceptable (a fail), and one whose rule waits for a person.
+  const brandC = await brandFor(a, "quillmoor-c", true);
+  await asUser(a.userId, (tx) => tx`update public.brands set dont_rules = ${[DONT_RULE]} where id = ${brandC}`);
+  const checked = await campaign(a, brandC, 1);
+  const k = builder(a, brandC, checked);
+  const kImage = await k.image(pic.sim, true, "A jar of coins");
+  const accepted = await k.ad(1, kImage, await k.words(1, "paid social", EN), "split", true);
+  const failing = await k.ad(1, kImage, await k.words(1, "paid social", { ...EN, headline: "Watch your savings grow" }), "full-bleed", true);
+  const waiting = await k.ad(1, kImage, await k.words(1, "paid social", { ...EN, headline: "Money you can see" }), "card", true);
+  await acceptReviews(a, accepted);
+  await acceptReviews(a, failing, "reject");
+
+  ids = { main, draft, nothingPicked, hostile, theirs, upscaled, social1, social2, display1, unpicked, discarded, oldVersion, checked, accepted, failing, waiting };
+}, 180_000);
+
+const DONT_RULE = "Use urgency or fear to sell";
+
+/** Accepts (or marks not acceptable) every open review item on an ad, as a person does on its Compliance view. */
+async function acceptReviews(m: Member, variantId: string, decision: "accept" | "reject" = "accept") {
+  const ad = (await adCompliance(m.userId, variantId))!;
+  for (const f of [...ad.perAd, ...ad.items.flatMap((i) => i.findings)]) {
+    if (f.outcome !== "review") continue;
+    await decideFinding(m, variantId, { lang: f.lang, size: f.size, rule: f.key, hash: f.hash, decision, note: "Checked by hand" });
+  }
+}
 beforeEach(() => {
   clearSizeCache();
   clearPackFitCache();
@@ -227,6 +265,7 @@ type Manifest = {
     altText: string;
     picture: { source: { width: number; height: number }; upscale: number; note: string | null } | null;
     checks: { contrast: { headline: number; button: number }; fit: { passed: boolean }; legalLinesPresent: boolean };
+    compliance: ReturnType<typeof packCompliance>;
     provenance: { picture: string; words: string; machineTranslation: string | null };
     labels: string[];
   }[];
@@ -534,26 +573,123 @@ describe("C7-3 the launch pack", () => {
   });
 
   it("review fix 2: one pack at a time per instance; the slot is freed when the zip ends or is cancelled", async () => {
-    const first = await packResponse(a.userId, ids.hostile);
-    expect(first.status).toBe(200);
-    for (const [who, id] of [[a.userId, ids.hostile], [b.userId, ids.theirs]] as const) {
-      const busy = await packResponse(who, id);
-      expect(busy.status).toBe(429);
-      expect(busy.headers.get("retry-after")).toBe("60");
-      expect(await busy.text()).toBe(PACK_BUSY);
+    // Every zip this test opens is cancelled in finally, so a failure or a slow database can't leave the slot taken for later tests.
+    const opened: Response[] = [];
+    const pack = async (who: string, id: string) => {
+      const res = await packResponse(who, id);
+      opened.push(res);
+      return res;
+    };
+    try {
+      const first = await pack(a.userId, ids.hostile);
+      expect(first.status).toBe(200);
+      for (const [who, id] of [[a.userId, ids.hostile], [b.userId, ids.theirs]] as const) {
+        const busy = await pack(who, id);
+        expect(busy.status).toBe(429);
+        expect(busy.headers.get("retry-after")).toBe("60");
+        expect(await busy.text()).toBe(PACK_BUSY);
+      }
+      // Refusals and 404s don't wait for the slot.
+      expect((await pack(a.userId, ids.draft)).status).toBe(409);
+      expect((await pack(b.userId, ids.main)).status).toBe(404);
+      // Read to the end: the slot is free again.
+      expect(Object.keys(unzipSync(new Uint8Array(await first.arrayBuffer())))).toHaveLength(7);
+      const second = await pack(a.userId, ids.hostile);
+      expect(second.status).toBe(200);
+      expect((await pack(a.userId, ids.hostile)).status).toBe(429);
+      // Cancelled part-way (a closed tab): free again.
+      await second.body!.cancel();
+      const third = await pack(a.userId, ids.hostile);
+      expect(third.status).toBe(200);
+      await third.arrayBuffer();
+    } finally {
+      for (const res of opened) if (res.body && !res.bodyUsed) await res.body.cancel().catch(() => undefined);
     }
-    // Refusals and 404s don't wait for the slot.
-    expect((await packResponse(a.userId, ids.draft)).status).toBe(409);
-    expect((await packResponse(b.userId, ids.main)).status).toBe(404);
-    // Read to the end: the slot is free again.
-    expect(Object.keys(unzipSync(new Uint8Array(await first.arrayBuffer())))).toHaveLength(7);
-    const second = await packResponse(a.userId, ids.hostile);
-    expect(second.status).toBe(200);
-    expect((await packResponse(a.userId, ids.hostile)).status).toBe(429);
-    // Cancelled part-way (a closed tab): free again.
-    await second.body!.cancel();
-    const third = await packResponse(a.userId, ids.hostile);
-    expect(third.status).toBe(200);
-    await third.arrayBuffer();
+  }, 180_000);
+
+  it("#9 C8-1: a file with a fail or an unaccepted review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person", async () => {
+    const [{ email }] = await getSql()`select email from auth.users where id = ${a.userId}`;
+    const res = await packResponse(a.userId, ids.checked, new Date("2026-11-03T10:00:00Z"));
+    expect(res.status).toBe(200);
+    const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
+    const m = JSON.parse(strFromU8(zip["manifest.json"])) as Manifest;
+    const social = SIZE_LIST("paid social");
+    // The accepted ad: every size. The ad marked not acceptable, and the one whose don't rule waits: nothing.
+    expect(m.files.map((f) => `${f.ad.id} ${f.size.id}`).sort()).toEqual(social.map((s) => `${ids.accepted} ${s}`).sort());
+    // English (the brand's other languages have no words for these ads, and are left out as before).
+    expect(m.leftOut.filter((l) => l.language.tag === "en-GB").map((l) => [l.ad.id, typeof l.size === "string" ? l.size : l.size.id, l.reason])).toEqual([
+      [ids.failing, "every size", `Fails: don't rule "${DONT_RULE}", marked not acceptable by ${email}.`],
+      [ids.waiting, "every size", `Awaiting review: don't rule "${DONT_RULE}".`],
+    ]);
+    // Each file's compliance is the Compliance view's, rule by rule, with who accepted the don't rule (every file is the accepted ad's).
+    const acceptedAd = (await adCompliance(a.userId, ids.accepted))!;
+    for (const f of m.files) {
+      const fc = fileCompliance(acceptedAd, f.language.tag, f.size.id)!;
+      expect(fc.leftOut, f.file).toBeNull();
+      expect(f.compliance, f.file).toEqual(JSON.parse(JSON.stringify(packCompliance(fc.findings))));
+      expect(f.compliance.outcome).toBe("accepted");
+      expect(f.compliance.rules.filter((r) => r.scope === "ad")).toEqual([
+        expect.objectContaining({ name: `Don't rule: ${DONT_RULE}`, status: "review", acceptedBy: email, note: "Checked by hand", acceptedAt: expect.stringMatching(/^\d{4}-/) }),
+      ]);
+      // Review fix: the picture check's "no" is recorded as "no issues found by AI", never as a pass, and says who checked it.
+      expect(f.compliance.rules.filter((r) => r.scope === "picture"), f.file).toEqual([
+        expect.objectContaining({ rule: "picture", status: "no issues found by AI", checkedBy: "Checked by AI (simulated: the mock model)", acceptedBy: null }),
+      ]);
+      const rules = f.compliance.rules.filter((r) => r.scope === "file");
+      expect(rules.map((r) => r.rule), f.file).toEqual(["contrast", "legal", "banned", "logo", "density", ...(f.size.id === "1080x1920" ? ["platform"] : []), "simulated"]);
+      for (const r of rules) expect(r.status, `${f.file} ${r.rule}`).toBe("pass");
+      for (const r of [...rules, ...f.compliance.rules.filter((x) => x.scope === "ad")]) expect(r.checkedBy, `${f.file} ${r.rule}`).toBeNull();
+    }
+    // The CSV: compliance and reviewed_by per file; the left-out rows carry the reason.
+    const csv = readCsv(strFromU8(zip["manifest.csv"]).replace(/^\uFEFF/, ""));
+    const col = (name: (typeof CSV_COLUMNS)[number]) => CSV_COLUMNS.indexOf(name);
+    expect(csv[0]).toContain("compliance");
+    expect(csv[0]).toContain("reviewed_by");
+    for (const r of csv.slice(1).filter((x) => x[col("status")] === "included")) {
+      expect([r[col("compliance")], r[col("reviewed_by")]], r[col("file")]).toEqual(["Passes, 1 review item accepted", email]);
+    }
+    expect(csv.slice(1).filter((x) => x[col("status")] === "left out" && x[col("language")] === "en-GB").map((r) => [r[col("size")], r[col("reason_left_out")], r[col("compliance")]])).toEqual([
+      ["every size", `Fails: don't rule "${DONT_RULE}", marked not acceptable by ${email}.`, ""],
+      ["every size", `Awaiting review: don't rule "${DONT_RULE}".`, ""],
+    ]);
+    expect(strFromU8(zip["README.txt"])).toContain("Compliance: every file passed Studio's compliance rules (text contrast, legal lines, banned terms, logo clear space, text density, the 9:16 platform zones and the simulated label), or a person accepted each item that needed review");
+    // The gallery says the same before the download.
+    const summary = packSummary((await planPack(a.userId, ids.checked))!);
+    if (!summary.allowed) throw new Error(summary.reason);
+    expect(summary.files).toBe(m.files.length);
+    expect(summary.leftOut.map((l) => l.reason)).toEqual(m.leftOut.map((l) => l.reason));
+
+    // Only the waiting ad picked: no file can go in, so there is no pack, and the gallery lists why.
+    await asUser(a.userId, (tx) => tx`update public.ad_variants set picked_at = null where id = any(${[ids.accepted, ids.failing]}::uuid[])`);
+    try {
+      const none = packSummary((await planPack(a.userId, ids.checked))!);
+      expect(none).toMatchObject({ allowed: false, reason: NOTHING_PASSES_PACK });
+      if (none.allowed) throw new Error("allowed");
+      expect(none.leftOut!.filter((l) => l.lang === "en-GB")).toEqual([expect.objectContaining({ adId: ids.waiting, size: null, reason: `Awaiting review: don't rule "${DONT_RULE}".` })]);
+      const refused = await packResponse(a.userId, ids.checked);
+      expect(refused.status).toBe(409);
+      expect(await refused.text()).toBe(NOTHING_PASSES_PACK);
+    } finally {
+      await asUser(a.userId, (tx) => tx`update public.ad_variants set picked_at = now() where id = any(${[ids.accepted, ids.failing]}::uuid[])`);
+    }
+  }, 180_000);
+
+  it("review fix 3: a file whose compliance was worked out for other words or another layout than the pack draws is held back with the reason", async () => {
+    const ad = (await adCompliance(a.userId, ids.accepted))!;
+    const item = ad.items.find((i) => i.lang === "en-GB" && i.size === "1080x1080")!;
+    expect(item.layout).toBe("split");
+    expect(fileCompliance(ad, "en-GB", "1080x1080", { setId: item.setId, layout: "split" })!.leftOut).toBeNull();
+    // A newer translation (other words) or a layout switch since the findings were worked out: held back, never packed under another drawing's checks.
+    expect(fileCompliance(ad, "en-GB", "1080x1080", { setId: "00000000-0000-4000-8000-000000000000", layout: "split" })!.leftOut).toBe(CHANGED_WHILE_PLANNED);
+    expect(fileCompliance(ad, "en-GB", "1080x1080", { setId: item.setId, layout: "card" })!.leftOut).toBe(CHANGED_WHILE_PLANNED);
+  });
+
+  it("review fix 2: the manifest records the picture check's no as no issues found by AI, never a pass, with who checked it", () => {
+    // A finance brand's picture checked by the mock model: no face, and no don't rule broken.
+    const findings = pictureFindings(checkedVision([DONT_RULE]), true, [DONT_RULE]).map((f) => judge(f, "a".repeat(64), null));
+    expect(packCompliance(findings).rules.map((r) => [r.rule, r.scope, r.status, r.checkedBy])).toEqual([
+      ["face", "picture", "no issues found by AI", "Checked by AI (simulated: the mock model)"],
+      ["picture", "picture", "no issues found by AI", "Checked by AI (simulated: the mock model)"],
+    ]);
   });
 });

@@ -27,9 +27,12 @@ async function SizesPageContent(props: PageProps<"/campaigns/[id]/ads/[variantId
   return (
     <div className="space-y-8">
       <div>
-        <TextLink href={`/campaigns/${id}#creative`}>
-          <span aria-hidden>← </span>Back to the campaign
-        </TextLink>
+        <div className="flex flex-wrap gap-x-4 gap-y-1">
+          <TextLink href={`/campaigns/${id}#creative`}>
+            <span aria-hidden>← </span>Back to the campaign
+          </TextLink>
+          <TextLink href={`/campaigns/${id}/ads/${variantId}/compliance`}>Compliance of this ad</TextLink>
+        </div>
         <Card size="hero" className="mt-3">
           <p className="flex flex-wrap items-center gap-x-3 gap-y-2 font-medium text-ink-2">
             <span>
