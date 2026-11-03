@@ -24,6 +24,12 @@ export const TYPICAL_TOKENS = {
   copyOne: { input: 4_000, output: 300 },
   /** C7-2: one set's words into one language (the prompt is the kit's lists and the English words). */
   localiseOne: { input: 1_800, output: 250 },
+  /**
+   * C8-4: one ad pre-tested: the ad's square PNG (1,600 tokens estimated, as generate() does), the
+   * instructions, the brand's voice, the ad's words and up to four personas; four personas' scores
+   * on four scales, each with a sentence and a quote.
+   */
+  pretestOne: { input: 2_800, output: 800 },
 } as const;
 
 /** What a repair prompt adds to the first prompt besides the previous reply: the issues and the instructions. */
@@ -49,7 +55,7 @@ const round = (p: number) => Math.round(p * 10_000) / 10_000;
 /** A button that shows the typical cost only; the worst case is kept for any check against the cap. */
 const est = (pence: number, worstPence: number): Estimate => ({ pence: round(pence), worstPence: round(worstPence), label: aboutPence(pence) });
 
-type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise";
+type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise" | "pretest";
 
 function modelCall(agent: ModelAgent, tokens: { input: number; output: number }, env: Env): number {
   const m = resolveAgentModel(agent, env);
@@ -109,4 +115,27 @@ export function translateEstimate(translations: number, env: Env = process.env):
   const pence = n * modelCall("localise", TYPICAL_TOKENS.localiseOne, env);
   const worstPence = n * worstModelCall("localise", TYPICAL_TOKENS.localiseOne.input, env);
   return { pence: round(pence), worstPence: round(worstPence), label: n === 0 ? "nothing to translate" : aboutAndAtMost(pence, worstPence) };
+}
+
+/** "0.05p", "0.2p", "2.1p", "12p": small costs to one or two places, so a cost under a penny isn't shown as nothing. */
+export function smallPence(pence: number): string {
+  if (pence >= 10) return `${Math.ceil(pence - 1e-9)}p`;
+  if (pence >= 0.1) return `${Math.round(pence * 10) / 10}p`;
+  if (pence >= 0.01) return `${Math.round(pence * 100) / 100}p`;
+  return "under 0.01p";
+}
+
+/**
+ * C8-4: Pre-test picked ads: one Haiku vision call per ad still to score
+ * (about 0.05p an ad). The worst case repairs every call once (a quote not in
+ * the ad, a figure in a reason), each writing its full output allowance. The
+ * label gives the total and the price of one ad, both before the click.
+ */
+export function pretestEstimate(ads: number, env: Env = process.env): Estimate & { perAdPence: number } {
+  const n = Math.max(0, ads);
+  const perAd = modelCall("pretest", TYPICAL_TOKENS.pretestOne, env);
+  const pence = n * perAd;
+  const worstPence = n * worstModelCall("pretest", TYPICAL_TOKENS.pretestOne.input, env);
+  const label = n === 0 ? "nothing to pre-test" : n === 1 ? `about ${smallPence(perAd)}` : `about ${smallPence(perAd)} an ad, ${smallPence(pence)} in all`;
+  return { pence: round(pence), worstPence: round(worstPence), perAdPence: round(perAd), label };
 }

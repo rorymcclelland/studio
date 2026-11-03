@@ -32,6 +32,7 @@ import {
   type FieldSpec,
 } from "./creative-controls";
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
+import { PretestBar, PretestScores } from "./pretest-panel";
 
 const RUNNING = new Set(["queued", "running"]);
 
@@ -44,6 +45,7 @@ const RUN_KIND: Record<CreativeRunView["kind"], string> = {
   imagery: "Imagery agent",
   copy: "Copy agent",
   translate: "Translate",
+  pretest: "Pre-test",
 };
 
 const CHANNEL_NAME: Record<string, string> = {
@@ -79,7 +81,8 @@ export function CreativeSection({ view, pack }: { view: CreativeView; pack: Prom
     view.variants.some((v) => v.busy.picture || v.busy.words) ||
     Object.keys(view.busySets).length > 0 ||
     view.runs.some((r) => RUNNING.has(r.status)) ||
-    !!view.translate.runningRunId;
+    !!view.translate.runningRunId ||
+    !!view.pretest.runningRunId;
   const lastMake = view.runs.find((r) => r.kind === "make") ?? null;
   const makeProblem = lastMake && !RUNNING.has(lastMake.status) && lastMake.status !== "completed" ? lastMake : null;
   const usedIn = new Map<string, number>();
@@ -172,6 +175,7 @@ export function CreativeSection({ view, pack }: { view: CreativeView; pack: Prom
                 {plural(view.variants.length, "ad")}, {picked} picked. Each shows its checks: contrast, fit and the legal line.
               </p>
               <Languages view={view} />
+              <PretestBar view={view} />
               {pack && (
                 <Suspense fallback={<LaunchPackSkeleton />}>
                   <LaunchPack summary={pack} />
@@ -338,6 +342,7 @@ function AdCard({ view, v, number, usedIn, level }: { view: CreativeView; v: Var
         </div>
       )}
       <Translations view={view} v={v} number={number} />
+      <PretestScores v={v} number={number} />
       <AdControls
         campaignId={view.campaignId}
         variantId={v.id}

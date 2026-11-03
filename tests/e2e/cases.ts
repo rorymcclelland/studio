@@ -77,6 +77,7 @@ export const STORIES: Story[] = [
   { sprint: 7, id: "F-26", title: "Redraw with the current kit" },
   { sprint: 7, id: "F-28", title: "The database-driver patch: report and watch" },
   { sprint: 7, id: "N-7a", title: "Remove the cutover pieces and Supabase" },
+  { sprint: 8, id: "C8-4", title: "Pre-test panel" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -97,6 +98,11 @@ const CREATIVE = "tests/agents/creative.test.ts";
 const REAL_AI =
   "CI runs the mock model and has no real keys, so this needs real model output: checked by hand on production after the deploy";
 const HAND_PACK = "docs/testing/sprint-7-test-pack.md";
+
+// C8-4 Pre-test panel
+const PRETEST_SPEC = "pretest.spec.ts";
+const PRETEST = "C8-4 #1: Pre-test picked ads gives four picked ads each persona's scores with reasons, the panel average and the synthetic label";
+const PRETEST_CI = "tests/agents/pretest.test.ts";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -524,6 +530,56 @@ export const CASES: Case[] = [
     story: "N-7a",
     words: "Rory confirms both Supabase projects are deleted.",
     checks: [{ kind: "hand", why: "Rory deletes them in Supabase's dashboard, on or after 12 November." }],
+  },
+
+  // C8-4 Pre-test panel (Sprint 8)
+  {
+    id: "C8-4.1",
+    sprint: 8,
+    story: "C8-4",
+    words: "Pre-testing 4 picked ads gives each ad four personas' scores with reasons, the average, and the label.",
+    checks: [
+      { kind: "browser", spec: PRETEST_SPEC, title: PRETEST },
+      { kind: "ci", file: PRETEST_CI, test: "#1 pre-testing 4 picked ads gives each ad every persona's scores with reasons, the average and the label, from one vision call per ad" },
+    ],
+  },
+  {
+    id: "C8-4.2",
+    sprint: 8,
+    story: "C8-4",
+    words: "A reply that predicts a click rate, or quotes words not in the ad, is repaired once and then refused, with the reason in the run.",
+    checks: [
+      { kind: "ci", file: PRETEST_CI, test: "#2 a reply that predicts a click rate is repaired once, then refused, with the reason in the run" },
+      { kind: "ci", file: PRETEST_CI, test: "#2 a quote that isn't in the ad's words is repaired, and the repaired reply is kept" },
+      { kind: "ci", file: PRETEST_CI, test: "#2 the checks in code: numbers are scores only, and quotes must be the ad's own words" },
+    ],
+  },
+  {
+    id: "C8-4.3",
+    sprint: 8,
+    story: "C8-4",
+    words: "Scores are kept with the ad's words and picture; a redraw or new words make them \"Out of date: pre-test again\".",
+    checks: [
+      { kind: "ci", file: PRETEST_CI, test: "#3 scores are kept with the ad's words and picture; a redraw, new words or another layout make them \"Out of date: pre-test again\"" },
+      { kind: "ci", file: PRETEST_CI, test: "the launch pack's manifest gains each picked ad's panel scores, labelled \"Synthetic panel, not real customers\"" },
+    ],
+  },
+  {
+    id: "C8-4.4",
+    sprint: 8,
+    story: "C8-4",
+    words: "Cost: the charge is within the estimate shown, and the cap applies.",
+    checks: [
+      { kind: "ci", file: PRETEST_CI, test: "#4 cost: about 0.05p an ad on Haiku, shown before the click; the charge is within the estimate shown" },
+      { kind: "ci", file: PRETEST_CI, test: "#4 the cap applies: with the cap reached, nothing is charged, no scores are saved and the other ads aren't started" },
+    ],
+  },
+  {
+    id: "C8-4.5",
+    sprint: 8,
+    story: "C8-4",
+    words: "Real model quality: whether the panel's reasons are sensible.",
+    checks: [{ kind: "hand", why: `${REAL_AI}. Whether the reasons are sensible goes in the Sprint 8 test pack (N-8e).` }],
   },
 ];
 

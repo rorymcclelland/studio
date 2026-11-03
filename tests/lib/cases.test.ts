@@ -114,6 +114,12 @@ describe("the case list", () => {
     expect(CASES.find((c) => c.id === "F-28.1")!.checks).toEqual([{ kind: "withdrawn", why: expect.stringContaining("Rory's decision on 2 November 2026") }]);
   });
 
+  it("has every agreed C8-4 case, once each, in order; the real model's reasons are a hand check", () => {
+    expect(CASES.filter((c) => c.story === "C8-4").map((c) => c.id)).toEqual([1, 2, 3, 4, 5].map((n) => `C8-4.${n}`));
+    expect(CASES.filter((c) => c.story === "C8-4").map(caseKind)).toEqual(["browser", "ci", "ci", "ci", "hand"]);
+    expect(CASES.find((c) => c.id === "C8-4.5")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys/) }]);
+  });
+
   it("counts a case as browser, ci, hand or withdrawn by its strongest check", () => {
     const c = (checks: Case["checks"]): Case => ({ id: "X-1.1", sprint: 0, story: "X-1", words: "x", checks });
     expect(caseKind(c([{ kind: "hand", why: "w" }, { kind: "browser", spec: "s", title: "t" }]))).toBe("browser");

@@ -27,6 +27,9 @@ export const AGENT_MODELS = {
   // C7-2 (Sprint 7, Q5): Sonnet, not Haiku, as the Copy agent: tone matters in another
   // language, and one set is about 1 to 2p a language. One set's three fields fit in 600 tokens.
   localise: { provider: "anthropic", model: "claude-sonnet-5-5", maxOutputTokens: 600 },
+  // C8-4: the pre-test panel on Haiku with vision (about 0.05p an ad). Four personas, four
+  // scales each, a sentence and a quote per scale: about 800 tokens, at most about 1,800.
+  pretest: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

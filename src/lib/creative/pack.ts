@@ -7,6 +7,7 @@ import { brandLanguagesIn, DEMO_LANGUAGES, ENGLISH, isDemoSlug, LANG_NAMES, MACH
 import type { RenderChecks } from "./render/render";
 import { SIZES, sizesFor, type DrawLayoutId, type SizeId } from "./render/sizes";
 import { languageOptions } from "./translate";
+import { OUT_OF_DATE, pretestViews, SYNTHETIC_PANEL, type PretestView } from "./pretest";
 import {
   adEtag,
   loadParts,
@@ -127,6 +128,8 @@ export type PackPlan = {
   leftOut: PackLeftOut[];
   /** The ad's English parts each item is drawn from (not in the manifest). */
   sources: Map<string, { imageAssetId: string; kit: KitSnapshot; layout: LayoutId; etagParts: EtagParts }>;
+  /** C8-4: the synthetic panel's scores for each picked ad, by ad id (none when an ad was never pre-tested). */
+  pretest?: Map<string, PretestView>;
 };
 
 export type PackRefusal = { refused: string };
@@ -302,6 +305,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
       items,
       leftOut,
       sources,
+      pretest: await pretestViews(tx, ids),
     };
   });
 }
@@ -409,7 +413,9 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
         simulatedWords: simulatedWords ? "Some words were written by the mock model, not a real one; each such file is labelled here." : null,
         machineTranslation: translations ? { label: MACHINE_TRANSLATION.label, detail: MACHINE_TRANSLATION.detail } : null,
         legalLinesWrittenForDemo: demoLegal ? WRITTEN_FOR_DEMO : null,
+        syntheticPanel: SYNTHETIC_PANEL,
       },
+      pretest: panelScores(plan),
     },
     files: drawn.map((i) => ({
       file: i.path,
@@ -446,6 +452,7 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
         translatedFrom: i.translation?.fromSetId ?? null,
       },
       labels: labelsFor(i),
+      pretest: panelAverageFor(plan, i.adId),
     })),
     leftOut: leftOut.map((l) => ({
       ad: { id: l.adId, number: l.adNumber },
@@ -458,6 +465,42 @@ export function manifestJson(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLe
     })),
   };
   return `${JSON.stringify(manifest, null, 2)}\n`;
+}
+
+/**
+ * C8-4: the synthetic panel's scores for each picked ad, labelled (rule 1).
+ * Only scores for the ad as it is now are given; scores for an earlier version
+ * of an ad (a redraw, new words, a new picture or another layout) say "Out of
+ * date: pre-test again" instead. Scores, never results or predictions.
+ */
+export function panelScores(plan: PackPlan) {
+  return {
+    label: SYNTHETIC_PANEL,
+    note: "Each picked ad's scores from 1 to 5 by the brief's synthetic personas, each with a reason quoting the ad. They are not results or predictions.",
+    ads: plan.ads.map((a) => {
+      const p = plan.pretest?.get(a.id);
+      const ad = { id: a.id, number: a.number, headline: a.headline };
+      if (!p) return { ad, status: "not pre-tested", average: null, personas: [] };
+      if (p.state !== "current") return { ad, status: OUT_OF_DATE, average: null, personas: [] };
+      return {
+        ad,
+        status: "current",
+        label: SYNTHETIC_PANEL,
+        simulated: p.simulated,
+        simulatedScores: p.simulated ? "Simulated scores: written by the mock model for the demo, not a real one." : null,
+        average: p.average,
+        scoredAt: p.createdAt.toISOString(),
+        runId: p.runId,
+        personas: p.personas.map((x) => ({ name: x.name, segment: x.segment, average: x.average, scores: x.scores })),
+      };
+    }),
+  };
+}
+
+/** C8-4: a file's ad's panel average, with the label; null when the ad has no current scores. */
+function panelAverageFor(plan: PackPlan, adId: string): { label: string; average: number; simulated: boolean } | null {
+  const p = plan.pretest?.get(adId);
+  return p && p.state === "current" ? { label: SYNTHETIC_PANEL, average: p.average, simulated: p.simulated } : null;
 }
 
 /** One CSV field: quoted, quotes doubled, and a leading = + - @ (or tab or return) defused so a spreadsheet reads it as text. */
