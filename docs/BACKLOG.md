@@ -155,37 +155,59 @@ Evidence: 532 unit, database and agent tests and 55 end-to-end specs; CI green o
 | F-30 | A database error caught inside an `asUser` callback could let later statements run on a connection that has reconnected, outside the transaction and its role. Don't swallow database errors there; optionally make a transaction refuse statements after its connection closes | Connection-fix review, note | Backlog, from Sprint 6 review |
 | F-23 | Folded: on this plan GitHub doesn't enforce required checks or reviewers on a private repository, so F-23 needs Vercel's own "wait for checks" or a plan change | Sprint 6 review | Folded into F-23 |
 
-## Sprint 7: Creative II, sizes, languages and the launch pack (refined and confirmed 2 November 2026)
+## Sprint 7: Creative II, sizes, languages and the launch pack (closed 3 November 2026)
 
-A picked ad becomes a launch pack: every size each channel needs, in English and three more languages, checked, in one zip with a manifest. Detail: `docs/refinement/sprint-7.md`.
+A picked ad becomes a launch pack: every size each channel needs, in English and three more languages, checked, in one zip with a manifest. Detail: `docs/refinement/sprint-7.md`, "Review evidence".
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| F-26 | Redraw ads with the current kit | S | Ready, Sprint 7 |
-| F-27 | Several audiences in Make creative, the gallery and New words | M | Ready, Sprint 7 |
-| C7-1 | Sizes: four social sizes and three banners from one ad, 2K pictures, attention crop or boxed picture | L | Ready, Sprint 7 |
-| C7-2 | Languages: Localise agent (Sonnet), per-brand languages (French, German, Spanish first), legal lines per language written by a person, overflow checked in every size | L | Ready, Sprint 7 |
-| C7-3 | Launch pack: a streamed zip per campaign with manifest and README, picked ads only | M | Ready, Sprint 7 |
-| F-28 | Watch production for a week (the upstream report was dropped on 2 Nov: 4.0.0 rewrote that code; trying it is F-31) | S | Ready, Sprint 7 |
-| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 7 (reminder on 12 Nov) |
-| N-8b | Test pack, now hand checks only (real AI output, crops, demo legal lines) | S | Ready, Sprint 7 (narrowed 2 Nov, decision 0021) |
-| N-8c | Demo sign-off: case list `tests/e2e/cases.ts`, browser tests for Sizes and several audiences, recordings, results to `e2e-results/ci/<branch>`, the demo page, an independent QA review of the tests against the agreed cases | M | In progress, Sprint 7 (added 2 Nov, Rory) |
+| F-26 | Redraw ads with the current kit | S | Done, Sprint 7 (one or all, no AI cost, with undo) |
+| F-27 | Several audiences in Make creative, the gallery and New words | M | Done, Sprint 7 (24 ads in two groups; New words on the second audience changes only its 4 ads; cost shown is unchanged) |
+| C7-1 | Sizes: four social sizes and three banners from one ad, 2K pictures, attention crop or boxed picture | L | Done, Sprint 7. Residual: crops on real 2K pictures are a hand check (N-8d, HC-1) |
+| C7-2 | Languages: Localise agent (Sonnet), per-brand languages (French, German and Spanish first), legal lines per language written by a person, overflow checked in every size | L | Done, Sprint 7. Residual: translation quality with the real model and Rory's review of the demo legal lines are hand checks (N-8d, HC-2 and HC-3). C7-2 #3 is checked on the square, not 4:5 (layout fallback) |
+| C7-3 | Launch pack: a streamed zip per campaign with manifest and README, picked ads only | M | Done, Sprint 7 (64 ads in 19.7 s, 22.6 MB, in CI) |
+| F-28 | Watch production for a week; the upstream report was dropped on 2 Nov | S | Split: the decision is done (report withdrawn, F-31 replaces it); the week's log watch is F-28a, returned |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Backlog, returned from Sprint 7 (waits for 12 Nov; reminder set) |
+| N-8b | Test pack, hand checks only | S | Done, Sprint 7 (`docs/testing/sprint-7-test-pack.md`, Markdown only); running the checks is N-8d, returned |
+| N-8c | Demo sign-off: case list, browser tests for Sizes and several audiences, recordings, results to `e2e-results/ci/<branch>`, the demo page, an independent QA review | M | Done, Sprint 7 (Rory signed off 3 Nov from CI run 41547303603) |
+
+Evidence: 718 unit, database and agent tests and 33 browser tests (22 Sprint 7 cases) passing in CI, with recordings; an independent QA review of the tests against the agreed cases, with 12 findings, all fixed before the demo; the demo page built from CI's results; two migrations applied by the connector to preview and then production, checked by fingerprint; decisions 0017 to 0021. Sprint 7 went to production on 2 Nov before its demo (Rory approved), which decision 0021 records.
+
+## Where the Sprint 7 review items now live
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| N-8d | Rory's four production hand checks, HC-1 to HC-4 in `docs/testing/sprint-7-test-pack.md`: crops on real 2K pictures, the demo legal lines, translation quality, a launch pack from real creative. About 20 minutes and 26p; a failure becomes a BUG- row | N-8b split | Backlog, returned from Sprint 7 (Rory, 3 Nov) |
+| F-28a | Watch production's logs for connection errors (`CONNECT_TIMEOUT`, `Cannot read properties of null`) until 9 November; Vercel keeps one hour, so Claude checks on each visit | F-28 split | Backlog, returned from Sprint 7 |
+| F-32 | The results branch grows the repository: each push adds about 25 MB of recordings, and force-pushes leave old objects for GitHub to collect. Keep fewer recordings, shorten them, or store them outside git | Demo pipeline build | Backlog, from Sprint 7 review |
+| F-33 | Merge the sign-off pipeline, QA test fixes and the `data-words` attribute to `main` (a production deploy, with nothing visible to users), once Rory approves the deploy | Sprint 7 close | Backlog, from Sprint 7 review |
+| QA-7 | Folded: the independent QA review's 12 findings on the Sprint 7 tests | Sprint 7 QA review | Fixed in Sprint 7 (`68999d5`), before the demo |
 
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 6 close. Sprint 7 (Creative II with F-26, F-27, F-28 and N-7a) is refined and confirmed above.
+Re-ranked at the Sprint 7 close. Proposed for Sprint 8, Compliance and pre-testing (the roadmap's demo gate 2: a compliant, pre-tested launch pack, with every failure explained), to be refined once Rory confirms:
 
-1. F-16a First real-model eval report and regression cases (S): every production fix would have been caught by one
-2. F-23 Gate production deploys on the checks, before real users arrive (S)
-3. F-29 Narrow the Neon API key (S)
-4. F-30 Don't swallow database errors inside transactions (S)
-5. F-31 Try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S): pairs with F-30
-6. F-24 Ask the picture check about faces for finance brands (S): with Sprint 8's compliance work
-7. F-20 Persona facts check compares age and region (S)
-8. F-19 Withdrawn sign-offs get their own state (S)
-9. F-25 A cheaper worst case for Make creative (S)
-10. F-9 Dark theme, once the light design system has settled
-11. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring, role-based views
+- **C8-1 Compliance agent** (M): deterministic checks per rule (contrast, logo safe zone, text density, banned terms, legal lines present) with pass, review or fail and a suggested fix. It builds on the checks Sprint 7 already runs in every size and language.
+- **C8-2 Vision checks for judgement calls** (M), with **F-24** (faces for finance brands) folded in: the same picture check, one more question.
+- **C8-3 Check an uploaded asset** (M): any existing ad, against the brand kit and the rules.
+- **C8-4 Pre-test panel** (M): a synthetic audience scores variants before spend, labelled simulated. This is the first to move if the sprint runs over.
+- **F-33** (S): merge Sprint 7's tests and pipeline to `main`, once Rory approves the deploy. Nothing changes for users.
+- **N-7a** (S): on or after 12 November, which falls inside the sprint.
+- **F-28a and N-8d** (S, no build): the log watch until 9 November, and Rory's hand checks.
+
+Then, in order:
+
+1. F-16a: the first real-model eval report and regression cases (S). Every production fix would have been caught by one. It would join Sprint 8 if room allows.
+2. F-30: don't swallow database errors inside transactions (S), with F-31.
+3. F-31: try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S).
+4. F-23: gate production deploys on the checks, before real users arrive (S).
+5. F-29: narrow the Neon API key (S).
+6. F-32: keep the results branch small (S).
+7. F-20: the persona facts check compares age and region (S).
+8. F-19: withdrawn sign-offs get their own state (S).
+9. F-25: a cheaper worst case for Make creative (S).
+10. F-9: the dark theme, once the light design system has settled.
+11. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
 
 ## Decisions
 
@@ -207,3 +229,4 @@ Re-ranked at the Sprint 6 close. Sprint 7 (Creative II with F-26, F-27, F-28 and
 | 2 Nov 2026 | F-28: don't report the 3.4.9 driver bugs upstream (4.0.0 rewrote that code and similar issues are closed); try 4.0.0 instead, as F-31 (Rory) |
 | 2 Nov 2026 | Studio adopts the build working agreement (decision 0021): Claude is QA, Rory signs off from a demo page built from CI's browser tests, hand checks only for real AI output; the live site changes only after sign-off. Sprint 7 had already been deployed to production (Rory approved) before its demo existed; its demo and sign-off follow, and from Sprint 8 the merge to `main` waits for sign-off (Rory) |
 | 2 Nov 2026 | Sprint 7 refined and confirmed (all as recommended): 2K pictures; three banners with honest refusals; per-brand languages, French, German and Spanish first; legal lines per language written by a person; Sonnet translates; picked ads in the pack, no approval to download; N-7a on or after 12 Nov |
+| 3 Nov 2026 | Sprint 7 closed: Rory signed off from the demo page (CI run 41547303603); all five stories and N-8c done; F-28 and N-8b split (F-28a log watch, N-8d hand checks); N-7a returned (12 Nov); new rows F-32 and F-33; the independent QA review's 12 findings fixed before the demo; Sprint 8 (Compliance and pre-testing) proposed |
