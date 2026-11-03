@@ -274,3 +274,19 @@ The pack then holds only ads that pass, and its manifest says why each other ad 
 | Q5 | Pack: what happens to an ad with an unaccepted review item? | (a) Left out, with "Awaiting review: <rule>", like a failure |
 | Q6 | Pre-test: which ads, and when? | (a) Picked ads only, on a click with the cost shown; never automatic |
 | Q7 | The 9:16 platform-zone rule (top 14%, bottom 20%) | (a) In Sprint 8, as Review and Fail with the Card layout as the fix; second to move if the sprint runs over |
+
+## Answers (Rory, 3 November 2026)
+
+All seven as recommended.
+
+| # | Answer | Effect on the stories |
+| --- | --- | --- |
+| Q1 | (a) The thresholds, as Studio's own defaults in `src/config/compliance.ts` | As written (C8-1) |
+| Q2 | (a) Text density is not applied to banners; the view says so | As written (C8-1 test case 6) |
+| Q3 | (a) Review items are accepted inline on the ad's Compliance view, with name and time; not in the approvals inbox | As written (C8-1) |
+| Q4 | (a) Only the face rule for finance brands fails on the model's word (redrawn once, then dropped); every other model finding is Review at most | As written (C8-2) |
+| Q5 | (a) An ad with an unaccepted review item is left out of the pack with "Awaiting review: <rule>" | As written (C8-1 test case 9) |
+| Q6 | (a) Pre-test picked ads only, on a click with the cost shown | As written (C8-4) |
+| Q7 | (a) The 9:16 platform-zone rule is in Sprint 8; second to move if the sprint runs over | As written (C8-1 test case 7) |
+
+No acceptance criteria changed. C8-1 to C8-4 and N-8e are Ready, Sprint 8. Building starts when Rory says go.
