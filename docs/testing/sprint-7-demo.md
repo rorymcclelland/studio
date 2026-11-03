@@ -2,6 +2,8 @@
 
 From CI run [41547303603](https://github.com/rorymcclelland/campaign-studio/actions/runs/41547303603) on `sprint-7`, commit `68999d5`, 3 November 2026, 00:05 (London).
 
+**Sign-off:** Rory signed the demo off on 3 November 2026 at 14:01 ("All good"). The hand checks in `sprint-7-test-pack.md` (HC-1 to HC-4) had not been run on production at that point; their results are recorded here when they come in.
+
 **Totals:** 37 cases, 22 passed in the browser, 0 failed, 0 not run, 9 passed in CI, 0 failed in CI, 5 by hand, 1 withdrawn.
 
 Built by `scripts/demo-page.mjs` (decision 0021). A case shows Passed or Failed only from a browser test that ran in this run. The recordings are on the demo page; they use the mock model, so their pictures and words are simulated.
