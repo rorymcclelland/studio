@@ -12,6 +12,7 @@ import {
   uploadContrastRule,
   uploadDensityRule,
   uploadDontRules,
+  uploadFindings,
   uploadLegalRule,
   uploadLogoRule,
   uploadOutcome,
@@ -90,6 +91,46 @@ describe("C8-3 upload rules", () => {
     expect(realNameRule(words, [])).toMatchObject({ status: "pass", reason: "The brand's market notes name no real companies, so there were none to look for." });
     expect(maskNames("Warmer than Monzo's best, unlike monzo or Monzoland", ["Monzo"])).toBe("Warmer than [a named company]'s best, unlike [a named company] or Monzoland");
     expect(maskNames("Kit from North  Face", ["North Face"])).toBe("Kit from [a named company]");
+  });
+
+  it("review fix: a real company's name is said only in its own finding, never in the contrast, face or don't-rule findings", () => {
+    // The named line is the lowest-contrast line, so the contrast rule quotes it; the model's face and don't-rule reasons name the company too.
+    const words = [w("Walk the long way home", "headline"), w("Warmer than Brightwell's best", "body")];
+    const measured = [
+      { index: 0, ratio: 9, text: "#2B2A26", background: "#E8EBE4" },
+      { index: 1, ratio: 2.1, text: "#3F5B3A", background: "#4F7A8C" },
+    ];
+    const kit = {
+      langName: "English",
+      isEnglish: true,
+      legalLines: [],
+      englishLegal: [],
+      bannedTerms: [],
+      dontRules: ["Compare the brand with Brightwell"],
+      realNames: ["Brightwell"],
+      palette: PALETTE,
+      hasLogo: true,
+      finance: true,
+      channel: "paid social",
+    };
+    const reading = {
+      words,
+      logo: { present: false, box: null },
+      face: { present: true, reason: "A Brightwell cashier smiles at the camera." },
+      dontRules: [{ key: "D1", breaks: true, reason: "The body compares the brand with Brightwell." }],
+    };
+    const findings = uploadFindings(reading, measured, kit, { width: 1080, height: 1080 });
+    const real = findings.filter((f) => f.rule === "realName");
+    expect(real).toHaveLength(1);
+    expect(real[0]).toMatchObject({ status: "fail" });
+    expect(real[0].reason).toMatch(/"Brightwell"/);
+    const contrast = findings.find((f) => f.rule === "contrast")!;
+    expect(contrast.reason).toMatch(/^The lowest is about 2\.10:1, for "Warmer than \[a named company\]'s best"\./);
+    expect(findings.find((f) => f.rule === "face")!.reason).toBe("The AI found a person's face: A [a named company] cashier smiles at the camera.");
+    const dont = findings.find((f) => f.rule === "dont")!;
+    expect(dont.reason).toBe("The AI thinks the ad may break this rule: The body compares the brand with [a named company]. A person decides.");
+    expect(dont.fix).toBe("Compare the brand with [a named company]");
+    expect(JSON.stringify(findings.filter((f) => f.rule !== "realName"))).not.toMatch(/brightwell/i);
   });
 
   it("the AI's no is shown as No issues found by AI, never Pass; its findings are Review at most", () => {

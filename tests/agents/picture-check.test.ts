@@ -16,16 +16,17 @@ import { listBrands } from "@/lib/brands/repo";
 import { createCampaign, getCampaign } from "@/lib/brief/repo";
 import { complianceFor, decideFinding, fileCompliance, type AdCompliance } from "@/lib/compliance/compute";
 import { CHECKED_BY_AI, leftOutReason, NOT_CHECKED_YET } from "@/lib/compliance/rules";
-import { readVision } from "@/lib/compliance/vision";
+import { jsonbBytes, readVision } from "@/lib/compliance/vision";
 import { pictureCheckEstimate, smallPence } from "@/lib/creative/costs";
 import { clearFitCache } from "@/lib/creative/fit-cache";
 import { getCreative, startMakeCreative } from "@/lib/creative/gallery";
-import { ALL_CHECKED, PICTURE_CHECK_KEY, PICTURE_CHECK_VERSION, PictureCheckError, startPictureCheck } from "@/lib/creative/picture-check";
+import { ALL_CHECKED, CHECK_BUSY, PICTURE_CHECK_KEY, PICTURE_CHECK_VERSION, PictureCheckError, startPictureCheck } from "@/lib/creative/picture-check";
 import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
 import { spendPosition } from "@/lib/models/generate";
 import { mockBehaviour } from "@/lib/models/mock";
+import { startWhileAnotherStarts } from "../helpers/run-lock";
 import { createMember, truncateAll } from "../helpers/db";
 
 const inline: StepTools = { run: async (_id, fn) => fn(), waitForEvent: async () => null };
@@ -147,6 +148,11 @@ describe("C8-2 picture checks and Check pictures", () => {
     expect(real.label).toBe(`about 0.03p a picture, ${smallPence(real.pence)} in all`);
 
     const before = await spendPosition(a.userId, a.workspaceId);
+    // Review fix 4: a click while another click's start is part-way through waits for it, then is refused as busy: one paid run.
+    const race = await startWhileAnotherStarts(`${PICTURE_CHECK_KEY}:${id}`, { ...a, agent: PICTURE_CHECK_KEY, input: { campaignId: id } }, () => startPictureCheck(a, id, noSend));
+    expect(race.waited).toBe(true);
+    expect(race.result).toMatchObject({ status: "rejected", reason: expect.objectContaining({ message: CHECK_BUSY }) });
+    await getSql()`delete from public.agent_runs where id = ${race.otherRunId}`;
     const runId = await startPictureCheck(a, id, noSend);
     const { status, run } = await execute(a, runId);
     expect(status, run.error ?? "").toBe("completed");
@@ -275,5 +281,54 @@ describe("C8-2 picture checks and Check pictures", () => {
     await expect(getSql()`update public.assets set meta = jsonb_set(meta, '{vision}', '"no"') where id = ${p.id}`).rejects.toThrow(/must be an object/);
     // The column's limit still holds.
     await expect(asUser(a.userId, (tx) => tx`select public.set_asset_vision(${p.id}, ${tx.json({ status: "error", message: "x".repeat(9000) })})`)).rejects.toThrow(/check constraint/);
+    // Review nit 8: a result must say its status (checked, error or cap); any other object is refused.
+    for (const bad of [{ message: "no status" }, { status: "maybe" }, { status: 1 }]) {
+      await expect(asUser(a.userId, (tx) => tx`select public.set_asset_vision(${p.id}, ${tx.json(bad)})`), JSON.stringify(bad)).rejects.toThrow(/must have a status/);
+    }
+    expect(readVision((await pictures(id))[0].meta.vision)).toMatchObject({ status: "checked" });
   }, 120_000);
+
+  it("review fix 6: a paid check whose result can't be saved is recorded on its step, not retried or thrown, and the record fits meta as jsonb measures it", async () => {
+    const id = await campaignWithAds();
+    await forgetChecks(id);
+    const [first, ...rest] = await pictures(id);
+    // The database refuses to store the first picture's result (as a full disk or a dropped connection would).
+    const sql = getSql();
+    await sql.unsafe(`
+      create or replace function public.test_refuse_vision() returns trigger language plpgsql as $$
+      begin
+        if new.id = '${first.id as string}'::uuid and (new.meta -> 'vision') is distinct from (old.meta -> 'vision') then
+          raise exception 'the result could not be written (test)';
+        end if;
+        return new;
+      end $$`);
+    await sql.unsafe("create trigger test_refuse_vision before update on public.assets for each row execute function public.test_refuse_vision()");
+    try {
+      const { status, run } = await execute(a, await startPictureCheck(a, id, noSend));
+      expect(status, run.error ?? "").toBe("completed");
+      const checks = run.steps.filter((s) => /^Check picture \d$/.test(s.name));
+      // One paid call a picture: nothing was retried.
+      expect(checks).toHaveLength(4);
+      const ledger = await asUser(a.userId, (tx) => tx`select 1 from public.usage_ledger where run_id = ${run.id}`);
+      expect(ledger).toHaveLength(4);
+      const failed = checks.filter((s) => s.error);
+      expect(failed).toHaveLength(1);
+      expect(failed[0]).toMatchObject({ status: "succeeded", attempts: 1 });
+      expect(failed[0].error).toMatch(/^The check's result couldn't be saved with the picture, so its ads show the picture check as not run \(.*could not be written \(test\)\)\.$/);
+      // The picture has no result, so its ads say the check didn't run (Review, never Pass); the others are checked.
+      const after = await pictures(id);
+      expect(after).toHaveLength(4);
+      expect(after[0].meta.vision).toBeUndefined();
+      for (const p of after.slice(1)) expect(readVision(p.meta.vision)).toMatchObject({ status: "checked" });
+      expect(rest).toHaveLength(3);
+    } finally {
+      await sql.unsafe("drop trigger if exists test_refuse_vision on public.assets");
+      await sql.unsafe("drop function if exists public.test_refuse_vision()");
+    }
+    // The stored record is the size the budget measured: jsonb's own text, not compact JSON.
+    const [{ stored }] = await sql`select octet_length((meta -> 'vision')::text) as stored from public.assets where id = ${rest[0].id}`;
+    const [p] = await asUser(a.userId, (tx) => tx`select meta from public.assets where id = ${rest[0].id}`);
+    expect(Number(stored)).toBe(jsonbBytes(p.meta.vision));
+    expect(Number(stored)).toBeGreaterThan(Buffer.byteLength(JSON.stringify(p.meta.vision)));
+  }, 180_000);
 });

@@ -5,9 +5,10 @@
 // badged "Machine translation (simulated)", with the German translation's own
 // legal lines in the ad's details (test cases 1, 6 and 8), and the German ad
 // drawn in all four sizes of its channel, each with its fit, contrast and
-// legal-line checks (test case 2). Then, on Fernhollow (which no other spec
-// translates), German legal lines cleared on the Languages page leave German
-// out with the reason beside Translate, and are put back (test case 5). Each
+// legal-line checks (test case 2). Then, on Fernhollow, German legal lines
+// cleared on the Languages page leave German out with the reason beside
+// Translate, and are put back (test case 5; tagged @brand-kit, so it runs in the
+// brand-kit project, after every other spec and one at a time). Each
 // page at 375 px and 1440 px: nothing scrolls sideways, AA contrast.
 // SHOTS_DIR=<folder> saves a screenshot of each.
 import { expect, test, type Page } from "@playwright/test";
@@ -178,10 +179,11 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
 
 test(
   "C7-2 #5: a brand with no German legal lines leaves German out, and the Languages bar says why",
-  { annotation: [{ type: "case", description: "C7-2.5" }] },
+  { tag: "@brand-kit", annotation: [{ type: "case", description: "C7-2.5" }] },
   async ({ page }) => {
     test.setTimeout(480_000);
-    // Fernhollow: no other spec translates it, so clearing its German legal lines for a moment touches no other test.
+    // Clearing Fernhollow's German legal lines for a moment: compliance.spec also translates Fernhollow, so this test is
+    // tagged @brand-kit and runs in the brand-kit project, after every other spec and never beside another kit change.
     const brandId = await demoBrandId(page, "Fernhollow Outfitters");
     const bar = page.locator("[data-languages]");
     let campaignPath = "";

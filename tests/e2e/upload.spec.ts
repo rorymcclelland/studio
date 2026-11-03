@@ -60,7 +60,7 @@ test(
     await step(page, "The brand's Check an ad page: the cost is on the button before anything runs", async () => {
       await openCheckAnAd(page);
       await expect(form(page).getByRole("button", { name: /^Upload and check/ })).toHaveText(/^Upload and check \(about [\d.]+p\)$/);
-      await expect(form(page)).toContainText("A PNG or JPEG up to 5 MB and 4096 pixels on each side.");
+      await expect(form(page)).toContainText("A PNG or JPEG up to 4 MB and 4096 pixels on each side.");
       await expect(form(page).getByLabel("Channel")).toHaveValue("paid social");
       await expect(form(page).getByLabel("Language")).toHaveValue("en-GB");
       await checkWidths(page, "check an ad");

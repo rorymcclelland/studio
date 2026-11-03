@@ -418,6 +418,12 @@ export function leftOutReason(list: Judged[]): string | null {
 
 /** "Checked by AI" on every finding from the picture check (rule 1), saying so when the mock model checked. */
 export const CHECKED_BY_AI = "Checked by AI";
+
+/** How the AI's "no" on a picture rule is shown, never as Pass (decision 0009, Q4). */
+export const NO_ISSUES_BY_AI = "No issues found by AI";
+
+/** Whether a finding is the picture check's "no" (the face rule or the don't rules): shown as "No issues found by AI", not Pass. */
+export const noIssuesFoundByAi = (f: Pick<Finding, "rule" | "status">) => (f.rule === "face" || f.rule === "picture") && f.status === "pass";
 const checkedBy = (v: VisionRecord) => (isSimulated(v) ? `${CHECKED_BY_AI} (simulated: the mock model)` : CHECKED_BY_AI);
 
 export const NOT_CHECKED_YET =

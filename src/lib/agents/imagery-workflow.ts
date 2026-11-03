@@ -6,7 +6,7 @@ import { NOT_SIGNED_OFF } from "@/lib/creative/imagery";
 import { asUser } from "@/lib/db/scoped";
 import { CapExceededError, generateImage } from "@/lib/models/generate";
 import { dontKey } from "@/lib/compliance/rules";
-import { fitVision, VISION_MAX_BYTES, type VisionRecord } from "@/lib/compliance/vision";
+import { fitVision, META_MARGIN_BYTES, META_MAX_BYTES, VISION_MAX_BYTES, type VisionRecord } from "@/lib/compliance/vision";
 import { IMAGE_COUNT, imageCheckAgent, imageryAgent, imageryStart, isFinanceCategory, MAX_DONT_RULES, type ImageryInput, type ImageryOutput } from "./imagery";
 import { runModelStep, type StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
@@ -190,10 +190,20 @@ export async function drawOne(
 /** C8-2 (F-24): what a close-up face in a finance brand's picture is called in the trail and the run summary. */
 export const FACE_REFUSAL = "a close-up face (a finance brand's pictures show people only from behind, at a distance or as hands)";
 
-/** Stores a picture check's result with the picture (assets.meta.vision), within the meta column's limit. */
+/**
+ * Stores a picture check's result with the picture (assets.meta.vision), within
+ * the meta column's limit: the rest of meta (measured in SQL as jsonb text) and
+ * the record (measured as jsonb prints it) leave META_MARGIN_BYTES spare.
+ */
 async function saveVision(ctx: StepContext, assetId: string, metaBytes: number, record: VisionRecord): Promise<void> {
-  const fitted = fitVision(record, Math.min(VISION_MAX_BYTES, 7_900 - metaBytes));
+  const fitted = fitVision(record, Math.min(VISION_MAX_BYTES, META_MAX_BYTES - META_MARGIN_BYTES - metaBytes));
   await asUser(ctx.userId, (tx) => tx`select public.set_asset_vision(${assetId}, ${tx.json(fitted as never)})`);
+}
+
+/** Says on the check's step that its paid-for result couldn't be kept with the picture (review fix 6). Never throws. */
+async function noteNotSaved(ctx: StepContext, seq: number, why: string): Promise<void> {
+  const error = `The check's result couldn't be saved with the picture, so its ads show the picture check as not run (${why}).`.slice(0, 1000);
+  await asUser(ctx.userId, (tx) => tx`update public.agent_steps set error = ${error} where run_id = ${ctx.runId} and seq = ${seq}`).catch(() => undefined);
 }
 
 /**
@@ -233,7 +243,9 @@ export async function checkOne(ctx: StepContext, assetId: string, picture: numbe
     );
     const closeUp = output.face.closeUp;
     const refused = output.hasText ? "text" : finance && closeUp ? "face" : null;
-    await saveVision(ctx, assetId, metaBytes, {
+    // Review fix 6: the check is paid for and its answer stands. A failure to save it is recorded on the step, not
+    // thrown, so the step isn't retried (a second paid call) and the answer isn't mistaken for a check that failed.
+    const notSaved = await saveVision(ctx, assetId, metaBytes, {
       status: "checked",
       checkedAt: new Date().toISOString(),
       runId: ctx.runId,
@@ -242,7 +254,11 @@ export async function checkOne(ctx: StepContext, assetId: string, picture: numbe
       reason: output.reason,
       face: { present: output.face.present || closeUp, closeUp },
       rules: output.dontRules.map((r) => ({ key: dontKey(rules[r.rule - 1]), breaks: r.breaks, reason: r.reason })),
-    });
+    }).then(
+      () => null,
+      (err: unknown) => errorText(err),
+    );
+    if (notSaved) await noteNotSaved(ctx, seq, notSaved);
     if (refused && discard) await asUser(ctx.userId, (tx) => discardIn(tx, assetId));
     return { ok: true, hasText: output.hasText, reason: output.reason, closeUpFace: finance && closeUp, refused };
   } catch (err) {

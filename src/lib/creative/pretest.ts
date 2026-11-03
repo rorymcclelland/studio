@@ -1,5 +1,5 @@
 import { pretestAgent, PRETEST_SCALES, SCALE_NAMES, SYNTHETIC_PANEL, type PretestOutput, type PretestScale } from "@/lib/agents/pretest";
-import { createRun, type Member, type SendEvent } from "@/lib/agents/runs";
+import { createRun, takeRunLock, type Member, type SendEvent } from "@/lib/agents/runs";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { pretestEstimate, type Estimate } from "./costs";
 import { adEtag, type KitSnapshot } from "./variants";
@@ -92,7 +92,10 @@ export async function adKeys(tx: Tx, variantIds: string[]): Promise<Map<string, 
 /**
  * The panel's latest scores for each ad: its own, or, if it has none, the
  * latest of the ads it was made from (based_on), shown as out of date. An
- * ad's own scores are current only while its key is unchanged.
+ * ad's own scores are current only while its key is unchanged and the panel
+ * they came from is still the brief's: running the persona review again
+ * (a new review for the ad's brief version) makes them out of date too
+ * (review nit 10), as the next pre-test would use the new personas.
  */
 export async function pretestViews(tx: Tx, variantIds: string[]): Promise<Map<string, PretestView>> {
   const out = new Map<string, PretestView>();
@@ -106,11 +109,21 @@ export async function pretestViews(tx: Tx, variantIds: string[]): Promise<Map<st
       from chain c join public.ad_variants p on p.id = c.based_on
       where c.depth < 50
     )
-    select distinct on (c.start_id) c.start_id, c.depth, s.ad_key, s.panel, s.average, s.simulated, s.run_id, s.created_at
+    select distinct on (c.start_id) c.start_id, c.depth, s.ad_key, s.panel, s.average, s.simulated, s.run_id, s.created_at, s.persona_run_id
     from chain c join public.pretest_scores s on s.variant_id = c.id
     order by c.start_id, c.depth, s.created_at desc, s.id`;
+  // The panel each ad would be scored by now: the latest persona review of its campaign's brief version (as panelFor).
+  const panels = await tx`
+    select v.id,
+      (select pr.run_id from public.persona_reviews pr
+       where pr.campaign_id = v.campaign_id and pr.brief_version = v.brief_version
+       order by pr.created_at desc limit 1) as persona_run_id
+    from public.ad_variants v where v.id = any(${variantIds}::uuid[])`;
+  const panelOf = new Map(panels.map((p) => [p.id as string, (p.persona_run_id as string | null) ?? null]));
   for (const r of rows) {
-    const current = Number(r.depth) === 0 && r.ad_key === keys.get(r.start_id as string);
+    const panelNow = panelOf.get(r.start_id as string) ?? null;
+    const samePanel = panelNow === null || r.persona_run_id === panelNow;
+    const current = Number(r.depth) === 0 && r.ad_key === keys.get(r.start_id as string) && samePanel;
     const panel = r.panel as StoredPanel;
     out.set(r.start_id as string, {
       state: current ? "current" : "stale",
@@ -188,19 +201,20 @@ export async function pretestBar(tx: Tx, campaignId: string): Promise<PretestBar
  */
 export async function startPretest(member: Member, campaignId: string, send: SendEvent): Promise<string> {
   if (!UUID.test(campaignId)) throw new PretestError("That campaign isn't in your workspace.");
-  const { plan, busy } = await asUser(member.userId, async (tx) => {
-    const plan = await pretestPlan(tx, campaignId);
-    const [b] = await tx`
-      select count(*)::int as n from public.agent_runs
-      where agent = 'pretest' and status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId}`;
-    return { plan, busy: b.n > 0 };
-  });
+  const plan = await asUser(member.userId, (tx) => pretestPlan(tx, campaignId));
   if (plan.refusal) throw new PretestError(plan.refusal);
-  if (busy) throw new PretestError(PRETEST_BUSY);
   const n = plan.variantIds.length;
   return createRun(member, pretestAgent.key, { campaignId, variantIds: plan.variantIds }, send, {
     brandId: plan.brandId,
     label: `${plan.brandName}: pre-test ${n} picked ${n === 1 ? "ad" : "ads"}`,
+    // Review fix 4: the busy check and the run's insert in one transaction, under the campaign's lock, so two clicks start one run.
+    guard: async (tx) => {
+      await takeRunLock(tx, `pretest:${campaignId}`);
+      const [b] = await tx`
+        select count(*)::int as n from public.agent_runs
+        where agent = 'pretest' and status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId}`;
+      if (b.n > 0) throw new PretestError(PRETEST_BUSY);
+    },
   });
 }
 

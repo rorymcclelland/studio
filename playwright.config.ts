@@ -27,6 +27,19 @@ export default defineConfig({
     // S2-4 #5 needs an empty workspace, so it runs once, before every spec
     // that reads the demo brands, instead of emptying it under them.
     { name: "demo-brands", testMatch: /demo-brands\.setup\.ts/, use: { ...devices["Desktop Chrome"] }, dependencies: ["sign-in"] },
-    { name: "chromium", use: { ...devices["Desktop Chrome"] }, dependencies: ["demo-brands"] },
+    { name: "chromium", use: { ...devices["Desktop Chrome"] }, dependencies: ["demo-brands"], grepInvert: /@brand-kit/ },
+    // Sprint 8 QA fix: the tests tagged @brand-kit change a demo brand's kit for a moment (a don't rule, a banned or
+    // German term, German legal lines, the palette, tone words) and put it back. Other specs read those kits (the
+    // launch pack, the pre-test and the uploads count Quillmoor's and Fernhollow's don't rules, for example), so
+    // these run after every other spec, one at a time, never beside a test that reads what they change. A
+    // failure in the main project skips them (Playwright's rule for dependencies); CI retries a test once first.
+    {
+      name: "brand-kit",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["chromium"],
+      grep: /@brand-kit/,
+      workers: 1,
+      fullyParallel: false,
+    },
   ],
 });

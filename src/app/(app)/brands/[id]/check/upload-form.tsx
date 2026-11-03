@@ -1,6 +1,6 @@
 "use client";
 
-// C8-3: the Check an ad form. A PNG or JPEG up to 5 MB, the channel and the
+// C8-3: the Check an ad form. A PNG or JPEG up to 4 MB, the channel and the
 // language the ad is for; the button shows what the check costs before the
 // click (rule 3). The file goes to the upload route (its own limit), not a
 // server action. A refusal says why, and nothing is stored.
@@ -13,13 +13,13 @@ import { Field } from "@/components/ui/field";
 import { Select } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 
-const MAX_BYTES = 5 * 1024 * 1024;
+const MAX_BYTES = 4 * 1024 * 1024;
 
 /** Refuses a file that can't pass before it is sent, with the same reasons the server gives. */
 function checkBeforeSending(file: File): string | null {
   const name = file.name.toLowerCase();
   if (file.size === 0) return "The file is empty.";
-  if (file.size > MAX_BYTES) return "The file is too large (5 MB at most).";
+  if (file.size > MAX_BYTES) return "The file is too large (4 MB at most).";
   if (name.endsWith(".svg") || file.type === "image/svg+xml") return "An SVG can't be checked. Upload the ad as a PNG or JPEG.";
   return null;
 }
@@ -58,7 +58,7 @@ export function UploadForm({ brandId, languages, cost }: { brandId: string; lang
         toast({ message: body.done ?? "Uploaded.", tone: "good" });
         router.push(body.href!);
       } catch {
-        fail("Couldn't upload the ad. Nothing was stored; check the file is a PNG or JPEG under 5 MB, and try again.");
+        fail("Couldn't upload the ad. Nothing was stored; check the file is a PNG or JPEG under 4 MB, and try again.");
       }
     });
   }
@@ -70,7 +70,7 @@ export function UploadForm({ brandId, languages, cost }: { brandId: string; lang
           The ad
         </label>
         <p id={`${id}-hint`} className="max-w-prose text-sm text-ink-2">
-          A PNG or JPEG up to 5 MB and 4096 pixels on each side. It is re-encoded without its metadata and kept only for this
+          A PNG or JPEG up to 4 MB and 4096 pixels on each side. It is re-encoded without its metadata and kept only for this
           brand&apos;s checks: it never goes into Studio&apos;s ads or a launch pack.
         </p>
         <input

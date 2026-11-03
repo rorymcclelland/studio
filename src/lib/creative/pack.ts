@@ -1,6 +1,6 @@
 import { strToU8, Zip, ZipDeflate, ZipPassThrough } from "fflate";
 import { complianceFor, fileCompliance } from "@/lib/compliance/compute";
-import type { Judged } from "@/lib/compliance/rules";
+import { noIssuesFoundByAi, type Judged } from "@/lib/compliance/rules";
 import { asUser } from "@/lib/db/scoped";
 import { drawInSize, sentence, translationBadge, upscaleNote } from "./ad-sizes";
 import { clearFitCache, fitBase, fitsFor, logoFor } from "./fit-cache";
@@ -111,8 +111,11 @@ export type PackCompliance = {
     name: string;
     /** "file" for this size and language; "ad" for a finding about the whole ad (a don't rule); "picture" for the picture check's (C8-2, checked by AI). */
     scope: "file" | "ad" | "picture";
-    status: "pass" | "review" | "fail" | "not applied";
+    /** "no issues found by AI": the picture check's "no", never recorded as a pass (decision 0009, Q4). */
+    status: "pass" | "review" | "fail" | "not applied" | "no issues found by AI";
     reason: string;
+    /** Rule 1: "Checked by AI" (with "(simulated: the mock model)" for the mock) on the picture check's findings; null for findings checked in code. */
+    checkedBy: string | null;
     acceptedBy: string | null;
     acceptedAt: string | null;
     note: string | null;
@@ -127,8 +130,9 @@ export function packCompliance(findings: Judged[]): PackCompliance {
       rule: f.rule === "dont" ? f.key : f.rule,
       name: f.rule === "dont" ? `${f.name}: ${f.fix ?? ""}` : f.name,
       scope: f.rule === "face" || f.rule === "picture" ? "picture" : f.size === null ? "ad" : "file",
-      status: f.status === "na" ? "not applied" : f.status,
+      status: f.status === "na" ? "not applied" : noIssuesFoundByAi(f) ? "no issues found by AI" : f.status,
       reason: f.reason,
+      checkedBy: f.checkedBy ?? null,
       acceptedBy: f.outcome === "accepted" ? (f.decision?.decidedByName ?? null) : null,
       acceptedAt: f.outcome === "accepted" ? (f.decision?.decidedAt.toISOString() ?? null) : null,
       note: f.outcome === "accepted" ? (f.decision?.note ?? null) : null,
@@ -313,7 +317,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
             leftOut.push({ adId: v.id, adNumber: number, channel, audience, headline: words.headline, size: f.size, sizeName: size.name, lang, langName, reason: sentence(f.refused) });
             continue;
           }
-          const fc = ad ? fileCompliance(ad, lang, f.size) : null;
+          const fc = ad ? fileCompliance(ad, lang, f.size, { setId, layout: f.layout }) : null;
           if (!fc || fc.leftOut) {
             held.push({ size: f.size, reason: fc?.leftOut ?? "Its compliance checks couldn't be worked out; open the ad's Compliance view." });
             continue;

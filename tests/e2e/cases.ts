@@ -109,6 +109,7 @@ const COMPLIANCE_DB = "tests/db/compliance.test.ts";
 const REAL_AI =
   "CI runs the mock model and has no real keys, so this needs real model output: checked by hand on production after the deploy";
 const HAND_PACK = "docs/testing/sprint-7-test-pack.md";
+const HAND_PACK_8 = "docs/testing/sprint-8-test-pack.md";
 
 // C8-2 Vision checks
 const VISION_SPEC = "vision.spec.ts";
@@ -593,11 +594,17 @@ export const CASES: Case[] = [
     id: "C8-1.3",
     sprint: 8,
     story: "C8-1",
-    words: "A banned term added to the kit after the ad was made makes it Fail, with the term quoted; the same for a German term in a German translation.",
+    words: "A person's edit can't add a banned term (refused today), but a banned term added to the kit after the ad was made makes it Fail, with the term quoted; the same for a German term in a German translation.",
     checks: [
       { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_HOSTILE, note: "A German term added on the Languages page, then taken out again. The English case is the CI test." },
       { kind: "ci", file: COMPLIANCE_RULES, test: "#3 a banned term added to the kit after the ad was made fails, quoted; a German term in a German translation too" },
       { kind: "ci", file: COMPLIANCE_DB, test: "#3 a banned term added to the kit after the ad was made fails with the term quoted, in English and in German" },
+      {
+        kind: "ci",
+        file: CREATIVE,
+        test: "#3 Edit words with a banned term is refused inline, and nothing is saved",
+        note: "The first clause: a person's edit that adds a banned term is refused before it is saved (the copy checks, Sprint 5), so it never becomes a Fail to report.",
+      },
     ],
   },
   {
@@ -630,7 +637,14 @@ export const CASES: Case[] = [
     sprint: 8,
     story: "C8-1",
     words: "Text density: a long body on the Full bleed square is Review or Fail at the stated shares; banners show Not applied.",
-    checks: [{ kind: "ci", file: COMPLIANCE_RULES, test: "#6 a long body on the Full bleed square is Review or Fail at the stated shares; banners show Not applied" }],
+    checks: [
+      {
+        kind: "ci",
+        file: COMPLIANCE_RULES,
+        test: "#6 a long body on the Full bleed square is Review or Fail at the stated shares; banners show Not applied",
+        note: "The renderer refuses a body long enough to pass 25% on Full bleed (it doesn't fit), so the longest body that draws passes, with its measured share; Review and Fail are shown on known boxes. Banners are Not applied (Q2).",
+      },
+    ],
   },
   {
     id: "C8-1.7",
@@ -661,6 +675,7 @@ export const CASES: Case[] = [
       { kind: "ci", file: COMPLIANCE_RULES, test: "#8 each don't rule is one Review item for the whole ad, and a decision applies only while its hash is unchanged" },
       { kind: "ci", file: COMPLIANCE_DB, test: "#8 a decision names who and when; a layout switch or a redraw with the current kit makes the don't rules Review again" },
       { kind: "ci", file: COMPLIANCE_DB, test: "#8 Accept for every picked ad records one decision per picked ad, each with name, time and its own hash; decided ads are left as they are" },
+      { kind: "ci", file: COMPLIANCE_DB, test: "review fix 5: a translation added after the don't rules were accepted makes them Review again, and Accept for every picked ad covers it" },
     ],
   },
   {
@@ -669,9 +684,16 @@ export const CASES: Case[] = [
     story: "C8-1",
     words: "Pack: an ad with a Fail or an unaccepted Review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person.",
     checks: [
-      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_PASSES },
+      {
+        kind: "browser",
+        spec: COMPLIANCE_SPEC,
+        title: COMPLIANCE_PASSES,
+        note: "The browser shows an unaccepted review left out; a Fail (and one marked not acceptable) left out is the CI test (pack.test.ts).",
+      },
       { kind: "ci", file: PACK_DB, test: "#9 C8-1: a file with a fail or an unaccepted review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person" },
       { kind: "ci", file: COMPLIANCE_RULES, test: "#9 a file with a fail or an open review is left out with the reason; accepted reviews go in" },
+      { kind: "ci", file: PACK_DB, test: "review fix 3: a file whose compliance was worked out for other words or another layout than the pack draws is held back with the reason" },
+      { kind: "ci", file: PACK_DB, test: "review fix 2: the manifest records the picture check's no as no issues found by AI, never a pass, with who checked it" },
     ],
   },
   {
@@ -701,7 +723,12 @@ export const CASES: Case[] = [
     words: "The mock says a finance brand's picture has a close-up face: it is redrawn once, dropped on a second yes, and the run summary says so.",
     checks: [
       { kind: "ci", file: IMAGERY_CI, test: "#1 the mock says a finance brand's picture has a close-up face: it is redrawn once, dropped on a second yes, and the run summary says so" },
-      { kind: "ci", file: IMAGERY_CI, test: "#1b a close-up face only on the first drawing: the redraw is kept" },
+      {
+        kind: "ci",
+        file: IMAGERY_CI,
+        test: "#1b a close-up face only on the first drawing: the redraw is kept",
+        note: "Decision 0024: \"redrawn once, then dropped\" is for a picture just drawn. A picture already in ads is never dropped by a model: Check pictures finds the face and its ads fail with \"Use New picture on this ad\" until a person does.",
+      },
     ],
   },
   {
@@ -743,6 +770,12 @@ export const CASES: Case[] = [
         note: "The campaign's pictures lose their results through the database, as a campaign made before Sprint 8 would be. After the run the button is disabled; running it again is the CI test.",
       },
       { kind: "ci", file: PICTURE_CHECK_CI, test: "#4 Check pictures on a campaign made before Sprint 8 shows its cost, checks each picture once and adds results; running it again checks nothing and costs nothing" },
+      {
+        kind: "ci",
+        file: PICTURE_CHECK_CI,
+        test: "rule 7: set_asset_vision writes only to a picture in the caller's workspace, and the app's role can't write meta directly",
+        note: "Tenancy of the results the button adds (rule 7), and a result must say its status.",
+      },
     ],
   },
   {
@@ -753,6 +786,7 @@ export const CASES: Case[] = [
     checks: [
       { kind: "ci", file: PICTURE_CHECK_CI, test: "#5 a check that errors, or hits the cap, leaves Review with \"The picture check didn't run: <reason>\", never Pass; nothing is discarded" },
       { kind: "ci", file: VISION_RULES, test: "#5 a check that errored, hit the cap or never ran is Review with \"The picture check didn't run: <reason>\", never Pass" },
+      { kind: "ci", file: PICTURE_CHECK_CI, test: "review fix 6: a paid check whose result can't be saved is recorded on its step, not retried or thrown, and the record fits meta as jsonb measures it" },
     ],
   },
   {
@@ -770,7 +804,7 @@ export const CASES: Case[] = [
     sprint: 8,
     story: "C8-2",
     words: "Real model quality: whether Haiku spots faces and don't-rule breaks on real pictures.",
-    checks: [{ kind: "hand", why: `${REAL_AI}. Whether Haiku spots faces and don't-rule breaks on real pictures goes in the Sprint 8 test pack (N-8e).` }],
+    checks: [{ kind: "hand", why: `${REAL_AI}. Whether Haiku spots faces and don't-rule breaks on real pictures (hand check HC-1 in ${HAND_PACK_8}; HC-4 runs Check pictures on an older campaign).` }],
   },
 
   // C8-3 Check an uploaded ad (Sprint 8)
@@ -816,17 +850,24 @@ export const CASES: Case[] = [
         note: "The real names are the brand's market notes' (as for copy). The run's trail keeps the model's raw reading (rule 4); the check page, its stored words and the run's summary say the name only in its finding.",
       },
       { kind: "ci", file: UPLOAD_RULES, test: "a real company's name fails once, and is masked in the words shown" },
+      { kind: "ci", file: UPLOAD_RULES, test: "review fix: a real company's name is said only in its own finding, never in the contrast, face or don't-rule findings" },
     ],
   },
   {
     id: "C8-3.4",
     sprint: 8,
     story: "C8-3",
-    words: "A non-image, an SVG, a file over 5 MB, an oversized image or a PNG with a script in its metadata is refused with a plain reason, and nothing is stored.",
+    words: "A non-image, an SVG, a file over 4 MB, an oversized image or a PNG with a script in its metadata is refused with a plain reason, and nothing is stored.",
     checks: [
       { kind: "browser", spec: UPLOAD_SPEC, title: UPLOAD_FAILS, note: "One refusal shown, as the case says: an SVG (refused by the page) and a script named .png (refused by the server)." },
       { kind: "ci", file: UPLOAD_DB, test: "#4 hostile files are refused with a plain reason, and nothing is stored" },
-      { kind: "ci", file: UPLOAD_DB, test: "#4 the upload route refuses a body over the limit, another site's request and no session, storing nothing" },
+      {
+        kind: "ci",
+        file: UPLOAD_DB,
+        test: "#4 the upload route refuses a body over the limit, another site's request and no session, storing nothing",
+        note: "The limit is 4 MB (Rory, decision 0025): with 64 KB of framing the route's body limit stays under the 4.5 MB Vercel takes in a request, so on production Studio's own refusal is the one shown. CI calls the route's handler directly, so Vercel's own cap isn't part of this check.",
+      },
+      { kind: "ci", file: UPLOAD_DB, test: "the limits are 4 MB and 4096 px a side, and a picture exactly at the side limit is kept" },
     ],
   },
   {
@@ -841,7 +882,7 @@ export const CASES: Case[] = [
     sprint: 8,
     story: "C8-3",
     words: "Real model reading of real uploaded ads (words, boxes).",
-    checks: [{ kind: "hand", why: `${REAL_AI}. How well Haiku reads the words and places the boxes on real uploaded ads goes in the Sprint 8 test pack (N-8e).` }],
+    checks: [{ kind: "hand", why: `${REAL_AI}. How well Haiku reads the words and places the boxes on a real uploaded ad (hand check HC-2 in ${HAND_PACK_8}).` }],
   },
 
   // C8-4 Pre-test panel (Sprint 8)
@@ -853,6 +894,12 @@ export const CASES: Case[] = [
     checks: [
       { kind: "browser", spec: PRETEST_SPEC, title: PRETEST },
       { kind: "ci", file: PRETEST_CI, test: "#1 pre-testing 4 picked ads gives each ad every persona's scores with reasons, the average and the label, from one vision call per ad" },
+      {
+        kind: "ci",
+        file: PRETEST_CI,
+        test: "the launch pack's manifest gains each picked ad's panel scores, labelled \"Synthetic panel, not real customers\"",
+        note: "The story's \"after\": the pack's manifest carries the panel's scores with the same label.",
+      },
     ],
   },
   {
@@ -863,6 +910,7 @@ export const CASES: Case[] = [
     checks: [
       { kind: "ci", file: PRETEST_CI, test: "#2 a reply that predicts a click rate is repaired once, then refused, with the reason in the run" },
       { kind: "ci", file: PRETEST_CI, test: "#2 a quote that isn't in the ad's words is repaired, and the repaired reply is kept" },
+      { kind: "ci", file: PRETEST_CI, test: "#2 a quote that isn't in the ad's words in both replies is refused: the run fails after two attempts, with the reason, and no scores are saved" },
       { kind: "ci", file: PRETEST_CI, test: "#2 the checks in code: numbers are scores only, and quotes must be the ad's own words" },
     ],
   },
@@ -873,7 +921,13 @@ export const CASES: Case[] = [
     words: "Scores are kept with the ad's words and picture; a redraw or new words make them \"Out of date: pre-test again\".",
     checks: [
       { kind: "ci", file: PRETEST_CI, test: "#3 scores are kept with the ad's words and picture; a redraw, new words or another layout make them \"Out of date: pre-test again\"" },
-      { kind: "ci", file: PRETEST_CI, test: "the launch pack's manifest gains each picked ad's panel scores, labelled \"Synthetic panel, not real customers\"" },
+      { kind: "ci", file: PRETEST_CI, test: "review nit 10: running the persona review again makes every ad's scores out of date: the panel they came from is no longer the brief's" },
+      {
+        kind: "ci",
+        file: PRETEST_CI,
+        test: "another workspace can't read, add, change or delete pre-test scores, and its gallery shows none",
+        note: "Tenancy of the kept scores (rule 7): pretest_scores has workspace_id and row-level security.",
+      },
     ],
   },
   {
@@ -891,7 +945,7 @@ export const CASES: Case[] = [
     sprint: 8,
     story: "C8-4",
     words: "Real model quality: whether the panel's reasons are sensible.",
-    checks: [{ kind: "hand", why: `${REAL_AI}. Whether the reasons are sensible goes in the Sprint 8 test pack (N-8e).` }],
+    checks: [{ kind: "hand", why: `${REAL_AI}. Whether the panel's reasons are sensible (hand check HC-3 in ${HAND_PACK_8}).` }],
   },
 ];
 

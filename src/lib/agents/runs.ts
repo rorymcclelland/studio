@@ -1,4 +1,4 @@
-import { asUser } from "@/lib/db/scoped";
+import { asUser, type Tx } from "@/lib/db/scoped";
 import { getAgent } from "./registry";
 
 export class StartRunError extends Error {}
@@ -6,6 +6,21 @@ export class ApprovalError extends Error {}
 
 export type Member = { userId: string; workspaceId: string };
 export type SendEvent = (event: { name: string; data: Record<string, unknown> }) => Promise<unknown>;
+
+/**
+ * Runs inside the transaction that records the run, before the insert: it
+ * may refuse (throw) and nothing is recorded. With takeRunLock first, a check
+ * such as "is one already running?" and the insert are one step, so two
+ * clicks at once start one paid run, not two (Sprint 8 review fix 4).
+ */
+export type RunGuard = (tx: Tx) => Promise<void>;
+
+/** A lock held until the run's transaction ends, keyed by what may have one run at a time ("pretest:<campaign id>"). */
+export async function takeRunLock(tx: Tx, key: string): Promise<void> {
+  await tx`select pg_advisory_xact_lock(hashtextextended(${runLockName(key)}, 0))`;
+}
+
+export const runLockName = (key: string) => `studio:run:${key}`;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -22,7 +37,7 @@ export async function createRun(
   agentKey: string,
   rawInput: unknown,
   send: SendEvent,
-  opts: { label?: string; brandId?: string | null } = {},
+  opts: { label?: string; brandId?: string | null; guard?: RunGuard } = {},
 ): Promise<string> {
   const agent = getAgent(agentKey);
   if (!agent) throw new StartRunError(`Unknown agent "${agentKey}".`);
@@ -30,7 +45,7 @@ export async function createRun(
   if (!parsed.success) throw new StartRunError(parsed.error.issues[0]?.message ?? "Invalid input.");
 
   const label = (opts.label ?? (agent.start ? agent.name : agent.label(parsed.data))).slice(0, 200);
-  return queueRun(member, agent.key, agent.version, parsed.data, label, opts.brandId ?? null, send);
+  return queueRun(member, agent.key, agent.version, parsed.data, label, opts.brandId ?? null, send, opts.guard);
 }
 
 /**
@@ -45,9 +60,9 @@ export async function createWorkflowRun(
   version: number,
   input: Record<string, unknown>,
   send: SendEvent,
-  opts: { label: string; brandId?: string | null },
+  opts: { label: string; brandId?: string | null; guard?: RunGuard },
 ): Promise<string> {
-  return queueRun(member, key, version, input, opts.label.slice(0, 200), opts.brandId ?? null, send);
+  return queueRun(member, key, version, input, opts.label.slice(0, 200), opts.brandId ?? null, send, opts.guard);
 }
 
 async function queueRun(
@@ -58,12 +73,16 @@ async function queueRun(
   label: string,
   brandId: string | null,
   send: SendEvent,
+  guard?: RunGuard,
 ): Promise<string> {
-  const [row] = await asUser(member.userId, (tx) => tx`
-    insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)
-    values (${member.workspaceId}, ${key}, ${version}, ${tx.json(input as never)}, ${member.userId},
-            ${label}, ${brandId})
-    returning id`);
+  const [row] = await asUser(member.userId, async (tx) => {
+    if (guard) await guard(tx);
+    return tx`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, brand_id)
+      values (${member.workspaceId}, ${key}, ${version}, ${tx.json(input as never)}, ${member.userId},
+              ${label}, ${brandId})
+      returning id`;
+  });
   const runId = row.id as string;
 
   try {

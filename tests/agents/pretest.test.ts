@@ -26,6 +26,7 @@ import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
 import { mockBehaviour } from "@/lib/models/mock";
 import { startPersonaReview } from "@/lib/strategy/reviews";
+import { startWhileAnotherStarts } from "../helpers/run-lock";
 import { createMember, truncateAll } from "../helpers/db";
 
 const inline: StepTools = { run: async (_id, fn) => fn(), waitForEvent: async () => null };
@@ -146,6 +147,11 @@ describe("C8-4 Pre-test panel", () => {
     expect(personas).toBeGreaterThanOrEqual(2);
     expect((await view()).pretest).toMatchObject({ todo: 4, picked: 4, reason: null, runningRunId: null });
 
+    // Review fix 4: a click while another click's start is part-way through waits for it, then is refused as busy: one paid run.
+    const race = await startWhileAnotherStarts(`pretest:${campaign}`, { ...a, agent: "pretest", input: { campaignId: campaign } }, () => startPretest(a, campaign, noSend));
+    expect(race.waited).toBe(true);
+    expect(race.result).toMatchObject({ status: "rejected", reason: expect.objectContaining({ message: PRETEST_BUSY }) });
+    await getSql()`delete from public.agent_runs where id = ${race.otherRunId}`;
     const runId = await startPretest(a, campaign, noSend);
     await expect(startPretest(a, campaign, noSend)).rejects.toThrow(PRETEST_BUSY);
     const run = await execute(a, runId);
@@ -181,7 +187,7 @@ describe("C8-4 Pre-test panel", () => {
     expect((await view()).variants.filter((v) => v.picked).map((v) => v.id).sort()).toEqual(picked.map((p) => p.id).sort());
     expect((await view()).pretest).toMatchObject({ todo: 0, reason: ALL_PRETESTED });
     await expect(startPretest(a, campaign, noSend)).rejects.toThrow(ALL_PRETESTED);
-  });
+  }, 180_000);
 
   it("#2 a reply that predicts a click rate is repaired once, then refused, with the reason in the run", async () => {
     const target = picked[0].id;
@@ -223,6 +229,25 @@ describe("C8-4 Pre-test panel", () => {
     expect(step.attempts).toBe(2);
     expect(JSON.stringify(step.attempt_log)).toContain("which is not in the ad's words; quote them exactly");
     expect((await ad(target)).pretest).toMatchObject({ state: "current", runId: run.id });
+  });
+
+  it("#2 a quote that isn't in the ad's words in both replies is refused: the run fails after two attempts, with the reason, and no scores are saved", async () => {
+    const target = picked[1].id;
+    const v = await ad(target);
+    const panel = (await asUser(a.userId, (tx) => pretestPlan(tx, campaign))).panel!;
+    const prompt = pretestAgent.buildPrompt({ ...inputFor(v.words, personas), legalLines: v.words.legalLines, personas: panel.personas });
+    const misquoting = (o: PretestOutput) => (o.personas[0].scores.clear.quote = "Guaranteed to double your savings");
+    mockBehaviour.next(replyFor(prompt, misquoting));
+    mockBehaviour.next(replyFor(prompt, misquoting));
+    const before = (await scoresOf(target)).length;
+    const run = await pretest([target]);
+    expect(run.status).toBe("failed");
+    const step = run.steps.find((s) => s.kind === "model")!;
+    expect(step).toMatchObject({ attempts: 2, status: "failed" });
+    expect(step.error).toContain("not in the ad's words");
+    expect(run.error).toMatch(/still broke a rule after one repair/);
+    expect(run.error).toContain("not in the ad's words");
+    expect((await scoresOf(target)).length).toBe(before);
   });
 
   it("#2 the checks in code: numbers are scores only, and quotes must be the ad's own words", () => {
@@ -309,7 +334,37 @@ describe("C8-4 Pre-test panel", () => {
     } finally {
       await sql`update public.brands set palette = ${sql.json(palette as never)} where id = ${quill}`;
     }
-  });
+  }, 180_000);
+
+  it("review nit 10: running the persona review again makes every ad's scores out of date: the panel they came from is no longer the brief's", async () => {
+    // One gallery read per check (each is several queries; CI's database is far away).
+    const states = async () => {
+      const all = (await view()).variants;
+      return picked.map((p) => all.find((v) => v.id === p.id)!.pretest?.state ?? null);
+    };
+    expect(await states()).toEqual(picked.map(() => "current"));
+    const sql = getSql();
+    const [latest] = await sql`select brief_version, review from public.persona_reviews where campaign_id = ${campaign} order by created_at desc limit 1`;
+    // The persona review again (as its run writes it), with the same personas.
+    const [run] = await sql`
+      insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by, label, status, completed_at)
+      values (${a.workspaceId}, 'persona', 1, ${sql.json({ campaignId: campaign })}, ${a.userId}, 'persona review again (test)', 'completed', now())
+      returning id`;
+    try {
+      await sql`
+        insert into public.persona_reviews (workspace_id, campaign_id, brief_version, run_id, review, created_by)
+        values (${a.workspaceId}, ${campaign}, ${latest.brief_version}, ${run.id}, ${sql.json(latest.review)}, ${a.userId})`;
+      expect(await states()).toEqual(picked.map(() => "stale"));
+      expect((await ad(picked[0].id)).pretest).toMatchObject({ state: "stale", note: OUT_OF_DATE });
+      const plan = await asUser(a.userId, (tx) => pretestPlan(tx, campaign));
+      expect(plan.variantIds.sort()).toEqual(picked.map((p) => p.id).sort());
+      expect(plan.panel!.personaRunId).toBe(run.id);
+    } finally {
+      // Deleting the run takes its review with it (on delete cascade); the scores are current again.
+      await sql`delete from public.agent_runs where id = ${run.id}`;
+    }
+    expect(await states()).toEqual(picked.map(() => "current"));
+  }, 120_000);
 
   it("#4 cost: about 0.05p an ad on Haiku, shown before the click; the charge is within the estimate shown", async () => {
     const real = pretestEstimate(1, { MODEL_PROVIDER_OVERRIDE: "" });

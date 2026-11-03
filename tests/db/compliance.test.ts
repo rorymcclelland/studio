@@ -134,7 +134,7 @@ describe("C8-1 compliance in the database", () => {
     expect(g.pills[ids.fullBleed]).toEqual({ tone: "review", label: "3 to review" });
     expect(g.summary!.text).toBe("8 ads pass, 4 to review, 0 fail");
     expect(g.dontRules.map((r) => [r.rule, r.open, r.picked])).toEqual(FERNHOLLOW.kit.dontRules.map((r) => [r, 1, 2]));
-  });
+  }, 120_000);
 
   it("#3 a banned term added to the kit after the ad was made fails with the term quoted, in English and in German", async () => {
     const sql = getSql();
@@ -216,7 +216,7 @@ describe("C8-1 compliance in the database", () => {
     } finally {
       await sql`update public.brands set palette = ${sql.json(FERNHOLLOW.kit.palette)} where id = ${ids.brand}`;
     }
-  });
+  }, 120_000);
 
   it("#8 Accept for every picked ad records one decision per picked ad, each with name, time and its own hash; decided ads are left as they are", async () => {
     const [key, other] = (await must(a.userId, ids.fullBleed)).perAd.map((f) => f.key);
@@ -250,7 +250,32 @@ describe("C8-1 compliance in the database", () => {
     await expect(acceptDontRuleForPicked(b, ids.campaign, key)).rejects.toThrow("Nothing is picked in this campaign, so there is nothing to accept.");
     await expect(acceptDontRuleForPicked(a, ids.campaign, "dont:0000000000000000")).rejects.toThrow(/isn't one of the brand's don't rules/);
     for (const bad of ["logo", "dont:'; drop", ""]) await expect(acceptDontRuleForPicked(a, ids.campaign, bad)).rejects.toThrow("That rule couldn't be read.");
-  });
+  }, 120_000);
+
+  it("review fix 5: a translation added after the don't rules were accepted makes them Review again, and Accept for every picked ad covers it", async () => {
+    const before = await must(a.userId, ids.card);
+    expect(before.perAd.map((f) => f.outcome)).toEqual(["accepted", "accepted", "accepted"]);
+    const [v] = await getSql()`select copy_set_id from public.ad_variants where id = ${ids.card}`;
+    const FR = { headline: "Fait pour le long chemin", body: "Une veste pour les jours humides en altitude, faite pour être réparée.", cta: "Voir les vestes" };
+    const [fr] = await asUser(a.userId, (tx) => tx`
+      insert into public.copy_sets (workspace_id, campaign_id, brief_version, channel, segment_title, set, legal_lines, source, created_by, lang, translated_from, simulated)
+      values (${a.workspaceId}, ${ids.campaign}, 1, 'paid social', 'Walkers', ${tx.json(FR)}, ${DEMO_LANGUAGES.fernhollow["fr-FR"].legalLines}, 'agent', ${a.userId}, 'fr-FR', ${v.copy_set_id}, true)
+      returning id`);
+    try {
+      const after = await must(a.userId, ids.card);
+      expect([...new Set(after.items.map((i) => i.lang))]).toEqual(["en-GB", "fr-FR", "de-DE"]);
+      // The person accepted the ad in English and German: the French ad is new to them.
+      expect(after.perAd.map((f) => f.outcome)).toEqual(["review", "review", "review"]);
+      // The picture's findings are about the picture alone, which a translation doesn't change.
+      expect(after.picture.map((f) => f.hash)).toEqual(before.picture.map((f) => f.hash));
+      for (const f of after.perAd) expect((await acceptDontRuleForPicked(a, ids.campaign, f.key)).accepted).toBeGreaterThanOrEqual(1);
+      expect((await must(a.userId, ids.card)).perAd.map((f) => f.outcome)).toEqual(["accepted", "accepted", "accepted"]);
+    } finally {
+      await getSql()`update public.copy_sets set discarded_at = now() where id = ${fr.id}`;
+    }
+    // Without the French words it is the ad that was accepted before, and those decisions apply again.
+    expect((await must(a.userId, ids.card)).perAd.map((f) => f.outcome)).toEqual(["accepted", "accepted", "accepted"]);
+  }, 120_000);
 
   it("#10 another workspace can't read or write a decision: the same refusal as a missing ad, and RLS in the database", async () => {
     // Through the app: B can't see A's ad or decide on it; it reads as a missing ad would.

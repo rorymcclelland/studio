@@ -122,7 +122,7 @@ export function uploadLegalRule(words: Word[], kitLines: string[] | null, englis
 
 /** The real companies (from the brand's market notes) the words name. */
 export function namedCompanies(words: Word[], realNames: string[]): string[] {
-  // A possessive is the name too ("Monzo's"): the word matcher would read it as another word.
+  // A possessive is the name too ("Brightwell's"): the word matcher would read it as another word.
   const text = foldText(allText(words)).replace(/(\p{L})'s(?![\p{L}\p{N}])/gu, "$1");
   return [...new Set(realNames.filter((n) => normaliseText(n).length >= 2 && containsTerm(text, foldText(n))))];
 }
@@ -323,18 +323,33 @@ export type Reading = {
 
 export const UPLOAD_RULE_ORDER: UploadRuleId[] = ["banned", "legal", "realName", "contrast", "density", "logo", "face", "dont"];
 
-/** Every finding for an uploaded ad, in the order the check page lists them. */
+/**
+ * Every finding for an uploaded ad, in the order the check page lists them.
+ * Rule 2: a real company's name is said once, in the "Real company name"
+ * finding. Every other finding's reason and fix is masked ("[a named
+ * company]"), whether it quotes the ad's words (the contrast rule's lowest
+ * line) or the model's own words (the face and don't-rule reasons). The
+ * checks themselves read the words as the AI read them.
+ */
 export function uploadFindings(reading: Reading, measured: MeasuredContrast[], kit: UploadKit, size: { width: number; height: number }): UploadFinding[] {
-  return [
+  const shown = reading.words.map((w) => ({ ...w, text: maskNames(w.text, kit.realNames) }));
+  const findings = [
     uploadBannedRule(reading.words, kit.bannedTerms, kit.langName),
     uploadLegalRule(reading.words, kit.legalLines, kit.englishLegal, kit.langName, kit.isEnglish),
     realNameRule(reading.words, kit.realNames),
-    uploadContrastRule(reading.words, measured, kit.palette),
+    uploadContrastRule(shown, measured, kit.palette),
     uploadDensityRule(reading.words, kit.channel),
     uploadLogoRule(reading.logo, reading.words, kit.hasLogo, size),
     uploadFaceRule(reading.face, kit.finance),
     ...uploadDontRules(kit.dontRules, reading.dontRules),
   ];
+  return findings.map((f) => (f.rule === "realName" ? f : maskFinding(f, kit.realNames)));
+}
+
+/** A finding with any real company's name in its reason and fix replaced (rule 2). */
+export function maskFinding(f: UploadFinding, realNames: string[]): UploadFinding {
+  if (realNames.length === 0) return f;
+  return { ...f, reason: maskNames(f.reason, realNames), fix: f.fix === null ? null : maskNames(f.fix, realNames) };
 }
 
 export type UploadOutcome = "passes" | "review" | "fails";

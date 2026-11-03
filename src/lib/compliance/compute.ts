@@ -56,6 +56,8 @@ export type ItemCompliance = {
   langName: string;
   size: SizeId;
   sizeName: string;
+  /** The words this file was checked with: the English copy set or the language's latest translation. */
+  setId: string;
   /** The layout this size is drawn in (the ad's own, or the size's fallback); null when it can't be drawn. */
   layout: DrawLayoutId | null;
   /** Why the size can't be drawn in this language (not a compliance finding: the pack leaves it out for that). */
@@ -211,15 +213,28 @@ function outcomeOf(list: Judged[]): ItemCompliance["outcome"] {
   return "pass";
 }
 
+/** The ad's current translations, as part of its don't rules' hash: each language and its copy set, in a fixed order. */
+export function wholeAdTranslations(langs: { lang: AdLang; setId: string }[]): string {
+  return langs
+    .filter((l) => l.lang !== ENGLISH)
+    .map((l) => `${l.lang}:${l.setId}`)
+    .sort()
+    .join(",");
+}
+
 /** The findings for one ad, judged with its decisions. */
 async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<string, Decision>): Promise<AdCompliance> {
   const judged = (f: Finding, about: string) => {
     const hash = findingHash(f, about);
     return judge(f, hash, decisions.get(decisionKey(src.id, f.lang, f.size, f.key, hash)) ?? null);
   };
-  // The don't rules are about the whole ad: tied to the English ad as drawn (its picture, words, layout and kit).
+  // The don't rules are about the whole ad: tied to the English ad as drawn (its picture, words, layout and kit) and
+  // to the translations it has now (review fix 5), so a translation added after a person accepted a rule makes the
+  // rule Review again: the person accepted the ad in the languages it had then. Accept for every picked ad covers it.
+  // The picture's findings are about the picture alone, which a translation doesn't change.
   const about = adEtag(src.etagParts);
-  const perAd = dontRules(kit.dontRules).map((f) => judged(f, about));
+  const aboutWords = `${about}|${wholeAdTranslations(src.langs)}`;
+  const perAd = dontRules(kit.dontRules).map((f) => judged(f, aboutWords));
   const picture = pictureFindings(src.vision, kit.finance, kit.dontRules).map((f) => judged(f, about));
   const wholeAd = [...perAd, ...picture];
   const items: ItemCompliance[] = [];
@@ -236,7 +251,7 @@ async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<strin
     for (const f of fits) {
       const size = SIZES[f.size];
       if (!f.ok) {
-        items.push({ lang: l.lang, langName, size: f.size, sizeName: size.name, layout: null, refused: sentence(f.refused), findings: [], outcome: "pass" });
+        items.push({ lang: l.lang, langName, size: f.size, sizeName: size.name, setId: l.setId, layout: null, refused: sentence(f.refused), findings: [], outcome: "pass" });
         continue;
       }
       const where = { size: f.size, lang: l.lang as string };
@@ -253,7 +268,7 @@ async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<strin
       ].sort((a, b) => order(a) - order(b));
       const sized = adEtag({ ...src.etagParts, copySetId: l.setId, layout: f.layout, size: f.size });
       const findings = list.map((x) => judged(x, sized));
-      items.push({ lang: l.lang, langName, size: f.size, sizeName: size.name, layout: f.layout, refused: null, findings, outcome: outcomeOf([...wholeAd, ...findings]) });
+      items.push({ lang: l.lang, langName, size: f.size, sizeName: size.name, setId: l.setId, layout: f.layout, refused: null, findings, outcome: outcomeOf([...wholeAd, ...findings]) });
     }
   }
   const drawn = items.filter((i) => !i.refused);
@@ -293,11 +308,27 @@ export async function adCompliance(userId: string, variantId: string): Promise<A
   return (await complianceFor(userId, [variantId])).get(variantId) ?? null;
 }
 
-/** The judged findings of one drawn file (its own and the ad's), and why it would be left out of a pack (null when it can go in). */
-export function fileCompliance(ad: AdCompliance, lang: string, size: SizeId): { findings: Judged[]; leftOut: string | null } | null {
+export const CHANGED_WHILE_PLANNED =
+  "The ad's words or layout changed while the pack was being planned, so its compliance checks are for another drawing. Build the pack again.";
+
+/**
+ * The judged findings of one drawn file (its own and the ad's), and why it
+ * would be left out of a pack (null when it can go in). With `drawn`, the
+ * words and layout the caller will draw: the findings were worked out in an
+ * earlier transaction, so a file whose checks were for other words (a new
+ * translation since) or another layout is held back with the reason, never
+ * packed under another drawing's checks (review fix 3).
+ */
+export function fileCompliance(
+  ad: AdCompliance,
+  lang: string,
+  size: SizeId,
+  drawn?: { setId: string; layout: DrawLayoutId },
+): { findings: Judged[]; leftOut: string | null } | null {
   const item = ad.items.find((i) => i.lang === lang && i.size === size && !i.refused);
   if (!item) return null;
   const findings = [...ad.perAd, ...ad.picture, ...item.findings];
+  if (drawn && (drawn.setId !== item.setId || drawn.layout !== item.layout)) return { findings, leftOut: CHANGED_WHILE_PLANNED };
   return { findings, leftOut: leftOutReason(findings) };
 }
 

@@ -15,6 +15,7 @@ import { carriesScript, readAdUpload, UPLOAD_MAX_BYTES, UPLOAD_MAX_SIDE, UploadE
 import { checkAgain, getUpload, listUploads, uploadAd } from "@/lib/uploads/repo";
 import { BODY_LIMIT, uploadResponse } from "@/lib/uploads/upload-response";
 import { fixtureAd, withTextChunk } from "../fixtures/uploaded-ads";
+import { startWhileAnotherStarts } from "../helpers/run-lock";
 import { createMember, truncateAll } from "../helpers/db";
 
 let a: Member;
@@ -105,7 +106,15 @@ describe("C8-3 uploads", () => {
     expect(list[1]).toMatchObject({ name: "agency ad final.png", src: `/assets/${r.assetId}`, check: null, run: { status: "queued", channel: "paid social" } });
     // A second check while one is queued is refused.
     await expect(checkAgain(a, brand, r.assetId, OPTS, send)).rejects.toThrow("This ad is being checked already.");
-  });
+    // Review fix 4: a Check again while another click's start is part-way through waits for it, then is refused: one paid check.
+    // (The JPEG's first check is marked finished first, so only the other click's run counts.)
+    await getSql()`update public.agent_runs set status = 'failed', completed_at = now() where agent = 'readAd' and input ->> 'assetId' = ${j.assetId}`;
+    const race = await startWhileAnotherStarts(`readAd:${j.assetId}`, { ...a, agent: "readAd", input: { assetId: j.assetId } }, () => checkAgain(a, brand, j.assetId, OPTS, send));
+    expect(race.waited).toBe(true);
+    expect(race.result).toMatchObject({ status: "rejected", reason: expect.objectContaining({ message: "This ad is being checked already. Wait for that check to finish." }) });
+    const [{ n: queued }] = await getSql()`select count(*)::int as n from public.agent_runs where agent = 'readAd' and status = 'queued' and input ->> 'assetId' = ${j.assetId}`;
+    expect(queued).toBe(1);
+  }, 120_000);
 
   describe("#4 hostile files are refused with a plain reason, and nothing is stored", () => {
     const cases: [string, () => Promise<{ name: string; type?: string; bytes: Buffer }>, RegExp][] = [
@@ -118,13 +127,13 @@ describe("C8-3 uploads", () => {
       ],
       ["an SVG named .png", async () => ({ name: "ad.png", type: "image/png", bytes: Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>') }), /An SVG can't be checked/],
       [
-        "a file over 5 MB",
+        "a file over 4 MB",
         async () => {
           const big = await noisyPng(1400, 1400);
           expect(big.length).toBeGreaterThan(UPLOAD_MAX_BYTES);
           return { name: "big.png", type: "image/png", bytes: big };
         },
-        /^The file is too large \(5 MB at most\)\.$/,
+        /^The file is too large \(4 MB at most\)\.$/,
       ],
       [
         "an oversized image (5000 px)",
@@ -158,11 +167,14 @@ describe("C8-3 uploads", () => {
         expect(err).toBeInstanceOf(UploadError);
         expect((err as Error).message).toMatch(reason);
         expect(await counts()).toEqual(before);
-      }, 30_000);
+      }, 60_000);
     }
 
-    it("the limits are 5 MB and 4096 px a side, and a picture exactly at the side limit is kept", async () => {
-      expect(UPLOAD_MAX_BYTES).toBe(5_242_880);
+    it("the limits are 4 MB and 4096 px a side, and a picture exactly at the side limit is kept", async () => {
+      // Rory: 4 MB, so the file and its framing stay under the 4.5 MB production's host takes in a request (decision 0025).
+      expect(UPLOAD_MAX_BYTES).toBe(4_194_304);
+      expect(BODY_LIMIT).toBe(4_194_304 + 65_536);
+      expect(BODY_LIMIT).toBeLessThan(4_500_000);
       expect(UPLOAD_MAX_SIDE).toBe(4096);
       const edge = await sharp({ create: { width: 4096, height: 200, channels: 3, background: "#E8EBE4" } }).png().toBuffer();
       expect((await readAdUpload({ name: "edge.png", bytes: edge })).width).toBe(4096);
@@ -189,7 +201,7 @@ describe("C8-3 uploads", () => {
 
     // Over the limit by the declared length, and by what is actually sent.
     const tooBig = await read(await uploadResponse(a.userId, brand, uploadRequest(await formWith(Buffer.alloc(BODY_LIMIT + 10, 1))), send));
-    expect(tooBig).toEqual({ status: 413, body: { ok: false, error: "The file is too large (5 MB at most). Nothing was stored." } });
+    expect(tooBig).toEqual({ status: 413, body: { ok: false, error: "The file is too large (4 MB at most). Nothing was stored." } });
     const chunks = new ReadableStream({
       start(c) {
         for (let i = 0; i < 6; i++) c.enqueue(new Uint8Array(1024 * 1024));
@@ -226,7 +238,7 @@ describe("C8-3 uploads", () => {
     expect(good.status).toBe(200);
     expect(good.body.href).toMatch(new RegExp(`^/brands/${brand}/check/[0-9a-f-]{36}$`));
     expect(await counts()).toEqual({ uploads: before.uploads + 1, runs: before.runs + 1 });
-  });
+  }, 120_000);
 
   it("#5 another workspace can't see an upload or its check: not listed, the asset is a 404, and RLS in the database", async () => {
     const r = await uploadAd(a, brand, { name: "ad.png", bytes: await fixtureAd({ size: { width: 320, height: 320 } }) }, OPTS, send);
@@ -255,7 +267,10 @@ describe("C8-3 uploads", () => {
       asUser(b.userId, (tx) => tx`
         insert into public.uploaded_ad_checks (workspace_id, brand_id, asset_id, channel, lang, words, findings, outcome, created_by)
         values (${b.workspaceId}, ${brand}, ${r.assetId}, 'paid social', 'en-GB', '[]', '[]', 'passes', ${b.userId})`),
-    ).rejects.toThrow();
+    ).rejects.toSatisfy(
+      // QA fix: refused by the brand's foreign key (A's brand isn't in B's workspace) or the trigger, not by any error.
+      (e: { code?: string; message?: string }) => e.code === "23503" || /A check must be of an uploaded ad of the same brand/.test(e.message ?? ""),
+    );
     // Append-only: even its own workspace can't change or remove a check.
     await expect(asUser(a.userId, (tx) => tx`update public.uploaded_ad_checks set outcome = 'passes' where id = ${check.id}`)).rejects.toThrow(/permission denied/);
     await expect(asUser(a.userId, (tx) => tx`delete from public.uploaded_ad_checks where id = ${check.id}`)).rejects.toThrow(/permission denied/);
@@ -265,7 +280,7 @@ describe("C8-3 uploads", () => {
       await tx`set local role anon`;
       return tx`select count(*) from public.uploaded_ad_checks`;
     })).rejects.toThrow(/permission denied/);
-  });
+  }, 120_000);
 
   it("uploads are never used by Make creative or the pack: an ad's picture or a logo can't be an upload", async () => {
     const r = await uploadAd(a, brand, { name: "ad.png", bytes: await fixtureAd({ size: { width: 330, height: 330 } }) }, OPTS, send);

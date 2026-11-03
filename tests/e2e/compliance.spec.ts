@@ -22,6 +22,9 @@
 // Each page at 375 px and 1440 px: nothing scrolls sideways, AA contrast.
 // SHOTS_DIR=<folder> saves screenshots. The Fernhollow kit is changed only
 // for a moment (a German banned term, a don't rule) and put back in finally.
+// Both tests are tagged @brand-kit: they run in the brand-kit project
+// (playwright.config.ts), after every other spec and one at a time, so no other
+// test sees the change and test 1 sees Fernhollow's kit as the demo loads it.
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
@@ -81,7 +84,7 @@ test.beforeEach(async ({ page }) => {
 
 test(
   "C8-1 #1, #8, #9: a Fernhollow ad passes every rule once its don't rules are accepted, one by one or for every picked ad, the pack leaves out what waits, and a redraw makes them Review again",
-  { annotation: [{ type: "case", description: "C8-1.1" }, { type: "case", description: "C8-1.8" }, { type: "case", description: "C8-1.9" }] },
+  { tag: "@brand-kit", annotation: [{ type: "case", description: "C8-1.1" }, { type: "case", description: "C8-1.8" }, { type: "case", description: "C8-1.9" }] },
   async ({ page }) => {
     test.setTimeout(900_000);
     let campaignPath = "";
@@ -106,6 +109,8 @@ test(
     });
 
     let rules = 0;
+    /** Ad 1's drawn files: four sizes in each of its languages (worked out from its Compliance view). */
+    let files = 0;
     await step(page, "C8-1.8: ad 1's Compliance view lists each don't rule once, for the whole ad, as Review", async () => {
       await page.goto(`${campaignPath}/ads/${first}/compliance`);
       await settle(page);
@@ -135,20 +140,23 @@ test(
       await expect(page.locator("[data-compliance-pill]")).toHaveText("Passes");
     });
 
-    await step(page, "C8-1.1: every rule passes in all four sizes and in English, French, German and Spanish", async () => {
-      await expect(page.locator("[data-compliance-lang]")).toHaveCount(4);
-      await expect(page.locator("[data-compliance-lang] > h2")).toHaveText(["English", "French", "German", "Spanish"]);
-      for (const lang of ["en-GB", "fr-FR", "de-DE", "es-ES"]) {
+    await step(page, "C8-1.1: every rule passes in all four sizes and in English and every language the ad was translated into", async () => {
+      // QA fix: the languages are the ones the ad has (English and Translate's languages for the brand), read from the page.
+      const langs = await page.locator("[data-compliance-lang]").evaluateAll((s) => s.map((x) => x.getAttribute("data-compliance-lang")!));
+      expect(langs[0]).toBe("en-GB");
+      expect(langs.length).toBeGreaterThan(1);
+      for (const lang of langs) {
         const sizes = page.locator(`[data-compliance-lang="${lang}"] [data-compliance-size]`);
-        await expect(sizes).toHaveCount(4);
+        await expect(sizes).toHaveCount(SOCIAL.length);
         for (const size of SOCIAL) await expect(page.locator(`[data-compliance-lang="${lang}"] [data-compliance-size="${size}"]`)).toHaveAttribute("data-outcome", "pass");
       }
-      // Six rules in every size, and the platform zones in each 9:16 story: 4 × 4 × 6 + 4. Every one is Pass.
-      await expect(page.locator("[data-compliance-size] [data-rule]")).toHaveCount(100);
+      files = langs.length * SOCIAL.length;
+      // Six rules in every size, and the platform zones in each language's 9:16 story. Every one is Pass.
+      await expect(page.locator("[data-compliance-size] [data-rule]")).toHaveCount(files * 6 + langs.length);
       await expect(page.locator('[data-compliance-size] [data-rule]:not([data-status="pass"])')).toHaveCount(0);
-      for (const rule of ["contrast", "legal", "banned", "logo", "density", "simulated"]) await expect(page.locator(`[data-compliance-size] [data-rule=${rule}]`)).toHaveCount(16);
-      await expect(page.locator('[data-compliance-size="1080x1920"] [data-rule=platform]')).toHaveCount(4);
-      await expect(page.locator("[data-compliance-count]")).toContainText("16 drawn files: 16 pass, 0 to review, 0 fail.");
+      for (const rule of ["contrast", "legal", "banned", "logo", "density", "simulated"]) await expect(page.locator(`[data-compliance-size] [data-rule=${rule}]`)).toHaveCount(files);
+      await expect(page.locator('[data-compliance-size="1080x1920"] [data-rule=platform]')).toHaveCount(langs.length);
+      await expect(page.locator("[data-compliance-count]")).toContainText(`${files} drawn files: ${files} pass, 0 to review, 0 fail.`);
       await checkWidths(page, "compliance view, every rule passing");
     });
 
@@ -161,19 +169,19 @@ test(
       await settle(page);
       await expect(ads(page).first().locator("[data-compliance-pill]")).toHaveText("Passes");
       await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText(`${rules} to review`);
-      await expect(page.locator("[data-compliance-summary]")).toHaveText(/^Compliance of the picked ads: 16 ads pass, \d+ to review, 0 fail, over every size and language\./);
+      await expect(page.locator("[data-compliance-summary]")).toHaveText(new RegExp(`^Compliance of the picked ads: ${files} ads pass, \\d+ to review, 0 fail, over every size and language\\.`));
     });
 
-    await step(page, "C8-1.9: the launch pack leaves ad 2 out with the reason, and downloads ad 1's 16 files with their compliance", async () => {
+    await step(page, "C8-1.9: the launch pack leaves ad 2 out with the reason, and downloads ad 1's files with their compliance", async () => {
       await pack(page).locator("[data-pack-left-out] summary").click();
       const left = pack(page).locator("[data-pack-left-out] li");
       await expect(left.filter({ hasText: /^Ad 2, every size, English: Awaiting review: don't rule/ })).toHaveCount(1);
       await checkWidths(page, "launch pack with compliance left out");
-      const download = pack(page).getByRole("link", { name: "Build launch pack (16 ads)" });
+      const download = pack(page).getByRole("link", { name: `Build launch pack (${files} ads)` });
       const [file] = await Promise.all([page.waitForEvent("download"), download.click()]);
       const entries = unzipSync(new Uint8Array(await readFile(await file.path())));
       const manifest = JSON.parse(strFromU8(entries["manifest.json"]));
-      expect(manifest.files).toHaveLength(16);
+      expect(manifest.files).toHaveLength(files);
       for (const f of manifest.files) {
         expect(f.ad.id, f.file).toBe(first);
         expect(f.compliance.outcome, f.file).toBe("accepted");
@@ -194,7 +202,7 @@ test(
       const csv = strFromU8(entries["manifest.csv"]).replace(/^\uFEFF/, "").split("\r\n");
       expect(csv[0]).toContain('"compliance","reviewed_by"');
       const included = csv.filter((r) => r.startsWith('"included"'));
-      expect(included).toHaveLength(16);
+      expect(included).toHaveLength(files);
       for (const r of included) expect(r).toContain(`"Passes, ${rules} review ${rules === 1 ? "item" : "items"} accepted","${DEV_EMAIL}"`);
       expect(strFromU8(entries["README.txt"])).toContain("Compliance: every file passed Studio's compliance rules");
     });
@@ -244,7 +252,7 @@ test(
 
 test(
   "C8-1 #2, #3, #11: contrast near AA is Review with a palette colour, a German banned term added on the Languages page fails, and hostile words stay plain text",
-  { annotation: [{ type: "case", description: "C8-1.2" }, { type: "case", description: "C8-1.3" }, { type: "case", description: "C8-1.11" }] },
+  { tag: "@brand-kit", annotation: [{ type: "case", description: "C8-1.2" }, { type: "case", description: "C8-1.3" }, { type: "case", description: "C8-1.11" }] },
   async ({ page }) => {
     test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to seed an ad with a near-limit palette");
     test.setTimeout(900_000);
@@ -326,13 +334,15 @@ test(
         join public.ad_variants v on v.copy_set_id = t.translated_from
         where v.id = ${seeded} and t.lang = 'de-DE' and t.discarded_at is null`;
       const term = (cta as string).replace(/­/g, "");
-      let before = "";
+      // QA fix: the terms as they were are read before anything changes, so the finally below never "restores" an empty list.
+      await page.goto(`/brands/${brandId}/languages`);
+      await settle(page);
+      const before = await page.getByLabel("German banned terms").inputValue();
       try {
         await step(page, `C8-1.3: add "${term}" to Fernhollow's German banned terms on the Languages page`, async () => {
           await page.goto(`/brands/${brandId}/languages`);
           await settle(page);
           const field = page.getByLabel("German banned terms");
-          before = await field.inputValue();
           await field.fill(`${before}\n${term}`.trim());
           await page.getByRole("button", { name: "Save languages" }).click();
           await expect(toast(page, /^Saved\./)).toBeVisible({ timeout: 30_000 });

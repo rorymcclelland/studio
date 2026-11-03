@@ -237,9 +237,12 @@ describe("C8-1 #6: text density", () => {
       },
     });
     expect(wordShare(long.boxes)).toBeGreaterThan(wordShare(short.boxes));
+    // QA fix: a fixed expectation. The renderer refuses a body long enough to pass 25% on Full bleed (it doesn't fit),
+    // so the longest body that draws still passes, with its measured share; Review and Fail are the known boxes above.
     const f = densityRule(long.boxes, "paid social", where);
     const share = wordShare(long.boxes);
-    expect(f.status).toBe(share <= 0.25 ? "pass" : share <= 0.4 ? "review" : "fail");
+    expect(share).toBeLessThanOrEqual(COMPLIANCE.textDensity.pass);
+    expect(f.status).toBe("pass");
     expect(f.reason).toContain(`The words cover ${(Math.round(share * 1000) / 10).toFixed(1)}% of the ad.`);
 
     // Banners: not applied (Q2), and the view says so.

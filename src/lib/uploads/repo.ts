@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readAdAgent } from "@/lib/agents/read-ad";
-import { createRun, StartRunError, type Member, type SendEvent } from "@/lib/agents/runs";
+import { createRun, StartRunError, takeRunLock, type Member, type SendEvent } from "@/lib/agents/runs";
 import type { UploadFinding, UploadOutcome } from "@/lib/compliance/upload-rules";
 import { ENGLISH, LANG_NAMES, brandLanguagesIn } from "@/lib/creative/languages";
 import { asUser } from "@/lib/db/scoped";
@@ -44,8 +44,25 @@ export function cleanName(name: string): string {
   return (name ?? "").replace(/[^\p{L}\p{N} ._()-]/gu, "").replace(/\s+/g, " ").trim().slice(0, 100) || "Uploaded ad";
 }
 
+/**
+ * Starts a Read ad run for an upload. Review fix 4: under the upload's lock,
+ * in the run's own transaction, the upload is checked to be the brand's and
+ * not being checked already, so two clicks start one paid check.
+ */
 async function startCheck(member: Member, brandId: string, brandName: string, assetId: string, channel: UploadChannel, lang: string, send: SendEvent): Promise<string> {
-  return createRun(member, readAdAgent.key, { brandId, assetId, channel, lang }, send, { brandId, label: `${brandName}: check an uploaded ad` });
+  return createRun(member, readAdAgent.key, { brandId, assetId, channel, lang }, send, {
+    brandId,
+    label: `${brandName}: check an uploaded ad`,
+    guard: async (tx) => {
+      await takeRunLock(tx, `readAd:${assetId}`);
+      const [a] = await tx`select id from public.assets where id = ${assetId} and brand_id = ${brandId} and kind = 'upload' and discarded_at is null`;
+      if (!a) throw new UploadError("That upload isn't in your workspace.");
+      const [r] = await tx`
+        select count(*)::int as n from public.agent_runs
+        where agent = 'readAd' and status in ('queued', 'running') and input ->> 'assetId' = ${assetId}`;
+      if (r.n > 0) throw new UploadError(CHECK_BUSY);
+    },
+  });
 }
 
 /**
@@ -67,7 +84,8 @@ export async function uploadAd(member: Member, brandId: string, file: UploadFile
     return a.id as string;
   });
   try {
-    return { assetId, runId: await startCheck(member, brandId, o.brandName, assetId, o.channel, o.lang, send), error: null };
+    // The run is in the brand's workspace, as the upload is.
+    return { assetId, runId: await startCheck({ ...member, workspaceId: o.workspaceId }, brandId, o.brandName, assetId, o.channel, o.lang, send), error: null };
   } catch (err) {
     if (err instanceof StartRunError) return { assetId, runId: null, error: `The ad was uploaded, but its check didn't start: ${err.message}` };
     throw err;
@@ -78,15 +96,6 @@ export async function uploadAd(member: Member, brandId: string, file: UploadFile
 export async function checkAgain(member: Member, brandId: string, assetId: string, opts: CheckOptions, send: SendEvent): Promise<string> {
   const o = await checkOptions(member.userId, brandId, opts);
   if (!UUID.test(assetId)) throw new UploadError("That upload isn't in your workspace.");
-  const busy = await asUser(member.userId, async (tx) => {
-    const [a] = await tx`select id from public.assets where id = ${assetId} and brand_id = ${brandId} and kind = 'upload' and discarded_at is null`;
-    if (!a) throw new UploadError("That upload isn't in your workspace.");
-    const [r] = await tx`
-      select count(*)::int as n from public.agent_runs
-      where agent = 'readAd' and status in ('queued', 'running') and input ->> 'assetId' = ${assetId}`;
-    return r.n > 0;
-  });
-  if (busy) throw new UploadError(CHECK_BUSY);
   try {
     return await startCheck(member, brandId, o.brandName, assetId, o.channel, o.lang, send);
   } catch (err) {

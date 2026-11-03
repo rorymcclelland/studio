@@ -21,11 +21,12 @@ import {
 const WIDTHS = [375, 1440];
 
 let awaitingRun = "";
-// Fernhollow's kit text is only read by the e2e specs (brands.spec.ts edits
-// Quillmoor), so these screens look the same on every visit. Two specs change
-// Fernhollow for a moment and put it back: F-26 (creative.spec.ts) reorders its
-// palette, and C7-2 #5 (languages.spec.ts) clears its German legal lines;
-// neither changes what these layout and contrast checks see.
+// These screens look the same on every visit: every test that changes a demo
+// brand's kit for a moment (tagged @brand-kit: F-26 in creative.spec.ts reorders
+// Fernhollow's palette, C7-2 #5 in languages.spec.ts clears its German legal
+// lines, compliance.spec.ts adds a German banned term and a don't rule,
+// vision.spec.ts adds a Quillmoor don't rule, brands.spec.ts saves Quillmoor's
+// kit) runs in the brand-kit project, after this spec, one at a time.
 let fernhollow = "";
 
 type Screen = { name: string; path: () => string; signedIn: boolean };

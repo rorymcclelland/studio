@@ -5,7 +5,7 @@ import { NOT_YOURS, UploadError, uploadAd } from "./repo";
 
 // C8-3: what POST /brands/<id>/check/upload answers (the Check an ad page's
 // upload). Kept out of the route file so tests can call it; the route only
-// adds the session. A route handler, not a server action, so the 5 MB upload
+// adds the session. A route handler, not a server action, so the 4 MB upload
 // has its own limit without raising every server action's (next.config.ts
 // keeps 1100 KB for the logo). The body is read up to the limit and no
 // further. Only a signed-in member's same-origin request is taken (a server
@@ -13,9 +13,15 @@ import { NOT_YOURS, UploadError, uploadAd } from "./repo";
 // sends it shows the cost of the check that follows (rule 3). Refusals are
 // JSON with the reason; nothing is stored.
 
-/** The file, plus the multipart framing and the two small fields. */
+/**
+ * The file, plus the multipart framing and the two small fields: 4 MB and 64
+ * KB, under the 4.5 MB production's host takes in a request (Rory, decision
+ * 0025), so Studio's own refusal is the one a person sees.
+ */
 export const BODY_LIMIT = UPLOAD_MAX_BYTES + 64 * 1024;
-const TOO_LARGE = "The file is too large (5 MB at most). Nothing was stored.";
+const TOO_LARGE = "The file is too large (4 MB at most). Nothing was stored.";
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 const reply = (status: number, body: Record<string, unknown>) => Response.json(body, { status, headers: { "cache-control": "private, no-store" } });
 const refuse = (status: number, error: string) => reply(status, { ok: false, error });
@@ -80,10 +86,15 @@ export async function uploadResponse(userId: string | null, brandId: string, req
   if (!(file instanceof File) || file.size === 0) return refuse(400, "Choose a PNG or JPEG file first.");
   if (file.size > UPLOAD_MAX_BYTES) return refuse(413, TOO_LARGE);
 
-  const workspaceId = await asUser(userId, async (tx) => {
-    const [r] = await tx`select public.ensure_workspace() as id`;
-    return r.id as string;
-  });
+  // The workspace is the brand's, read through asUser as uploadAd's own check reads it (review nit 12): a brand
+  // the person can't see is the same answer as no brand, and nothing is made for them.
+  const workspaceId = UUID.test(brandId)
+    ? await asUser(userId, async (tx) => {
+        const [b] = await tx`select workspace_id from public.brands where id = ${brandId}`;
+        return (b?.workspace_id as string | undefined) ?? null;
+      })
+    : null;
+  if (!workspaceId) return refuse(404, NOT_YOURS);
   try {
     const r = await uploadAd(
       { userId, workspaceId },

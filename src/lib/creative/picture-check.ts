@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { createWorkflowRun, type Member, type SendEvent } from "@/lib/agents/runs";
+import { createWorkflowRun, takeRunLock, type Member, type SendEvent } from "@/lib/agents/runs";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { pictureCheckEstimate, type Estimate } from "./costs";
 
@@ -81,18 +81,19 @@ export async function pictureCheckBar(tx: Tx, campaignId: string): Promise<Pictu
  */
 export async function startPictureCheck(member: Member, campaignId: string, send: SendEvent): Promise<string> {
   if (!UUID.test(campaignId)) throw new PictureCheckError("That campaign isn't in your workspace.");
-  const { plan, busy } = await asUser(member.userId, async (tx) => {
-    const plan = await pictureCheckPlan(tx, campaignId);
-    const [b] = await tx`
-      select count(*)::int as n from public.agent_runs
-      where agent = ${PICTURE_CHECK_KEY} and status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId}`;
-    return { plan, busy: b.n > 0 };
-  });
+  const plan = await asUser(member.userId, (tx) => pictureCheckPlan(tx, campaignId));
   if (plan.refusal) throw new PictureCheckError(plan.refusal);
-  if (busy) throw new PictureCheckError(CHECK_BUSY);
   const n = plan.assetIds.length;
   return createWorkflowRun(member, PICTURE_CHECK_KEY, PICTURE_CHECK_VERSION, { campaignId, assetIds: plan.assetIds }, send, {
     brandId: plan.brandId,
     label: `${plan.brandName}: check ${n} ${n === 1 ? "picture" : "pictures"}`,
+    // Review fix 4: the busy check and the run's insert in one transaction, under the campaign's lock, so two clicks start one run.
+    guard: async (tx) => {
+      await takeRunLock(tx, `${PICTURE_CHECK_KEY}:${campaignId}`);
+      const [b] = await tx`
+        select count(*)::int as n from public.agent_runs
+        where agent = ${PICTURE_CHECK_KEY} and status in ('queued', 'running') and input ->> 'campaignId' = ${campaignId}`;
+      if (b.n > 0) throw new PictureCheckError(CHECK_BUSY);
+    },
   });
 }

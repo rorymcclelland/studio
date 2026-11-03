@@ -1,7 +1,7 @@
 import { inflateSync } from "node:zlib";
 import sharp from "sharp";
 
-// C8-3: an ad uploaded to be checked. A PNG or JPEG up to 5 MB and 4096 px on
+// C8-3: an ad uploaded to be checked. A PNG or JPEG up to 4 MB and 4096 px on
 // each side. The file's contents decide what it is, never its name or the
 // type the browser claims: anything else (an SVG, a PDF, a script renamed
 // .png) is refused with a plain reason. A file whose metadata or trailing
@@ -13,7 +13,7 @@ import sharp from "sharp";
 
 export class UploadError extends Error {}
 
-export const UPLOAD_MAX_BYTES = 5 * 1024 * 1024;
+export const UPLOAD_MAX_BYTES = 4 * 1024 * 1024;
 export const UPLOAD_MAX_SIDE = 4096;
 /** The assets table's limit on an upload's bytes once re-encoded (db/migrations/20261103000002_uploaded_ads.sql). */
 export const UPLOAD_STORED_MAX_BYTES = 10 * 1024 * 1024;
@@ -87,7 +87,7 @@ const UNREADABLE = "This picture couldn't be read. Export it again and upload th
 export async function readAdUpload(file: UploadFile): Promise<ReadUpload> {
   const bytes = Buffer.from(file.bytes ?? []);
   if (bytes.length === 0) throw new UploadError("The file is empty.");
-  if (bytes.length > UPLOAD_MAX_BYTES) throw new UploadError("The file is too large (5 MB at most).");
+  if (bytes.length > UPLOAD_MAX_BYTES) throw new UploadError("The file is too large (4 MB at most).");
   const png = isPng(bytes);
   const jpeg = !png && isJpeg(bytes);
   if (!png && !jpeg) {

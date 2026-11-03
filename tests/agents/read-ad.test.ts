@@ -213,6 +213,8 @@ describe("C8-3 Check an uploaded ad", () => {
     const input = inputFor(["Promise safety or survival in any conditions", "Use fear (storms, danger) to sell", "Mock people who are new to the outdoors"]);
     const reply = mockOutput(input);
     reply.words[1].text = "Better than Monzo, built for every ridge.";
+    // Review fix: the model's own reasons may name the company too; they are masked like the words.
+    reply.dontRules[0] = { ...reply.dontRules[0], breaks: true, reason: "The body compares the brand with Monzo." };
     mockBehaviour.next({ text: JSON.stringify(reply), inputTokens: 2500, outputTokens: 400 });
     const { run, upload, assetId } = await check(await fixtureAd());
     expect(run.status, run.error ?? "").toBe("completed");
@@ -228,6 +230,7 @@ describe("C8-3 Check an uploaded ad", () => {
     expect(c.outcome).toBe("fails");
     // The name is said once, in its finding: not in the words shown, any other finding, the run's summary or its output.
     expect(c.words[1].text).toBe("Better than [a named company], built for every ridge.");
+    expect(byRule(c.findings, "dont")[0].reason).toBe("The AI thinks the ad may break this rule: The body compares the brand with [a named company]. A person decides.");
     const elsewhere = JSON.stringify([c.words, c.findings.filter((f) => f.rule !== "realName")]);
     expect(elsewhere).not.toMatch(/monzo/i);
     expect(JSON.stringify(run.output)).not.toMatch(/monzo/i);

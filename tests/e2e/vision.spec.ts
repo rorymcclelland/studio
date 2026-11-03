@@ -5,15 +5,18 @@
 //    database, as a campaign made before Sprint 8 would be. Each ad's
 //    Compliance view shows the picture items as Review, "The picture check
 //    didn't run". Check pictures shows its cost before the click, checks each
-//    picture once and adds the results: the face rule passes and the don't
-//    rules say "No issues found by AI", each "Checked by AI". The button then
+//    picture once and adds the results: the face rule and the don't rules say
+//    "No issues found by AI", each "Checked by AI". The button then
 //    says every picture is checked, so a second click can't check (or charge
 //    for) anything (the CI test runs it again to show it costs nothing).
 // 2. Case 2: a don't rule about abstract shapes is added to Quillmoor's kit
 //    for a moment (the mock pictures are soft shapes, so the mock says the
 //    picture breaks it) and picture 1 is checked again. Every ad using it shows
 //    Review with the AI's reason and "Checked by AI"; Accept clears it in each
-//    ad, one at a time. The rule is taken out again in finally.
+//    ad, one at a time. The rule is taken out again in finally. Tagged
+//    @brand-kit: it runs in the brand-kit project, after every other spec and
+//    one at a time, as the launch pack and pre-test specs count Quillmoor's
+//    don't rules.
 //
 // Each page at 375 px and 1440 px: nothing scrolls sideways, AA contrast.
 // SHOTS_DIR=<folder> saves screenshots.
@@ -55,7 +58,7 @@ test.beforeEach(async ({ page }) => {
 
 test(
   "C8-2 #2, #4: Check pictures on a campaign made before Sprint 8 shows its cost and adds results once, and a picture the AI says breaks a don't rule is Review on every ad using it until accepted",
-  { annotation: [{ type: "case", description: "C8-2.2" }, { type: "case", description: "C8-2.4" }] },
+  { tag: "@brand-kit", annotation: [{ type: "case", description: "C8-2.2" }, { type: "case", description: "C8-2.4" }] },
   async ({ page }) => {
     test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to make the pictures look as if made before Sprint 8");
     test.setTimeout(900_000);
@@ -101,11 +104,14 @@ test(
         expect(n).toBe(4);
       });
 
-      await step(page, "C8-2.4: the ad's Compliance view shows the results, each Checked by AI; the don't rules say No issues found by AI, not Pass", async () => {
+      await step(page, "C8-2.4: the ad's Compliance view shows the results, each Checked by AI; the face rule and the don't rules say No issues found by AI, not Pass", async () => {
         await page.goto(`${campaignPath}/ads/${firstAd}/compliance`);
         await settle(page);
         await expect(pictureRow(page, "face")).toHaveAttribute("data-status", "pass");
         await expect(pictureRow(page, "face")).toContainText("The AI check found no face in the picture.");
+        // Review nit 7: the AI's "no" on the face rule is not a green Pass either.
+        await expect(pictureRow(page, "face")).toContainText(/^No issues found by AI\s*Picture: face \(finance brands\)/);
+        await expect(pictureRow(page, "face")).not.toContainText("Pass");
         await expect(pictureRow(page, "picture")).toHaveAttribute("data-status", "pass");
         await expect(pictureRow(page, "picture")).toContainText(/^No issues found by AI\s*Picture: don't rules/);
         await expect(pictureRow(page, "picture")).not.toContainText("Pass");

@@ -3,7 +3,7 @@
 // test carries the case's annotation, so the demo page can match the run's
 // results to the case; every CI check names a Vitest file that exists, with
 // the test or describe title in it, or a job in ci.yml.
-import { existsSync, readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CASES, STORIES, caseKind, type Case } from "../e2e/cases";
@@ -128,13 +128,13 @@ describe("the case list", () => {
   it("has every agreed C8-2 case, once each, in order; the browser shows 2 and 4, and the real model's eyes are a hand check", () => {
     expect(CASES.filter((c) => c.story === "C8-2").map((c) => c.id)).toEqual([1, 2, 3, 4, 5, 6, 7].map((n) => `C8-2.${n}`));
     expect(CASES.filter((c) => c.story === "C8-2").map(caseKind)).toEqual(["ci", "browser", "ci", "browser", "ci", "ci", "hand"]);
-    expect(CASES.find((c) => c.id === "C8-2.7")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*N-8e/) }]);
+    expect(CASES.find((c) => c.id === "C8-2.7")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*HC-1 in docs\/testing\/sprint-8-test-pack\.md/) }]);
   });
 
   it("has every agreed C8-3 case, once each, in order, after C8-1's and C8-2's; the real model's reading is a hand check", () => {
     expect(CASES.filter((c) => c.story === "C8-3").map((c) => c.id)).toEqual([1, 2, 3, 4, 5, 6].map((n) => `C8-3.${n}`));
     expect(CASES.filter((c) => c.story === "C8-3").map(caseKind)).toEqual(["browser", "browser", "ci", "browser", "ci", "hand"]);
-    expect(CASES.find((c) => c.id === "C8-3.6")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*N-8e/) }]);
+    expect(CASES.find((c) => c.id === "C8-3.6")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*HC-2 in docs\/testing\/sprint-8-test-pack\.md/) }]);
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("C8-1")).toBeLessThan(order.indexOf("C8-3"));
     expect(order.lastIndexOf("C8-2")).toBeLessThan(order.indexOf("C8-3"));
@@ -145,7 +145,29 @@ describe("the case list", () => {
   it("has every agreed C8-4 case, once each, in order; the real model's reasons are a hand check", () => {
     expect(CASES.filter((c) => c.story === "C8-4").map((c) => c.id)).toEqual([1, 2, 3, 4, 5].map((n) => `C8-4.${n}`));
     expect(CASES.filter((c) => c.story === "C8-4").map(caseKind)).toEqual(["browser", "ci", "ci", "ci", "hand"]);
-    expect(CASES.find((c) => c.id === "C8-4.5")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys/) }]);
+    expect(CASES.find((c) => c.id === "C8-4.5")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*HC-3 in docs\/testing\/sprint-8-test-pack\.md/) }]);
+  });
+
+  it("the Sprint 8 test pack (N-8e) has each hand check the cases name, and only hand checks that need real AI output", () => {
+    const pack = read("docs/testing/sprint-8-test-pack.md");
+    for (const id of [
+      "HC-1 Picture judgement checks on real pictures",
+      "HC-2 Reading a real uploaded ad",
+      "HC-3 The panel's reasons",
+      "HC-4 Check pictures on an existing campaign, and the pack afterwards",
+    ]) {
+      expect(pack).toContain(`### ${id}`);
+    }
+    expect(pack.match(/^### HC-\d+ /gm)).toHaveLength(4);
+    // Each check says its cost, user, flow, expected outcome and a result box, as Sprint 7's.
+    for (const part of ["**What it checks:**", "**User:**", "**Flow:**", "**Expected outcome", "**Result:** ☐ Pass ☐ Fail"]) expect(pack.split(part).length - 1, part).toBe(4);
+    expect(pack).toContain("**AI cost:**");
+    // The file HC-2 uploads is in the repository and under the 4 MB limit.
+    expect(statSync(join(root, "docs/testing/files/sprint-8-hc2-fernhollow-ad.png")).size).toBeLessThan(4 * 1024 * 1024);
+    // Every Sprint 8 hand check names its check in the pack.
+    for (const c of CASES.filter((x) => x.sprint === 8)) {
+      for (const x of c.checks) if (x.kind === "hand") expect(x.why, c.id).toMatch(/HC-\d in docs\/testing\/sprint-8-test-pack\.md/);
+    }
   });
 
   it("counts a case as browser, ci, hand or withdrawn by its strongest check", () => {

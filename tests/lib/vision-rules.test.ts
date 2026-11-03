@@ -7,7 +7,7 @@
 // the don't rules is "No issues found by AI", not Pass).
 import { describe, expect, it } from "vitest";
 import { CHECKED_BY_AI, dontKey, faceRule, leftOutReason, NOT_CHECKED_YET, pictureDontRule, pictureFindings, judge, findingHash } from "@/lib/compliance/rules";
-import { fitVision, readVision, VISION_MAX_BYTES, type VisionRecord } from "@/lib/compliance/vision";
+import { fitVision, jsonbBytes, jsonbText, readVision, VISION_MAX_BYTES, type VisionRecord } from "@/lib/compliance/vision";
 
 const RULES = ["Use fear (storms, danger) to sell", "Show soft abstract shapes"];
 
@@ -91,13 +91,15 @@ describe("C8-2 picture findings", () => {
       reason: "é".repeat(300),
       rules: Array.from({ length: 20 }, (_, i) => ({ key: dontKey(`rule ${i}`), breaks: i % 2 === 0, reason: "ü".repeat(300) })),
     });
-    for (const budget of [VISION_MAX_BYTES, 2_500, 1_500]) {
+    for (const budget of [VISION_MAX_BYTES, 2_500, 1_800]) {
       const fitted = fitVision(many, budget);
-      expect(Buffer.byteLength(JSON.stringify(fitted)), String(budget)).toBeLessThanOrEqual(budget);
+      // Review fix 6: measured as jsonb prints it (the meta column's limit), which is longer than compact JSON.
+      expect(jsonbBytes(fitted), String(budget)).toBeLessThanOrEqual(budget);
       expect(readVision(fitted)).not.toBeNull();
       if (fitted.status === "checked") expect(fitted.rules.map((r) => r.breaks)).toEqual(many.status === "checked" ? many.rules.map((r) => r.breaks) : []);
     }
     const small = checked();
     expect(fitVision(small)).toEqual(small);
+    expect(jsonbText({ a: [1, "x"], b: { c: null } })).toBe('{"a": [1, "x"], "b": {"c": null}}');
   });
 });

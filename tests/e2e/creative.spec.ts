@@ -281,9 +281,9 @@ async function savePaletteInEditor(page: Page, brandId: string, brandName: strin
   await expect(toast(page, `Brand kit saved for ${brandName}.`)).toBeVisible({ timeout: 30_000 });
 }
 
-// On Fernhollow: brands.spec.ts saves Quillmoor's kit (and checks its palette is unchanged by a refused save),
-// and no other spec reads Fernhollow's palette, so changing it for a moment here touches no other test.
-test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", { annotation: [{ type: "case", description: "F-26.1" }, { type: "case", description: "F-26.2" }, { type: "case", description: "F-26.3" }, { type: "case", description: "F-26.4" }] }, async ({ page }) => {
+// On Fernhollow, whose palette other specs read (compliance.spec's contrast, design-system.spec's screens): the
+// test is tagged @brand-kit, so it runs in the brand-kit project, after every other spec and one at a time.
+test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo", { tag: "@brand-kit", annotation: [{ type: "case", description: "F-26.1" }, { type: "case", description: "F-26.2" }, { type: "case", description: "F-26.3" }, { type: "case", description: "F-26.4" }] }, async ({ page }) => {
   test.setTimeout(600_000);
   const brandName = "Fernhollow Outfitters";
   const brandId = await demoBrandId(page, brandName);

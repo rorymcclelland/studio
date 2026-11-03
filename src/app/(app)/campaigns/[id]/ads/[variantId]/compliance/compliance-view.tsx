@@ -1,5 +1,5 @@
 import type { AdCompliance, ItemCompliance } from "@/lib/compliance/compute";
-import type { Judged } from "@/lib/compliance/rules";
+import { NO_ISSUES_BY_AI, noIssuesFoundByAi, type Judged } from "@/lib/compliance/rules";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { formatWhen } from "@/lib/format";
 import { DecisionForm } from "./decision-form";
@@ -20,9 +20,9 @@ const OUTCOME: Record<Judged["outcome"] | "na", { label: string; tone: PillTone 
 };
 
 const statusOf = (f: Judged) => (f.status === "na" ? "na" : f.status === "review" && f.outcome === "fail" ? "fail" : f.outcome);
-// C8-2 (Q4): the AI's "no" on the don't rules is not a Pass.
-const noIssuesByAi = (f: Judged) => f.rule === "picture" && f.status === "pass";
-const labelOf = (f: Judged) => (noIssuesByAi(f) ? "No issues found by AI" : f.status === "review" && f.outcome === "fail" ? "Not acceptable" : OUTCOME[statusOf(f)].label);
+// C8-2 (Q4): the AI's "no" on the face rule and the don't rules is not a Pass.
+const noIssuesByAi = (f: Judged) => noIssuesFoundByAi(f);
+const labelOf = (f: Judged) => (noIssuesByAi(f) ? NO_ISSUES_BY_AI : f.status === "review" && f.outcome === "fail" ? "Not acceptable" : OUTCOME[statusOf(f)].label);
 const toneOf = (f: Judged): PillTone => (noIssuesByAi(f) ? "neutral" : OUTCOME[statusOf(f)].tone);
 
 const LAYOUT: Record<string, string> = { "full-bleed": "Full bleed", split: "Split", card: "Card", banner: "Banner" };
