@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "41657947555",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/campaign-studio/actions/runs/41657947555",
+  "repository": "rorymcclelland/campaign-studio",
+  "commit": "dc62f172e48921b64451702943c102f2b19f4b1f",
+  "branch": "sprint-7",
+  "date": "2026-11-03T15:19:14.300Z",
+  "checksJob": "success"
+}
