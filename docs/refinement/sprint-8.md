@@ -290,3 +290,8 @@ All seven as recommended.
 | Q7 | (a) The 9:16 platform-zone rule is in Sprint 8; second to move if the sprint runs over | As written (C8-1 test case 7) |
 
 No acceptance criteria changed. C8-1 to C8-4 and N-8e are Ready, Sprint 8. Building starts when Rory says go.
+
+**While building (Rory, 3 November 2026):**
+- C8-1: a don't rule can be accepted for every picked ad at once ("Accept for every picked ad"); each ad still records its own decision with name and time.
+- C8-1: every 9:16 layout (Full bleed and Split as well as Card) keeps its words, logo and legal lines clear of the top 14% and bottom 20%, so no layout loses its 9:16 size to the zone rule. Only 9:16 drawings change.
+- C8-1: the 300 × 250 and 300 × 600 banners place the logo at the 4% clear space, so banners pass the logo rule without a review. Only those two banner drawings change.
