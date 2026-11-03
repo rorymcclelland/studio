@@ -32,6 +32,9 @@ export const AGENT_MODELS = {
   // C8-4: the pre-test panel on Haiku with vision (about 0.05p an ad). Four personas, four
   // scales each, a sentence and a quote per scale: about 800 tokens, at most about 1,800.
   pretest: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 2000 },
+  // C8-3: Check an ad reads an uploaded ad on Haiku with vision (about 0.1p a check). Up to
+  // 80 lines of words, each with its box, the logo, the face and up to 20 don't rules.
+  readAd: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 4000 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

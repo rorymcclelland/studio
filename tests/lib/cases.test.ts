@@ -131,6 +131,17 @@ describe("the case list", () => {
     expect(CASES.find((c) => c.id === "C8-2.7")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*N-8e/) }]);
   });
 
+  it("has every agreed C8-3 case, once each, in order, after C8-1's and C8-2's; the real model's reading is a hand check", () => {
+    expect(CASES.filter((c) => c.story === "C8-3").map((c) => c.id)).toEqual([1, 2, 3, 4, 5, 6].map((n) => `C8-3.${n}`));
+    expect(CASES.filter((c) => c.story === "C8-3").map(caseKind)).toEqual(["browser", "browser", "ci", "browser", "ci", "hand"]);
+    expect(CASES.find((c) => c.id === "C8-3.6")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*N-8e/) }]);
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("C8-1")).toBeLessThan(order.indexOf("C8-3"));
+    expect(order.lastIndexOf("C8-2")).toBeLessThan(order.indexOf("C8-3"));
+    const stories = STORIES.map((s) => s.id);
+    expect(stories.slice(stories.indexOf("C8-1"))).toEqual(["C8-1", "C8-2", "C8-3", "C8-4"]);
+  });
+
   it("has every agreed C8-4 case, once each, in order; the real model's reasons are a hand check", () => {
     expect(CASES.filter((c) => c.story === "C8-4").map((c) => c.id)).toEqual([1, 2, 3, 4, 5].map((n) => `C8-4.${n}`));
     expect(CASES.filter((c) => c.story === "C8-4").map(caseKind)).toEqual(["browser", "ci", "ci", "ci", "hand"]);

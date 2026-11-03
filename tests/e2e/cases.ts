@@ -79,6 +79,7 @@ export const STORIES: Story[] = [
   { sprint: 7, id: "N-7a", title: "Remove the cutover pieces and Supabase" },
   { sprint: 8, id: "C8-1", title: "Compliance checks: pass, review or fail for every rule" },
   { sprint: 8, id: "C8-2", title: "Vision checks for judgement calls, with F-24" },
+  { sprint: 8, id: "C8-3", title: "Check an uploaded ad" },
   { sprint: 8, id: "C8-4", title: "Pre-test panel" },
 ];
 
@@ -116,6 +117,16 @@ const VISION =
 const IMAGERY_CI = "tests/agents/imagery.test.ts";
 const PICTURE_CHECK_CI = "tests/agents/picture-check.test.ts";
 const VISION_RULES = "tests/lib/vision-rules.test.ts";
+
+// C8-3 Check an uploaded ad
+const UPLOAD_SPEC = "upload.spec.ts";
+const UPLOAD_CLEAN =
+  "C8-3 #1: a clean fictional Fernhollow ad, uploaded on Check an ad with the cost shown, gets every rule Pass or Review, each saying how it was found, with the words read by AI in full";
+const UPLOAD_FAILS =
+  "C8-3 #2 and #4: a banned term fails with the term, no legal lines fails with the fix, and an SVG or a script named .png is refused with the reason and nothing stored";
+const READ_AD = "tests/agents/read-ad.test.ts";
+const UPLOAD_DB = "tests/db/upload.test.ts";
+const UPLOAD_RULES = "tests/lib/upload-rules.test.ts";
 
 // C8-4 Pre-test panel
 const PRETEST_SPEC = "pretest.spec.ts";
@@ -760,6 +771,77 @@ export const CASES: Case[] = [
     story: "C8-2",
     words: "Real model quality: whether Haiku spots faces and don't-rule breaks on real pictures.",
     checks: [{ kind: "hand", why: `${REAL_AI}. Whether Haiku spots faces and don't-rule breaks on real pictures goes in the Sprint 8 test pack (N-8e).` }],
+  },
+
+  // C8-3 Check an uploaded ad (Sprint 8)
+  {
+    id: "C8-3.1",
+    sprint: 8,
+    story: "C8-3",
+    words: "A clean fictional Fernhollow ad (a fixture made in code) gets every rule Pass or Review as the table says.",
+    checks: [
+      {
+        kind: "browser",
+        spec: UPLOAD_SPEC,
+        title: UPLOAD_CLEAN,
+        note: "The mock model reads fixed words for the fixture, chosen by its size; the fixture is drawn with marks where those words are, so the contrast is measured from real pixels.",
+      },
+      { kind: "ci", file: READ_AD, test: "#1 a clean fictional Fernhollow ad gets every rule Pass or Review as the table says, each saying how it was found" },
+      { kind: "ci", file: UPLOAD_RULES, test: "contrast is measured from the pixels under the boxes: Peat on Fog is well above AA, Moss on Loch below it, always Review" },
+      { kind: "ci", file: UPLOAD_RULES, test: "the AI's no is shown as No issues found by AI, never Pass; its findings are Review at most" },
+    ],
+  },
+  {
+    id: "C8-3.2",
+    sprint: 8,
+    story: "C8-3",
+    words: "An upload whose words include a banned term fails, with the term; one with no legal lines fails, with the fix.",
+    checks: [
+      { kind: "browser", spec: UPLOAD_SPEC, title: UPLOAD_FAILS },
+      { kind: "ci", file: READ_AD, test: "#2 an upload whose words include a banned term fails, with the term" },
+      { kind: "ci", file: READ_AD, test: "#2 an upload with no legal lines fails, with the fix" },
+      { kind: "ci", file: READ_AD, test: "#2 an upload checked in German needs the German legal lines, and the German and English banned terms" },
+    ],
+  },
+  {
+    id: "C8-3.3",
+    sprint: 8,
+    story: "C8-3",
+    words: "An upload whose words name a real company fails with \"Real company name\", and the name isn't repeated anywhere else.",
+    checks: [
+      {
+        kind: "ci",
+        file: READ_AD,
+        test: "#3 an upload whose words name a real company fails with \"Real company name\", and the name isn't repeated anywhere else",
+        note: "The real names are the brand's market notes' (as for copy). The run's trail keeps the model's raw reading (rule 4); the check page, its stored words and the run's summary say the name only in its finding.",
+      },
+      { kind: "ci", file: UPLOAD_RULES, test: "a real company's name fails once, and is masked in the words shown" },
+    ],
+  },
+  {
+    id: "C8-3.4",
+    sprint: 8,
+    story: "C8-3",
+    words: "A non-image, an SVG, a file over 5 MB, an oversized image or a PNG with a script in its metadata is refused with a plain reason, and nothing is stored.",
+    checks: [
+      { kind: "browser", spec: UPLOAD_SPEC, title: UPLOAD_FAILS, note: "One refusal shown, as the case says: an SVG (refused by the page) and a script named .png (refused by the server)." },
+      { kind: "ci", file: UPLOAD_DB, test: "#4 hostile files are refused with a plain reason, and nothing is stored" },
+      { kind: "ci", file: UPLOAD_DB, test: "#4 the upload route refuses a body over the limit, another site's request and no session, storing nothing" },
+    ],
+  },
+  {
+    id: "C8-3.5",
+    sprint: 8,
+    story: "C8-3",
+    words: "Another workspace can't see an upload or its check.",
+    checks: [{ kind: "ci", file: UPLOAD_DB, test: "#5 another workspace can't see an upload or its check: not listed, the asset is a 404, and RLS in the database" }],
+  },
+  {
+    id: "C8-3.6",
+    sprint: 8,
+    story: "C8-3",
+    words: "Real model reading of real uploaded ads (words, boxes).",
+    checks: [{ kind: "hand", why: `${REAL_AI}. How well Haiku reads the words and places the boxes on real uploaded ads goes in the Sprint 8 test pack (N-8e).` }],
   },
 
   // C8-4 Pre-test panel (Sprint 8)

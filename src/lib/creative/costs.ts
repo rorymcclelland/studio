@@ -33,6 +33,12 @@ export const TYPICAL_TOKENS = {
    * on four scales, each with a sentence and a quote.
    */
   pretestOne: { input: 2_800, output: 800 },
+  /**
+   * C8-3: one uploaded ad read: the ad (1,600 tokens estimated, as generate() does), the instructions
+   * and the kit's don't rules; about twenty lines of words with their boxes, the logo, the face and
+   * an answer per don't rule.
+   */
+  readAdOne: { input: 3_000, output: 2_000 },
 } as const;
 
 /** What a repair prompt adds to the first prompt besides the previous reply: the issues and the instructions. */
@@ -58,7 +64,7 @@ const round = (p: number) => Math.round(p * 10_000) / 10_000;
 /** A button that shows the typical cost only; the worst case is kept for any check against the cap. */
 const est = (pence: number, worstPence: number): Estimate => ({ pence: round(pence), worstPence: round(worstPence), label: aboutPence(pence) });
 
-type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise" | "pretest";
+type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise" | "pretest" | "readAd";
 
 function modelCall(agent: ModelAgent, tokens: { input: number; output: number }, env: Env): number {
   const m = resolveAgentModel(agent, env);
@@ -141,6 +147,18 @@ export function pretestEstimate(ads: number, env: Env = process.env): Estimate &
   const worstPence = n * worstModelCall("pretest", TYPICAL_TOKENS.pretestOne.input, env);
   const label = n === 0 ? "nothing to pre-test" : n === 1 ? `about ${smallPence(perAd)}` : `about ${smallPence(perAd)} an ad, ${smallPence(pence)} in all`;
   return { pence: round(pence), worstPence: round(worstPence), perAdPence: round(perAd), label };
+}
+
+/**
+ * C8-3: Check an ad: one Haiku vision call that reads the uploaded ad (about
+ * 0.1p). The checks after it are code and cost nothing. The worst case
+ * repairs the reply once (a don't rule left unanswered, a box off the
+ * picture), each call writing its full output allowance.
+ */
+export function readAdEstimate(env: Env = process.env): Estimate {
+  const pence = modelCall("readAd", TYPICAL_TOKENS.readAdOne, env);
+  const worstPence = worstModelCall("readAd", TYPICAL_TOKENS.readAdOne.input, env);
+  return { pence: round(pence), worstPence: round(worstPence), label: `about ${smallPence(pence)}` };
 }
 
 /**
