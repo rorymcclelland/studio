@@ -290,7 +290,7 @@ export async function acceptDontRulesForPicked(page: Page) {
 
 /** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is). */
 export async function drawInLayout(page: Page, adNumber: number, layout: "Full bleed" | "Split" | "Card") {
-  const button = page.getByRole("button", { name: `${layout} layout for ad ${adNumber}` });
+  const button = page.getByRole("button", { name: `${layout} layout for ad ${adNumber}`, exact: true });
   if ((await button.getAttribute("aria-pressed")) === "true") return;
   await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });

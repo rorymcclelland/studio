@@ -184,9 +184,12 @@ test(
       // The manifest's compliance is the Compliance view's, rule by rule.
       const square = manifest.files.find((f: { size: { id: string }; language: { tag: string } }) => f.size.id === "1080x1080" && f.language.tag === "en-GB");
       expect(square.compliance.rules.filter((r: { scope: string }) => r.scope === "file").map((r: { rule: string; status: string }) => [r.rule, r.status])).toEqual(viewRules);
+      // Ad 2 is left out for compliance; it was never translated, so each of the brand's
+      // other languages is left out too, saying there are no words in that language.
       const reasons = manifest.leftOut.filter((l: { ad: { id: string } }) => l.ad.id === second).map((l: { reason: string }) => l.reason);
-      expect(reasons.length).toBeGreaterThan(0);
-      for (const r of reasons) expect(r).toMatch(/^Awaiting review: don't rule/);
+      const awaiting = reasons.filter((r: string) => /^Awaiting review: don't rule/.test(r));
+      expect(awaiting.length).toBeGreaterThan(0);
+      for (const r of reasons) if (!awaiting.includes(r)) expect(r).toMatch(/^There are no \S+ words for this ad: /);
       // The CSV names the person who accepted, and the README says what the rules are.
       const csv = strFromU8(entries["manifest.csv"]).replace(/^\uFEFF/, "").split("\r\n");
       expect(csv[0]).toContain('"compliance","reviewed_by"');
