@@ -10,6 +10,7 @@ import { executeMarketRun } from "./market-workflow";
 import { executePersonaRun, executeTestPlanRun } from "./review-workflows";
 import { executePictureCheckRun } from "./picture-check-workflow";
 import { executePretestRun } from "./pretest-workflow";
+import { executeReadAdRun } from "./read-ad-workflow";
 import { executeTaglineRun, type StepTools } from "./workflow";
 
 /**
@@ -31,6 +32,8 @@ export const WORKFLOWS: Record<string, Workflow> = {
   localise: executeLocaliseRun,
   // C8-4: Pre-test picked ads (the Pretest agent, one vision call per ad).
   pretest: executePretestRun,
+  // C8-3: Check an ad (the Read ad agent, one vision call, then the checks in code).
+  readAd: executeReadAdRun,
   // S5-4: not a model agent of its own; runs the Imagery and Copy workflows, then composes ads in code.
   creative: executeCreativeRun,
   // C8-2: Check pictures (the picture check on pictures made before it asked about faces and don't rules).
