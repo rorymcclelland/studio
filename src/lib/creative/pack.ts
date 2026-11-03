@@ -109,8 +109,8 @@ export type PackCompliance = {
   rules: {
     rule: string;
     name: string;
-    /** "file" for this size and language; "ad" for a finding about the whole ad (a don't rule). */
-    scope: "file" | "ad";
+    /** "file" for this size and language; "ad" for a finding about the whole ad (a don't rule); "picture" for the picture check's (C8-2, checked by AI). */
+    scope: "file" | "ad" | "picture";
     status: "pass" | "review" | "fail" | "not applied";
     reason: string;
     acceptedBy: string | null;
@@ -126,7 +126,7 @@ export function packCompliance(findings: Judged[]): PackCompliance {
     rules: findings.map((f) => ({
       rule: f.rule === "dont" ? f.key : f.rule,
       name: f.rule === "dont" ? `${f.name}: ${f.fix ?? ""}` : f.name,
-      scope: f.size === null ? "ad" : "file",
+      scope: f.rule === "face" || f.rule === "picture" ? "picture" : f.size === null ? "ad" : "file",
       status: f.status === "na" ? "not applied" : f.status,
       reason: f.reason,
       acceptedBy: f.outcome === "accepted" ? (f.decision?.decidedByName ?? null) : null,

@@ -125,6 +125,12 @@ describe("the case list", () => {
     expect(CASES.find((c) => c.id === "F-28.1")!.checks).toEqual([{ kind: "withdrawn", why: expect.stringContaining("Rory's decision on 2 November 2026") }]);
   });
 
+  it("has every agreed C8-2 case, once each, in order; the browser shows 2 and 4, and the real model's eyes are a hand check", () => {
+    expect(CASES.filter((c) => c.story === "C8-2").map((c) => c.id)).toEqual([1, 2, 3, 4, 5, 6, 7].map((n) => `C8-2.${n}`));
+    expect(CASES.filter((c) => c.story === "C8-2").map(caseKind)).toEqual(["ci", "browser", "ci", "browser", "ci", "ci", "hand"]);
+    expect(CASES.find((c) => c.id === "C8-2.7")!.checks).toEqual([{ kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*N-8e/) }]);
+  });
+
   it("has every agreed C8-4 case, once each, in order; the real model's reasons are a hand check", () => {
     expect(CASES.filter((c) => c.story === "C8-4").map((c) => c.id)).toEqual([1, 2, 3, 4, 5].map((n) => `C8-4.${n}`));
     expect(CASES.filter((c) => c.story === "C8-4").map(caseKind)).toEqual(["browser", "ci", "ci", "ci", "hand"]);

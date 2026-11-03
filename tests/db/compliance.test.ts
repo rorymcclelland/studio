@@ -24,6 +24,7 @@ import { asAnon, asUser } from "@/lib/db/scoped";
 import { FERNHOLLOW } from "@/lib/demo/briefs";
 import { drawMockImage } from "@/lib/models/mock-image";
 import { createMember, truncateAll } from "../helpers/db";
+import { checkedVision } from "../helpers/vision";
 
 type Member = { userId: string; workspaceId: string };
 
@@ -58,7 +59,7 @@ async function setup(m: Member, slug: string) {
       values (${m.workspaceId}, ${br.id}, 'Bring walkers back for autumn', ${m.userId}, 1) returning id`;
     await tx`insert into public.brief_versions (workspace_id, campaign_id, version, brief, source, created_by) values (${m.workspaceId}, ${c.id}, 1, ${tx.json(brief)}, 'agent', ${m.userId})`;
     await tx`update public.campaigns set status = 'approved', approved_version = 1, approved_at = now(), approved_by = ${m.userId} where id = ${c.id}`;
-    const image = await insertImage(tx, { workspaceId: m.workspaceId, userId: m.userId, brandId: br.id as string, campaignId: c.id as string, runId: null, webp, simulated: true, createdByKind: "agent", meta: { picture: 1, briefVersion: 1, idea: "A walker on a ridge" } });
+    const image = await insertImage(tx, { workspaceId: m.workspaceId, userId: m.userId, brandId: br.id as string, campaignId: c.id as string, runId: null, webp, simulated: true, createdByKind: "agent", meta: { picture: 1, briefVersion: 1, idea: "A walker on a ridge", vision: checkedVision(FERNHOLLOW.kit.dontRules) } });
     const [s] = await tx`insert into public.copy_sets (workspace_id, campaign_id, brief_version, channel, segment_title, set, legal_lines, source, created_by)
       values (${m.workspaceId}, ${c.id}, 1, 'paid social', 'Walkers', ${tx.json(EN)}, ${FERNHOLLOW.kit.legalLines}, 'agent', ${m.userId}) returning id`;
     const [s2] = await tx`insert into public.copy_sets (workspace_id, campaign_id, brief_version, channel, segment_title, set, legal_lines, source, created_by)

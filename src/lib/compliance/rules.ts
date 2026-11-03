@@ -7,6 +7,7 @@ import { AA_LARGE, AA_TEXT, contrastRatio, parseHex, type PaletteColour } from "
 import { normaliseText } from "@/lib/creative/render/fit";
 import type { RenderChecks } from "@/lib/creative/render/render";
 import type { SizeId } from "@/lib/creative/render/sizes";
+import { isSimulated, type VisionRecord } from "./vision";
 
 // C8-1: the compliance rules, as pure functions of what an ad is (its laid-out
 // boxes and checks from planAd, its words) and the brand's kit as it is now.
@@ -18,7 +19,10 @@ import type { SizeId } from "@/lib/creative/render/sizes";
 
 export type Status = "pass" | "review" | "fail" | "na";
 
-export type RuleId = "contrast" | "legal" | "banned" | "logo" | "density" | "platform" | "dont" | "simulated";
+export type RuleId = "contrast" | "legal" | "banned" | "logo" | "density" | "platform" | "dont" | "simulated" | PictureRuleId;
+
+/** C8-2: the rules sourced from the picture check (vision.ts), once per ad. */
+export type PictureRuleId = "face" | "picture";
 
 export const RULE_NAMES: Record<RuleId, string> = {
   contrast: "Text contrast",
@@ -29,10 +33,12 @@ export const RULE_NAMES: Record<RuleId, string> = {
   platform: "9:16 platform zones",
   dont: "Don't rule",
   simulated: "Simulated label",
+  face: "Picture: face (finance brands)",
+  picture: "Picture: don't rules",
 };
 
 /** The order rules are listed in, per size and language; the don't rules (once per ad) come first. */
-export const RULE_ORDER: RuleId[] = ["dont", "contrast", "legal", "banned", "logo", "density", "platform", "simulated"];
+export const RULE_ORDER: RuleId[] = ["dont", "contrast", "legal", "banned", "logo", "density", "platform", "simulated", "face", "picture"];
 
 export type Finding = {
   rule: RuleId;
@@ -47,6 +53,8 @@ export type Finding = {
   /** Null for a finding about the whole ad (the don't rules). */
   size: SizeId | null;
   lang: string | null;
+  /** C8-2 (rule 1): set on a finding from the picture check: "Checked by AI", with "(simulated)" for the mock model. */
+  checkedBy?: string;
 };
 
 const pct = (x: number) => `${(Math.round(x * 1000) / 10).toFixed(1)}%`;
@@ -404,4 +412,103 @@ export function leftOutReason(list: Judged[]): string | null {
   const open = list.filter((f) => f.outcome === "review");
   if (open.length) return `Awaiting review: ${join([...new Set(open.map((f) => (f.rule === "dont" ? f.short : f.name.toLowerCase())))])}.`;
   return null;
+}
+
+// ---------------------------------------------------------------- the picture (C8-2)
+
+/** "Checked by AI" on every finding from the picture check (rule 1), saying so when the mock model checked. */
+export const CHECKED_BY_AI = "Checked by AI";
+const checkedBy = (v: VisionRecord) => (isSimulated(v) ? `${CHECKED_BY_AI} (simulated: the mock model)` : CHECKED_BY_AI);
+
+export const NOT_CHECKED_YET =
+  "The picture check didn't run: the picture was made before Studio checked pictures for faces and don't rules.";
+const CHECK_PICTURES = "Use Check pictures on the campaign";
+
+/** A picture finding: about the whole ad, like the don't rules (the picture is the same in every size and language). */
+function pictureFinding(rule: PictureRuleId, status: Status, reason: string, fix: string | null, short: string, by?: string): Finding {
+  const f = finding(rule, { size: null, lang: null }, status, reason, fix, short);
+  return by ? { ...f, checkedBy: by } : f;
+}
+
+/** Why the check gives no answer: never checked, an error, or the cap. Always Review, never Pass (case 5). */
+function didNotRun(rule: PictureRuleId, v: VisionRecord | null): Finding {
+  const reason = !v ? NOT_CHECKED_YET : `The picture check didn't run: ${v.status === "checked" ? "" : v.message.replace(/\.?$/, ".")}`;
+  return pictureFinding(rule, "review", reason, CHECK_PICTURES, `${RULE_NAMES[rule].toLowerCase()} not checked`);
+}
+
+/**
+ * F-24: a close-up face in a finance brand's picture. The only picture rule
+ * that fails on the model's word (Q4); the Imagery workflow redraws such a
+ * picture once and then drops it, so a Fail here is a picture checked after it
+ * was in ads (Check pictures). Null for any other brand: a face is not a finding.
+ */
+export function faceRule(v: VisionRecord | null, finance: boolean): Finding | null {
+  if (!finance) return null;
+  if (!v || v.status !== "checked") return didNotRun("face", v);
+  if (v.face.closeUp) {
+    return pictureFinding(
+      "face",
+      "fail",
+      "The AI check found a face in close-up. A finance brand's pictures show people only from behind, at a distance or as hands.",
+      "Use New picture on this ad to draw another picture",
+      "a close-up face in the picture",
+      checkedBy(v),
+    );
+  }
+  return pictureFinding(
+    "face",
+    "pass",
+    v.face.present ? "The AI check found a person, but no face in close-up." : "The AI check found no face in the picture.",
+    null,
+    "picture: face",
+    checkedBy(v),
+  );
+}
+
+/**
+ * The kit's don't rules as the model saw the picture: any "yes" is Review with
+ * the model's reason, for a person to decide (Q4, decision 0009). A "no" for
+ * every rule is shown as "No issues found by AI", not as Pass (the view's
+ * label), and each don't rule is still listed for a person (dontRules). A rule
+ * added since the check is named as not looked for. Null when the kit has none.
+ */
+export function pictureDontRule(v: VisionRecord | null, rules: string[]): Finding | null {
+  const current = [...new Map(rules.map((r) => normaliseText(r)).filter(Boolean).map((r) => [dontKey(r), r])).entries()];
+  if (current.length === 0) return null;
+  if (!v || v.status !== "checked") return didNotRun("picture", v);
+  const answers = new Map(v.rules.map((r) => [r.key, r]));
+  const broken = current.filter(([key]) => answers.get(key)?.breaks);
+  const unchecked = current.filter(([key]) => !answers.has(key)).map(([, r]) => r);
+  const since = unchecked.length
+    ? ` The picture was checked before ${join(unchecked.map(quote))} ${unchecked.length === 1 ? "was" : "were"} added, so the AI didn't look for ${unchecked.length === 1 ? "it" : "them"}; the don't rule${unchecked.length === 1 ? " is" : "s are"} still listed for a person.`
+    : "";
+  if (broken.length) {
+    const said = broken.map(([key, r]) => {
+      const why = answers.get(key)!.reason.trim();
+      return `The AI check says the picture may break ${quote(r)}${why ? `: ${why.replace(/\.?$/, ".")}` : "."}`;
+    });
+    const first = broken[0][1];
+    return pictureFinding(
+      "picture",
+      "review",
+      `${said.join(" ")}${since}`,
+      "Look at the picture: accept it if it keeps the rule, or use New picture on this ad",
+      `the picture may break ${quote(first.length > 60 ? `${first.slice(0, 57)}...` : first)}`,
+      checkedBy(v),
+    );
+  }
+  const checked = current.length - unchecked.length;
+  return pictureFinding(
+    "picture",
+    "pass",
+    `No issues found by AI for the brand's ${checked === 1 ? "don't rule" : `${checked} don't rules`}.${since}`,
+    null,
+    "picture: don't rules",
+    checkedBy(v),
+  );
+}
+
+/** The picture's findings for an ad: the face rule (finance brands) and the don't rules, each once. */
+export function pictureFindings(v: VisionRecord | null, finance: boolean, rules: string[]): Finding[] {
+  return [faceRule(v, finance), pictureDontRule(v, rules)].filter((f): f is Finding => f !== null);
 }

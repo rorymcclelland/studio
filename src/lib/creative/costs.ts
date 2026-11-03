@@ -16,8 +16,11 @@ import { costPence, imageCostPence } from "@/lib/models/cost";
 export const TYPICAL_TOKENS = {
   /** The Imagery agent's prompt-writing call. */
   imagery: { input: 2_000, output: 1_200 },
-  /** One picture check: the question plus one picture (1,600 tokens estimated, as generate() does). */
-  imageCheck: { input: 1_900, output: 80 },
+  /**
+   * One picture check: the three questions, the kit's don't rules and one picture (1,600 tokens
+   * estimated, as generate() does); the reply answers text, faces and each rule (C8-2).
+   */
+  imageCheck: { input: 2_100, output: 300 },
   /** The Copy agent writing every set for a brief (two audiences, two channels). */
   copyAll: { input: 4_000, output: 3_000 },
   /** New words for one set. */
@@ -138,4 +141,19 @@ export function pretestEstimate(ads: number, env: Env = process.env): Estimate &
   const worstPence = n * worstModelCall("pretest", TYPICAL_TOKENS.pretestOne.input, env);
   const label = n === 0 ? "nothing to pre-test" : n === 1 ? `about ${smallPence(perAd)}` : `about ${smallPence(perAd)} an ad, ${smallPence(pence)} in all`;
   return { pence: round(pence), worstPence: round(worstPence), perAdPence: round(perAd), label };
+}
+
+/**
+ * C8-2: Check pictures: one Haiku vision call per picture still without a
+ * result (about 0.03p a picture). The worst case repairs every call once, each
+ * writing its full output allowance. The label gives the price of one picture
+ * and the total, both before the click.
+ */
+export function pictureCheckEstimate(pictures: number, env: Env = process.env): Estimate & { perPicturePence: number } {
+  const n = Math.max(0, pictures);
+  const each = modelCall("imageCheck", TYPICAL_TOKENS.imageCheck, env);
+  const pence = n * each;
+  const worstPence = n * worstModelCall("imageCheck", TYPICAL_TOKENS.imageCheck.input, env);
+  const label = n === 0 ? "nothing to check" : n === 1 ? `about ${smallPence(each)}` : `about ${smallPence(each)} a picture, ${smallPence(pence)} in all`;
+  return { pence: round(pence), worstPence: round(worstPence), perPicturePence: round(each), label };
 }

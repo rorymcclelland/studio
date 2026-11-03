@@ -47,6 +47,7 @@ import { asUser } from "@/lib/db/scoped";
 import { QUILLMOOR } from "@/lib/demo/briefs";
 import { drawMockImage } from "@/lib/models/mock-image";
 import { createMember, truncateAll } from "../helpers/db";
+import { checkedVision } from "../helpers/vision";
 
 type Member = { userId: string; workspaceId: string };
 
@@ -128,7 +129,7 @@ function builder(m: Member, brandId: string, campaignId: string) {
   return {
     image: (webp: Awaited<ReturnType<typeof toWebp>>, simulated: boolean, idea: string) =>
       asUser(m.userId, (tx) =>
-        insertImage(tx, { workspaceId: m.workspaceId, userId: m.userId, brandId, campaignId, runId: null, webp, simulated, createdByKind: "agent", meta: { picture: 1, briefVersion: 1, idea, model: simulated ? "mock" : "an image model" } }),
+        insertImage(tx, { workspaceId: m.workspaceId, userId: m.userId, brandId, campaignId, runId: null, webp, simulated, createdByKind: "agent", meta: { picture: 1, briefVersion: 1, idea, model: simulated ? "mock" : "an image model", vision: checkedVision([DONT_RULE]) } }),
       ),
     words: (version: number, channel: string, copy: unknown) =>
       asUser(m.userId, async (tx) => {

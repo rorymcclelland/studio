@@ -33,6 +33,7 @@ import {
   type FieldSpec,
 } from "./creative-controls";
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
+import { PictureCheckBar } from "./picture-check-bar";
 import { PretestBar, PretestScores } from "./pretest-panel";
 import { CompliancePillView } from "./ads/[variantId]/compliance/compliance-view";
 import { BulkAcceptDontRules } from "./ads/[variantId]/compliance/bulk-accept";
@@ -49,6 +50,7 @@ const RUN_KIND: Record<CreativeRunView["kind"], string> = {
   copy: "Copy agent",
   translate: "Translate",
   pretest: "Pre-test",
+  pictures: "Check pictures",
 };
 
 const CHANNEL_NAME: Record<string, string> = {
@@ -87,7 +89,8 @@ export function CreativeSection({ view, pack, compliance = null }: { view: Creat
     Object.keys(view.busySets).length > 0 ||
     view.runs.some((r) => RUNNING.has(r.status)) ||
     !!view.translate.runningRunId ||
-    !!view.pretest.runningRunId;
+    !!view.pretest.runningRunId ||
+    !!view.pictureCheck.runningRunId;
   const lastMake = view.runs.find((r) => r.kind === "make") ?? null;
   const makeProblem = lastMake && !RUNNING.has(lastMake.status) && lastMake.status !== "completed" ? lastMake : null;
   const usedIn = new Map<string, number>();
@@ -186,6 +189,7 @@ export function CreativeSection({ view, pack, compliance = null }: { view: Creat
               )}
               <Languages view={view} />
               <PretestBar view={view} />
+              <PictureCheckBar view={view} />
               {pack && (
                 <Suspense fallback={<LaunchPackSkeleton />}>
                   <LaunchPack summary={pack} />

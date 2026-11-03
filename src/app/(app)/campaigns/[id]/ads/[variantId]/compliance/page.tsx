@@ -42,8 +42,9 @@ async function CompliancePageContent(props: PageProps<"/campaigns/[id]/ads/[vari
             accepted each item that needs review.
           </p>
           <p className="mt-3 max-w-prose text-sm text-ink-2">
-            Checked in code against the brand&apos;s kit as it is now, with no AI and no cost. The thresholds are Studio&apos;s own
-            defaults, not any platform&apos;s policy. A suggested fix is only a suggestion: nothing here changes the ad.
+            Checked in code against the brand&apos;s kit as it is now, at no cost. Only the picture&apos;s items come from AI (the
+            check made when the picture was drawn), and each says so. The thresholds are Studio&apos;s own defaults, not any
+            platform&apos;s policy. A suggested fix is only a suggestion: nothing here changes the ad.
           </p>
         </Card>
       </div>

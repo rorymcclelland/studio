@@ -20,7 +20,10 @@ const OUTCOME: Record<Judged["outcome"] | "na", { label: string; tone: PillTone 
 };
 
 const statusOf = (f: Judged) => (f.status === "na" ? "na" : f.status === "review" && f.outcome === "fail" ? "fail" : f.outcome);
-const labelOf = (f: Judged) => (f.status === "review" && f.outcome === "fail" ? "Not acceptable" : OUTCOME[statusOf(f)].label);
+// C8-2 (Q4): the AI's "no" on the don't rules is not a Pass.
+const noIssuesByAi = (f: Judged) => f.rule === "picture" && f.status === "pass";
+const labelOf = (f: Judged) => (noIssuesByAi(f) ? "No issues found by AI" : f.status === "review" && f.outcome === "fail" ? "Not acceptable" : OUTCOME[statusOf(f)].label);
+const toneOf = (f: Judged): PillTone => (noIssuesByAi(f) ? "neutral" : OUTCOME[statusOf(f)].tone);
 
 const LAYOUT: Record<string, string> = { "full-bleed": "Full bleed", split: "Split", card: "Card", banner: "Banner" };
 
@@ -46,6 +49,7 @@ export function ComplianceView({ ad, campaignId }: { ad: AdCompliance; campaignI
           </ul>
         </section>
       )}
+      {ad.picture.length > 0 && <PictureSection ad={ad} campaignId={campaignId} />}
       {langs.map(([lang, name]) => (
         <section key={lang} aria-labelledby={`lang-${lang}`} className="space-y-4" data-compliance-lang={lang}>
           <h2 id={`lang-${lang}`} className="text-lg font-strong">
@@ -61,6 +65,33 @@ export function ComplianceView({ ad, campaignId }: { ad: AdCompliance; campaignI
         </section>
       ))}
     </div>
+  );
+}
+
+/**
+ * C8-2: what the picture check found, once for the whole ad (the picture is the
+ * same in every size and language). Each finding says "Checked by AI"; the
+ * model flags and a person decides (decision 0009), so a "no" on the don't
+ * rules shows as "No issues found by AI", never as Pass (Q4).
+ */
+function PictureSection({ ad, campaignId }: { ad: AdCompliance; campaignId: string }) {
+  return (
+    <section aria-labelledby="whole-picture" className="space-y-3" data-compliance-picture="">
+      <div>
+        <h2 id="whole-picture" className="text-lg font-strong">
+          The picture
+        </h2>
+        <p className="mt-1 max-w-prose text-ink-2">
+          Checked by AI when the picture was drawn (or with Check pictures on the campaign): a face in close-up for a finance brand,
+          and anything that may break the brand&apos;s don&apos;t rules. The AI only flags; a person decides each item.
+        </p>
+      </div>
+      <ul className="space-y-3">
+        {ad.picture.map((f) => (
+          <FindingRow key={f.key} f={f} ad={ad} campaignId={campaignId} />
+        ))}
+      </ul>
+    </section>
   );
 }
 
@@ -96,10 +127,15 @@ function FindingRow({ f, ad, campaignId, compact = false }: { f: Judged; ad: AdC
   return (
     <li className={compact ? "min-w-0 space-y-1 border-line pt-2 not-first:border-t" : "min-w-0 space-y-2 rounded-card bg-surface p-4"} data-rule={f.rule} data-key={f.key} data-status={status}>
       <div className="flex flex-wrap items-start gap-x-2 gap-y-1">
-        <Pill tone={OUTCOME[status].tone}>{labelOf(f)}</Pill>
+        <Pill tone={toneOf(f)}>{labelOf(f)}</Pill>
         <span className="min-w-0 font-semibold wrap-anywhere" data-finding-title="">
           {isDont ? f.fix : f.name}
         </span>
+        {f.checkedBy && (
+          <span className="text-sm text-ink-2" data-checked-by="">
+            {f.checkedBy}
+          </span>
+        )}
       </div>
       <p className="text-sm text-ink-2 wrap-anywhere">{f.reason}</p>
       {!isDont && f.fix && f.status !== "pass" && f.status !== "na" && (

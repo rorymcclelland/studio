@@ -33,6 +33,7 @@ import { fitBase, fitsFor, logoFor } from "./fit-cache";
 import { LANG_NAMES, SUPPORTED_LANGS, type Lang } from "./languages";
 import { SIZES, type SizeId } from "./render/sizes";
 import { languageOptions, translateCost, type LanguageOption } from "./translate";
+import { pictureCheckBar, PICTURE_CHECK_KEY, type PictureCheckBar } from "./picture-check";
 import { pretestBar, pretestViews, type PretestBar, type PretestView } from "./pretest";
 
 // S5-4: what the Creative section of a campaign shows and does. The gallery
@@ -134,7 +135,7 @@ export type VariantView = {
 export type CreativeRunView = {
   runId: string;
   href: string;
-  kind: "make" | "picture" | "words" | "imagery" | "copy" | "translate" | "pretest";
+  kind: "make" | "picture" | "words" | "imagery" | "copy" | "translate" | "pretest" | "pictures";
   label: string | null;
   status: string;
   error: string | null;
@@ -199,6 +200,8 @@ export type CreativeView = {
   };
   /** C8-4: Pre-test picked ads: the picked ads still to score, the cost, a run in progress, or why not. */
   pretest: PretestBar;
+  /** C8-2: Check pictures: the pictures still without a picture-check result, the cost, a run in progress, or why not. */
+  pictureCheck: PictureCheckBar;
 };
 
 const TEXT_CHANNELS = ["search", "email", "app push"];
@@ -249,7 +252,9 @@ const kindOf = (agent: string, input: Record<string, unknown>): CreativeRunView[
         ? "translate"
         : agent === "pretest"
           ? "pretest"
-          : "imagery";
+          : agent === PICTURE_CHECK_KEY
+            ? "pictures"
+            : "imagery";
 
 /** Everything the Creative section needs for a campaign, or null if it isn't in the user's workspace. */
 export async function getCreative(userId: string, campaignId: string): Promise<CreativeView | null> {
@@ -438,7 +443,7 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
       select r.id, r.agent, r.label, r.status, r.error, r.input, r.created_at,
         coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::float8 as cost
       from public.agent_runs r
-      where r.agent in ('creative', 'imagery', 'copy', 'localise', 'pretest') and r.input ->> 'campaignId' = ${campaignId}
+      where r.agent in ('creative', 'imagery', 'copy', 'localise', 'pretest', 'pictureCheck') and r.input ->> 'campaignId' = ${campaignId}
       order by r.created_at desc limit 60`;
     const byParent = new Map<string, typeof runRows>();
     for (const r of runRows) {
@@ -484,6 +489,7 @@ export async function getCreative(userId: string, campaignId: string): Promise<C
       totalCostPence: runs.reduce((sum, r) => sum + r.costPence, 0),
       simulated: live.some((v) => v.simulated),
       pretest: await pretestBar(tx, campaignId),
+      pictureCheck: await pictureCheckBar(tx, campaignId),
       translate: {
         languages,
         unchosen,

@@ -19,6 +19,7 @@ import {
   legalRule,
   logoRule,
   logoStatus,
+  pictureFindings,
   pillOf,
   platformRule,
   RULE_ORDER,
@@ -29,6 +30,8 @@ import {
   type Judged,
   type Tally,
 } from "./rules";
+import { readVision, type VisionRecord } from "./vision";
+import { isFinanceCategory } from "@/lib/agents/imagery";
 
 // C8-1: compliance for ads, worked out on request. For each ad, in each
 // language it has words in (English and its current translations) and each
@@ -70,6 +73,8 @@ export type AdCompliance = {
   headline: string;
   /** Findings about the whole ad (each don't rule), once each. */
   perAd: Judged[];
+  /** C8-2: findings from the picture check (the face rule for finance brands, the don't rules), once each for the whole ad. */
+  picture: Judged[];
   items: ItemCompliance[];
   /** Every finding counted once: the ad's and each drawn file's. */
   tally: Tally;
@@ -84,6 +89,8 @@ type CurrentKit = {
   dontRules: string[];
   palette: KitSnapshot["palette"];
   languages: Map<string, { legalLines: string[]; bannedTerms: string[] }>;
+  /** C8-2: a finance brand (no close-up faces, F-24). */
+  finance: boolean;
 };
 
 type AdSource = {
@@ -97,6 +104,8 @@ type AdSource = {
   simulated: boolean;
   logo: FitBase["logo"];
   langs: { lang: AdLang; setId: string; words: AdWords; legalLines: string[] }[];
+  /** C8-2: the picture check's result, as stored in the picture's meta.vision (null when it has none). */
+  vision: VisionRecord | null;
 };
 
 const shown = (s: string) => s.split("­").join("");
@@ -104,7 +113,7 @@ const shown = (s: string) => s.split("­").join("");
 /** The ads and everything their findings need, read in one transaction. Ads whose picture or words were discarded can't be drawn, and are left out. */
 async function loadSources(tx: Tx, ids: string[]): Promise<{ sources: AdSource[]; kits: Map<string, CurrentKit>; decisions: Map<string, Decision> }> {
   const rows = await tx`
-    select v.id, v.campaign_id, v.layout, v.kit, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded,
+    select v.id, v.campaign_id, v.layout, v.kit, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, a.meta -> 'vision' as vision,
       s.channel, s.set, s.legal_lines, s.discarded_at as words_discarded, c.brand_id
     from public.ad_variants v
     join public.assets a on a.id = v.image_asset_id
@@ -122,7 +131,7 @@ async function loadSources(tx: Tx, ids: string[]): Promise<{ sources: AdSource[]
   const brandIds = [...new Set(live.map((r) => r.brand_id as string))];
   const kits = new Map<string, CurrentKit>();
   for (const brandId of brandIds) {
-    const [b] = await tx`select legal_lines, banned_terms, dont_rules, palette from public.brands where id = ${brandId}`;
+    const [b] = await tx`select legal_lines, banned_terms, dont_rules, palette, category from public.brands where id = ${brandId}`;
     const langs = await tx`select lang, legal_lines, banned_terms from public.brand_languages where brand_id = ${brandId}`;
     kits.set(brandId, {
       legalLines: (b?.legal_lines as string[]) ?? [],
@@ -130,6 +139,7 @@ async function loadSources(tx: Tx, ids: string[]): Promise<{ sources: AdSource[]
       dontRules: (b?.dont_rules as string[]) ?? [],
       palette: (b?.palette as KitSnapshot["palette"]) ?? [],
       languages: new Map(langs.map((l) => [l.lang as string, { legalLines: l.legal_lines as string[], bannedTerms: l.banned_terms as string[] }])),
+      finance: isFinanceCategory((b?.category as string | undefined) ?? ""),
     });
   }
   const logos = new Map<string, Buffer | null>();
@@ -149,6 +159,7 @@ async function loadSources(tx: Tx, ids: string[]): Promise<{ sources: AdSource[]
       etagParts: { imageSha256: r.sha256 as string, copySetId: r.copy_set_id as string, layout: r.layout as string, kit, simulated: r.simulated === true },
       simulated: r.simulated === true,
       logo: await logoFor(tx, kit, logos),
+      vision: readVision(r.vision),
       langs: [
         { lang: ENGLISH, setId: r.copy_set_id as string, words: r.set as AdWords, legalLines: r.legal_lines as string[] },
         ...SUPPORTED_LANGS.filter((l) => latest.has(l)).map((l) => {
@@ -209,6 +220,8 @@ async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<strin
   // The don't rules are about the whole ad: tied to the English ad as drawn (its picture, words, layout and kit).
   const about = adEtag(src.etagParts);
   const perAd = dontRules(kit.dontRules).map((f) => judged(f, about));
+  const picture = pictureFindings(src.vision, kit.finance, kit.dontRules).map((f) => judged(f, about));
+  const wholeAd = [...perAd, ...picture];
   const items: ItemCompliance[] = [];
   for (const l of src.langs) {
     const langName = LANG_NAMES[l.lang];
@@ -240,11 +253,11 @@ async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<strin
       ].sort((a, b) => order(a) - order(b));
       const sized = adEtag({ ...src.etagParts, copySetId: l.setId, layout: f.layout, size: f.size });
       const findings = list.map((x) => judged(x, sized));
-      items.push({ lang: l.lang, langName, size: f.size, sizeName: size.name, layout: f.layout, refused: null, findings, outcome: outcomeOf([...perAd, ...findings]) });
+      items.push({ lang: l.lang, langName, size: f.size, sizeName: size.name, layout: f.layout, refused: null, findings, outcome: outcomeOf([...wholeAd, ...findings]) });
     }
   }
   const drawn = items.filter((i) => !i.refused);
-  const t = tally([...perAd, ...drawn.flatMap((i) => i.findings)]);
+  const t = tally([...wholeAd, ...drawn.flatMap((i) => i.findings)]);
   return {
     variantId: src.id,
     campaignId: src.campaignId,
@@ -252,6 +265,7 @@ async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<strin
     layout: src.layout,
     headline: shown(src.langs[0].words.headline),
     perAd,
+    picture,
     items,
     tally: t,
     pill: pillOf(t),
@@ -283,7 +297,7 @@ export async function adCompliance(userId: string, variantId: string): Promise<A
 export function fileCompliance(ad: AdCompliance, lang: string, size: SizeId): { findings: Judged[]; leftOut: string | null } | null {
   const item = ad.items.find((i) => i.lang === lang && i.size === size && !i.refused);
   if (!item) return null;
-  const findings = [...ad.perAd, ...item.findings];
+  const findings = [...ad.perAd, ...ad.picture, ...item.findings];
   return { findings, leftOut: leftOutReason(findings) };
 }
 
@@ -410,7 +424,7 @@ export async function decideFinding(member: Member, variantId: string, raw: unkn
   }
   const ad = await adCompliance(member.userId, variantId);
   if (!ad) throw new ComplianceError("That ad isn't in your workspace.");
-  const pool = input.size === null ? ad.perAd : (ad.items.find((i) => i.lang === input.lang && i.size === input.size)?.findings ?? []);
+  const pool = input.size === null ? [...ad.perAd, ...ad.picture] : (ad.items.find((i) => i.lang === input.lang && i.size === input.size)?.findings ?? []);
   const f = pool.find((x) => x.key === input.rule);
   if (!f) throw new ComplianceError("That item isn't on this ad any more. Reload the page to see the ad as it is now.");
   if (f.hash !== input.hash) throw new ComplianceError("That item has changed since the page was drawn (the ad, its words or the rule changed). Reload the page and look again.");
@@ -421,7 +435,7 @@ export async function decideFinding(member: Member, variantId: string, raw: unkn
     select v.workspace_id, v.id, ${input.lang}, ${input.size}, ${input.rule}, ${input.hash}, ${input.decision}, ${note}, ${member.userId}, 'set by the database'
     from public.ad_variants v where v.id = ${variantId}`);
   const after = await adCompliance(member.userId, variantId);
-  const again = (input.size === null ? after?.perAd : after?.items.find((i) => i.lang === input.lang && i.size === input.size)?.findings)?.find((x) => x.key === input.rule);
+  const again = (input.size === null ? [...(after?.perAd ?? []), ...(after?.picture ?? [])] : after?.items.find((i) => i.lang === input.lang && i.size === input.size)?.findings)?.find((x) => x.key === input.rule);
   if (!again?.decision) throw new ComplianceError("The decision wasn't saved. Try again.");
   return again;
 }
