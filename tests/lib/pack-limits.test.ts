@@ -27,6 +27,7 @@ const item = (n: number): PackItem => ({
   picture: { assetId: "00000000-0000-4000-8000-000000000003", simulated: true, model: null, idea: null },
   wordsFrom: { setId: "00000000-0000-4000-8000-000000000002", source: "agent", runId: null, model: null, simulated: true },
   translation: null,
+  compliance: { outcome: "passes", rules: [] },
 });
 
 const plan = (files: number): PackPlan => ({

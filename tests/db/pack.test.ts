@@ -12,12 +12,18 @@
 // timed) is the e2e spec's: CI's database is too far away to time here. Review
 // fixes: a ceiling of 200 files and one pack at a time per instance (2), legal
 // lines written for the demo marked (5), the README's claims only where true
-// (6), and each file's picture size and upscale factor (7).
+// (6), and each file's picture size and upscale factor (7). C8-1 #9: a file
+// with a compliance failure or an unaccepted review item is left out with the
+// reason, and the manifests record each rule and who accepted any review item.
+// The C7-3 fixture's social ads are drawn in Card (the layout that keeps clear
+// of a 9:16 story's platform zones) and its banners' review items accepted, so
+// those tests still see every size that fits.
 import sharp from "sharp";
 import { unzipSync, strFromU8 } from "fflate";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { insertImage, toWebp } from "@/lib/assets/store";
 import { clearSizeCache } from "@/lib/creative/ad-sizes";
+import { adCompliance, decideFinding, fileCompliance } from "@/lib/compliance/compute";
 import { getCreative } from "@/lib/creative/gallery";
 import { DEMO_LANGUAGES, insertDemoLanguages, MACHINE_TRANSLATION, WRITTEN_FOR_DEMO } from "@/lib/creative/languages";
 import {
@@ -28,13 +34,15 @@ import {
   PACK_BUSY,
   packResponse,
   packSummary,
+  packCompliance,
   packTooLarge,
   planPack,
+  NOTHING_PASSES_PACK,
 } from "@/lib/creative/pack";
 import { SIZES, type SizeId } from "@/lib/creative/render/sizes";
 import { renderAd } from "@/lib/creative/render/render";
 import { loadParts, renderInputFor, type KitSnapshot, type LayoutId } from "@/lib/creative/variants";
-import { closeSql } from "@/lib/db/client";
+import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { QUILLMOOR } from "@/lib/demo/briefs";
 import { drawMockImage } from "@/lib/models/mock-image";
@@ -80,6 +88,10 @@ let ids: {
   unpicked: string;
   discarded: string;
   oldVersion: string;
+  checked: string;
+  accepted: string;
+  failing: string;
+  waiting: string;
 };
 
 /** A Quillmoor brand with its demo languages; `simulated` as the demo loader marks its brands (is_simulated). */
@@ -171,8 +183,10 @@ beforeAll(async () => {
   const display = await m.words(2, "display", EN);
   for (const l of ["fr-FR", "de-DE", "es-ES"] as const) await m.translation(2, "paid social", social, l);
   for (const l of ["fr-FR", "de-DE"] as const) await m.translation(2, "display", display, l);
-  const social1 = await m.ad(2, sim, social, "full-bleed", true);
-  const social2 = await m.ad(2, real, social, "split", true);
+  // C8-1: drawn in Card, the layout that keeps clear of a 9:16 story's platform zones, so every size can pass
+  // (Full bleed and Split fail there; the C8-1 #9 campaign below shows it).
+  const social1 = await m.ad(2, sim, social, "card", true);
+  const social2 = await m.ad(2, real, social, "card", true);
   const display1 = await m.ad(2, sim, display, "full-bleed", true);
   const unpicked = await m.ad(2, extra, social, "card", false);
   const discarded = await m.ad(2, real, display, "card", true);
@@ -189,21 +203,50 @@ beforeAll(async () => {
   await n.ad(1, await n.image(pic.sim, true, "x"), await n.words(1, "paid social", EN), "full-bleed", false);
   const hostile = await campaign(a, brandA, 1);
   const h = builder(a, brandA, hostile);
-  await h.ad(1, await h.image(pic.sim, true, "../../etc/passwd"), await h.words(1, "paid social", { headline: "../../x/..\\evil:*?<>|", body: "/etc/passwd", cta: "C:\\x" }), "full-bleed", true);
+  await h.ad(1, await h.image(pic.sim, true, "../../etc/passwd"), await h.words(1, "paid social", { headline: "../../x/..\\evil:*?<>|", body: "/etc/passwd", cta: "C:\\x" }), "card", true);
 
   // Another workspace's signed-off campaign with a picked ad.
   const theirs = await campaign(b, brandB, 1);
   const t = builder(b, brandB, theirs);
-  await t.ad(1, await t.image(pic.sim, true, "x"), await t.words(1, "paid social", EN), "full-bleed", true);
+  await t.ad(1, await t.image(pic.sim, true, "x"), await t.words(1, "paid social", EN), "card", true);
 
   // A picked ad on a 1K picture (drawn before Sprint 7), English only: enlarged to fill the taller sizes.
   const upscaled = await campaign(a, brandA, 1);
   const u = builder(a, brandA, upscaled);
   const oneK = await toWebp(await drawMockImage({ prompt: "pack one k", palette: QUILLMOOR.kit.palette.map((p) => p.hex), size: "1K" }));
+  // Full bleed, which covers the canvas and so enlarges a 1K picture (its 9:16 story fails the platform zones, C8-1).
   await u.ad(1, await u.image(oneK, true, "A 1K picture"), await u.words(1, "paid social", EN), "full-bleed", true);
 
-  ids = { main, draft, nothingPicked, hostile, theirs, upscaled, social1, social2, display1, unpicked, discarded, oldVersion };
-}, 120_000);
+  // C8-1: the display ad's corner logo is 2% to 4% from the banners' edges (Review); a person accepts each item, so
+  // the C7-3 tests here see every banner that fits. The C8-1 #9 test below leaves review items open.
+  await acceptReviews(a, display1);
+
+  // C8-1 #9: a brand with a don't rule; one ad whose rule is accepted (Card: every size passes), one accepted but in
+  // Full bleed (its 9:16 story fails the platform zones), and one whose rule waits for a person.
+  const brandC = await brandFor(a, "quillmoor-c", true);
+  await asUser(a.userId, (tx) => tx`update public.brands set dont_rules = ${[DONT_RULE]} where id = ${brandC}`);
+  const checked = await campaign(a, brandC, 1);
+  const k = builder(a, brandC, checked);
+  const kImage = await k.image(pic.sim, true, "A jar of coins");
+  const accepted = await k.ad(1, kImage, await k.words(1, "paid social", EN), "card", true);
+  const failing = await k.ad(1, kImage, await k.words(1, "paid social", { ...EN, headline: "Watch your savings grow" }), "full-bleed", true);
+  const waiting = await k.ad(1, kImage, await k.words(1, "paid social", { ...EN, headline: "Money you can see" }), "card", true);
+  await acceptReviews(a, accepted);
+  await acceptReviews(a, failing);
+
+  ids = { main, draft, nothingPicked, hostile, theirs, upscaled, social1, social2, display1, unpicked, discarded, oldVersion, checked, accepted, failing, waiting };
+}, 180_000);
+
+const DONT_RULE = "Use urgency or fear to sell";
+
+/** Accepts every open review item on an ad, as a person does on its Compliance view. */
+async function acceptReviews(m: Member, variantId: string) {
+  const ad = (await adCompliance(m.userId, variantId))!;
+  for (const f of [...ad.perAd, ...ad.items.flatMap((i) => i.findings)]) {
+    if (f.outcome !== "review") continue;
+    await decideFinding(m, variantId, { lang: f.lang, size: f.size, rule: f.key, hash: f.hash, decision: "accept", note: "Checked by hand" });
+  }
+}
 beforeEach(() => {
   clearSizeCache();
   clearPackFitCache();
@@ -227,6 +270,7 @@ type Manifest = {
     altText: string;
     picture: { source: { width: number; height: number }; upscale: number; note: string | null } | null;
     checks: { contrast: { headline: number; button: number }; fit: { passed: boolean }; legalLinesPresent: boolean };
+    compliance: ReturnType<typeof packCompliance>;
     provenance: { picture: string; words: string; machineTranslation: string | null };
     labels: string[];
   }[];
@@ -503,9 +547,11 @@ describe("C7-3 the launch pack", () => {
     const res = await packResponse(a.userId, ids.upscaled);
     const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
     const m = JSON.parse(strFromU8(zip["manifest.json"])) as Manifest;
-    expect(m.files.map((f) => f.size.id).sort()).toEqual([...SIZE_LIST("paid social")].sort());
-    const story = m.files.find((f) => f.size.id === "1080x1920")!;
-    expect(story.picture).toEqual({ source: { width: 1024, height: 1024 }, upscale: 1.88, note: "Upscaled from a 1K picture" });
+    // C8-1: the Full bleed story is left out (its words are in the platforms' zones); the 4:5 portrait enlarges the most.
+    expect(m.files.map((f) => f.size.id).sort()).toEqual(["1080x1080", "1080x1350", "1200x628"]);
+    expect(m.leftOut.filter((l) => l.language.tag === "en-GB")).toEqual([expect.objectContaining({ size: { id: "1080x1920", name: "9:16 story" }, reason: "Fails: words in the 9:16 platform zones." })]);
+    const story = m.files.find((f) => f.size.id === "1080x1350")!;
+    expect(story.picture).toEqual({ source: { width: 1024, height: 1024 }, upscale: 1.32, note: "Upscaled from a 1K picture" });
     // The square fills 1080 from 1024: 1.05 times, too little to see, so no note (as in the Sizes view).
     const square = m.files.find((f) => f.size.id === "1080x1080")!;
     expect(square.picture).toMatchObject({ source: { width: 1024, height: 1024 }, note: null });
@@ -513,7 +559,7 @@ describe("C7-3 the launch pack", () => {
     const csv = readCsv(strFromU8(zip["manifest.csv"]).replace(/^\uFEFF/, ""));
     const col = (name: (typeof CSV_COLUMNS)[number]) => CSV_COLUMNS.indexOf(name);
     const row = csv.find((r) => r[col("file")] === story.file)!;
-    expect([row[col("picture_source_size")], row[col("picture_upscale")]]).toEqual(["1024x1024", "1.88"]);
+    expect([row[col("picture_source_size")], row[col("picture_upscale")]]).toEqual(["1024x1024", "1.32"]);
     const upscaledFiles = m.files.filter((f) => f.picture?.note).length;
     expect(upscaledFiles).toBeGreaterThanOrEqual(2);
     expect(strFromU8(zip["README.txt"])).toContain(
@@ -555,5 +601,69 @@ describe("C7-3 the launch pack", () => {
     const third = await packResponse(a.userId, ids.hostile);
     expect(third.status).toBe(200);
     await third.arrayBuffer();
+  });
+
+  it("#9 C8-1: a file with a fail or an unaccepted review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person", async () => {
+    const [{ email }] = await getSql()`select email from auth.users where id = ${a.userId}`;
+    const res = await packResponse(a.userId, ids.checked, new Date("2026-11-03T10:00:00Z"));
+    expect(res.status).toBe(200);
+    const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
+    const m = JSON.parse(strFromU8(zip["manifest.json"])) as Manifest;
+    const social = SIZE_LIST("paid social");
+    // The accepted Card ad: every size. The Full bleed ad: all but its story. The ad whose don't rule waits: nothing.
+    expect(m.files.map((f) => `${f.ad.id} ${f.size.id}`).sort()).toEqual(
+      [...social.map((s) => `${ids.accepted} ${s}`), ...social.filter((s) => s !== "1080x1920").map((s) => `${ids.failing} ${s}`)].sort(),
+    );
+    // English (the brand's other languages have no words for these ads, and are left out as before).
+    expect(m.leftOut.filter((l) => l.language.tag === "en-GB").map((l) => [l.ad.id, typeof l.size === "string" ? l.size : l.size.id, l.reason])).toEqual([
+      [ids.failing, "1080x1920", "Fails: words in the 9:16 platform zones."],
+      [ids.waiting, "every size", `Awaiting review: don't rule "${DONT_RULE}".`],
+    ]);
+    // Each file's compliance is the Compliance view's, rule by rule, with who accepted the don't rule.
+    for (const f of m.files) {
+      const ad = (await adCompliance(a.userId, f.ad.id))!;
+      const fc = fileCompliance(ad, f.language.tag, f.size.id)!;
+      expect(fc.leftOut, f.file).toBeNull();
+      expect(f.compliance, f.file).toEqual(JSON.parse(JSON.stringify(packCompliance(fc.findings))));
+      expect(f.compliance.outcome).toBe("accepted");
+      expect(f.compliance.rules.filter((r) => r.scope === "ad")).toEqual([
+        expect.objectContaining({ name: `Don't rule: ${DONT_RULE}`, status: "review", acceptedBy: email, note: "Checked by hand", acceptedAt: expect.stringMatching(/^\d{4}-/) }),
+      ]);
+      const rules = f.compliance.rules.filter((r) => r.scope === "file");
+      expect(rules.map((r) => r.rule), f.file).toEqual(["contrast", "legal", "banned", "logo", "density", ...(f.size.id === "1080x1920" ? ["platform"] : []), "simulated"]);
+      for (const r of rules) expect(r.status, `${f.file} ${r.rule}`).toBe("pass");
+    }
+    // The CSV: compliance and reviewed_by per file; the left-out rows carry the reason.
+    const csv = readCsv(strFromU8(zip["manifest.csv"]).replace(/^\uFEFF/, ""));
+    const col = (name: (typeof CSV_COLUMNS)[number]) => CSV_COLUMNS.indexOf(name);
+    expect(csv[0]).toContain("compliance");
+    expect(csv[0]).toContain("reviewed_by");
+    for (const r of csv.slice(1).filter((x) => x[col("status")] === "included")) {
+      expect([r[col("compliance")], r[col("reviewed_by")]], r[col("file")]).toEqual(["Passes, 1 review item accepted", email]);
+    }
+    expect(csv.slice(1).filter((x) => x[col("status")] === "left out" && x[col("language")] === "en-GB").map((r) => [r[col("size")], r[col("reason_left_out")], r[col("compliance")]])).toEqual([
+      ["1080x1920", "Fails: words in the 9:16 platform zones.", ""],
+      ["every size", `Awaiting review: don't rule "${DONT_RULE}".`, ""],
+    ]);
+    expect(strFromU8(zip["README.txt"])).toContain("Compliance: every file passed Studio's compliance rules (text contrast, legal lines, banned terms, logo clear space, text density, the 9:16 platform zones and the simulated label), or a person accepted each item that needed review");
+    // The gallery says the same before the download.
+    const summary = packSummary((await planPack(a.userId, ids.checked))!);
+    if (!summary.allowed) throw new Error(summary.reason);
+    expect(summary.files).toBe(m.files.length);
+    expect(summary.leftOut.map((l) => l.reason)).toEqual(m.leftOut.map((l) => l.reason));
+
+    // Only the waiting ad picked: no file can go in, so there is no pack, and the gallery lists why.
+    await asUser(a.userId, (tx) => tx`update public.ad_variants set picked_at = null where id = any(${[ids.accepted, ids.failing]}::uuid[])`);
+    try {
+      const none = packSummary((await planPack(a.userId, ids.checked))!);
+      expect(none).toMatchObject({ allowed: false, reason: NOTHING_PASSES_PACK });
+      if (none.allowed) throw new Error("allowed");
+      expect(none.leftOut!.filter((l) => l.lang === "en-GB")).toEqual([expect.objectContaining({ adId: ids.waiting, size: null, reason: `Awaiting review: don't rule "${DONT_RULE}".` })]);
+      const refused = await packResponse(a.userId, ids.checked);
+      expect(refused.status).toBe(409);
+      expect(await refused.text()).toBe(NOTHING_PASSES_PACK);
+    } finally {
+      await asUser(a.userId, (tx) => tx`update public.ad_variants set picked_at = now() where id = any(${[ids.accepted, ids.failing]}::uuid[])`);
+    }
   });
 });

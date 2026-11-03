@@ -272,3 +272,26 @@ export async function makeCreative(page: Page, count: number) {
   await expect(page.locator("[data-creative]").getByRole("button", { name: /^Making creative/ })).toBeVisible({ timeout: 30_000 });
   await untilShown(page, () => expect(page.locator("[data-gallery] > li")).toHaveCount(count, { timeout: 10_000 }));
 }
+
+/**
+ * C8-1: on an ad's Compliance view, accepts every item that waits for review
+ * (each don't rule, and any size's review item), one at a time as a person
+ * does, waiting for each to show as accepted.
+ */
+export async function acceptReviews(page: Page, compliancePath: string) {
+  await page.goto(compliancePath);
+  await settle(page);
+  const open = page.locator('[data-status="review"]');
+  for (let n = await open.count(); n > 0; n--) {
+    await open.first().getByRole("button", { name: /^Accept/ }).click();
+    await expect(open).toHaveCount(n - 1, { timeout: 30_000 });
+  }
+}
+
+/** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is). */
+export async function drawInLayout(page: Page, adNumber: number, layout: "Full bleed" | "Split" | "Card") {
+  const button = page.getByRole("button", { name: `${layout} layout for ad ${adNumber}` });
+  if ((await button.getAttribute("aria-pressed")) === "true") return;
+  await button.click();
+  await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+}

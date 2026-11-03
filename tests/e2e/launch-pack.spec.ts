@@ -6,12 +6,15 @@
 // downloads one zip, which is unzipped and checked entry by entry (test cases
 // 1, 2, 5 and 6). The time from click to a complete download and the zip's size
 // are recorded as the test's "measure" annotation, shown on the demo page, and
-// must be under 120 s and 50 MB (test case 5). Each page at 375 px and 1440 px:
+// must be under 120 s and 50 MB (test case 5). C8-1: before the pack, the four
+// picked ads are drawn in Card (the layout that keeps clear of a 9:16 story's
+// platform zones) and their don't rules accepted on each Compliance view, so
+// every file passes and the pack still holds all 64. Each page at 375 px and 1440 px:
 // nothing scrolls sideways, AA contrast. SHOTS_DIR=<folder> saves screenshots.
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { caption, contrastViolations, expectNoHorizontalScroll, saveShot, settle, signIn, untilShown } from "./helpers";
+import { acceptReviews, caption, contrastViolations, expectNoHorizontalScroll, saveShot, settle, signIn, untilShown, drawInLayout } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -75,9 +78,11 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await caption(page, "The sprint demo: pick four paid-social ads and translate them into French, German and Spanish");
   const social = page.locator('[data-gallery] > li[data-channel="paid social"]');
   expect(await social.count()).toBeGreaterThanOrEqual(4);
+  const picked: { n: number; id: string }[] = [];
   for (let i = 0; i < 4; i++) {
     const card = social.nth(i);
     const title = (await card.locator("h3, h4").first().textContent())!.trim();
+    picked.push({ n: Number(title.replace(/^Ad /, "")), id: (await card.getAttribute("data-ad"))! });
     await card.getByRole("button", { name: `Pick ${title.toLowerCase()}` }).click();
     await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
   }
@@ -90,6 +95,12 @@ test("C7-3: the launch pack of four picked social ads in four languages download
     },
     240_000,
   );
+
+  // C8-1: Full bleed and Split put words in a 9:16 story's platform zones, and the don't rules wait for a person.
+  await caption(page, "C8-1: the picked ads drawn in Card, and their don't rules accepted on each ad's Compliance view");
+  for (const { n } of picked) await drawInLayout(page, n, "Card");
+  for (const { id } of picked) await acceptReviews(page, `${campaignPath}/ads/${id}/compliance`);
+  await page.goto(campaignPath);
 
   await caption(page, "C7-3.1: the gallery shows what the pack holds: 64 ads, 67 files");
   // #1: the gallery shows what the pack will hold and its file count before download.
@@ -144,6 +155,8 @@ test("C7-3: the launch pack of four picked social ads in four languages download
     if (f.language.tag !== "en-GB") expect(f.labels, f.file).toContain("Machine translation (simulated)");
     expect(f.checks.fit.passed).toBe(true);
     expect(f.headline.length).toBeGreaterThan(0);
+    // C8-1: every file passed its compliance rules, or a person accepted each review item.
+    expect(f.compliance.outcome, f.file).toBe("accepted");
   }
   const csvRows = strFromU8(entries["manifest.csv"]).trim().split("\r\n");
   expect(csvRows).toHaveLength(65);

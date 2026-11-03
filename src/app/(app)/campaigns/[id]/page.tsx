@@ -9,6 +9,7 @@ import { getReviews } from "@/lib/strategy/reviews";
 import { listMarketNotes, type MarketNote } from "@/lib/strategy/market";
 import { getCreative } from "@/lib/creative/gallery";
 import { packSummary, planPack } from "@/lib/creative/pack";
+import { galleryCompliance } from "@/lib/compliance/compute";
 import { daysSince } from "@/components/format-day";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
@@ -63,6 +64,14 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
             return null;
           },
         )
+      : null;
+  // C8-1: each ad's compliance pill and the picked ads' summary line, worked out without drawing; they stream in too.
+  const compliance =
+    creative && viewing === null && creative.signedOff && creative.variants.length > 0
+      ? galleryCompliance(member.userId, creative).catch((err: unknown) => {
+          console.error("[compliance] the gallery's compliance couldn't be worked out", err instanceof Error ? err.message : String(err));
+          return null;
+        })
       : null;
 
   // Titles for every item a brief here can cite: the current brief and
@@ -150,7 +159,7 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
           />
           <PersonasSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
           <TestPlanSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
-          {creative && <CreativeSection view={creative} pack={pack} />}
+          {creative && <CreativeSection view={creative} pack={pack} compliance={compliance} />}
         </>
       )}
 

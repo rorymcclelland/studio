@@ -1,7 +1,8 @@
 import { ImageResponse } from "next/og";
 import sharp from "sharp";
-import { logoPlate, pickButton, pickTextPair, recordRatio, contrastRatio, type PaletteColour } from "./colour";
-import { fitText, missingGlyphs, normaliseText, visibleText, wrapText, type FitResult } from "./fit";
+import { layOutBoxes, type AdBoxes } from "./boxes";
+import { logoPlate, pickButton, pickTextPair, recordRatio, contrastRatio, relativeLuminance, type PaletteColour } from "./colour";
+import { fitText, measureWidth, missingGlyphs, normaliseText, visibleText, wrapText, type FitResult } from "./fit";
 import { imageResponseFonts, loadTextFont, mapBrandFont, type BundledFamily, type FontMatch, type FontWeight } from "./fonts";
 import { SIMULATED_LABEL_TEXT, drawLayout, layoutSpec, linesHeight, type DrawProps, type LayoutId, type LayoutSpec, type Part, type PictureBox, type TextStyle } from "./layouts";
 import { prepareLogo, type LogoInput } from "./logo";
@@ -150,6 +151,8 @@ type Planned<L extends DrawLayoutId> = {
   headlineFit: Extract<FitResult, { ok: true }>;
   bodyFit: Extract<FitResult, { ok: true }>;
   layout: L;
+  /** C8-1: where each part is laid out (the picture's box as renderAd fits it), for the compliance rules. */
+  boxes: AdBoxes;
 };
 
 /**
@@ -276,18 +279,73 @@ async function planAd<L extends DrawLayoutId>(input: Omit<RenderInput<L>, "image
     const fit = fitText(SIMULATED_LABEL_TEXT, fontOf(labelStyle), [b.size], b.width - 2 * b.padX, 1, 0);
     if (!fit.ok) return { refused: `the "${SIMULATED_LABEL_TEXT}" label doesn't fit`, part: "other" };
   }
-  return { sizeId, spec, pair, button, primary, secondary, styles, labelStyle, cta, ctaFit, ctaWidth, legalFit, logo, heights, headlineFit, bodyFit, layout: input.layout };
+  // C8-1: the boxes, as the layout will place each part. Computed beside the drawing, which they never change.
+  const pictureBox = spec.picture({
+    ...heights,
+    headline: linesHeight(headlineFit.lineCount, headlineFit.size, spec.headline.lineHeight),
+    body: linesHeight(bodyFit.lineCount, bodyFit.size, spec.body.lineHeight),
+  });
+  const legalLinesDrawn = legalFit.paragraphs.flat();
+  const boxes = layOutBoxes({
+    spec,
+    pictureBox,
+    logo,
+    lightPanel: relativeLuminance(pair.panel) > 0.55,
+    headline: { size: headlineFit.size, lines: headlineFit.lines, widths: headlineFit.widths },
+    body: { size: bodyFit.size, lines: bodyFit.lines, widths: bodyFit.widths },
+    cta: { text: visibleText(cta), width: ctaWidth, textWidth: ctaFit.widths[0] ?? 0 },
+    legal: { size: legalFit.size, lines: legalLinesDrawn, widths: legalLinesDrawn.map((l) => measureWidth(l, fontOf(styles.legal), legalFit.size, styles.legal.letterSpacing)) },
+    simulated: input.simulated === true,
+  });
+  return { sizeId, spec, pair, button, primary, secondary, styles, labelStyle, cta, ctaFit, ctaWidth, legalFit, logo, heights, headlineFit, bodyFit, layout: input.layout, boxes };
 }
+
+/** The contrast an ad records (rounded down): the words on their panel, and the button's words and edge. */
+function contrastOf(pair: Planned<DrawLayoutId>["pair"], button: Planned<DrawLayoutId>["button"]): RenderChecks["contrast"] {
+  const textRatio = recordRatio(contrastRatio(pair.text, pair.panel));
+  return {
+    source: pair.source,
+    panel: pair.panel,
+    text: pair.text,
+    button: button.fill,
+    buttonText: button.text,
+    headline: textRatio,
+    body: textRatio,
+    legal: textRatio,
+    cta: button.ratio,
+    buttonEdge: button.edge,
+    note: pair.note,
+  };
+}
+
+/**
+ * C8-1: what an ad in a layout and size is, laid out but not drawn: its boxes,
+ * contrast, the legal lines drawn and whether it has a logo. The compliance
+ * rules read this; it is what renderAd would draw.
+ */
+export type AdPlan = {
+  boxes: AdBoxes;
+  contrast: RenderChecks["contrast"];
+  /** Every legal line drawn (each kit line, as given; all of them are drawn or the ad is refused). */
+  legalLines: string[];
+  logo: "drawn" | "none";
+};
 
 /**
  * C7-2: whether an ad's words, logo and legal lines fit a size in a layout,
  * without drawing it (no picture needed): what renderAd would decide, or its
  * refusal with the part it is about.
  */
-export async function fitAd<L extends DrawLayoutId>(input: Omit<RenderInput<L>, "image">): Promise<{ ok: true; headline: { size: number; lines: string[] } } | { ok: false; refused: string; part: RefusalPart }> {
+export async function fitAd<L extends DrawLayoutId>(
+  input: Omit<RenderInput<L>, "image">,
+): Promise<{ ok: true; headline: { size: number; lines: string[] }; plan: AdPlan } | { ok: false; refused: string; part: RefusalPart }> {
   const p = await planAd(input);
   if ("refused" in p) return { ok: false, refused: p.refused, part: p.part };
-  return { ok: true, headline: { size: p.headlineFit.size, lines: p.headlineFit.lines } };
+  return {
+    ok: true,
+    headline: { size: p.headlineFit.size, lines: p.headlineFit.lines },
+    plan: { boxes: p.boxes, contrast: contrastOf(p.pair, p.button), legalLines: (input.legalLines ?? []).map(normaliseText).filter(Boolean), logo: p.logo ? "drawn" : "none" },
+  };
 }
 
 export async function renderAd<L extends DrawLayoutId = LayoutId>(input: RenderInput<L>): Promise<RenderResult<L>> {

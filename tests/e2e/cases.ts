@@ -77,6 +77,7 @@ export const STORIES: Story[] = [
   { sprint: 7, id: "F-26", title: "Redraw with the current kit" },
   { sprint: 7, id: "F-28", title: "The database-driver patch: report and watch" },
   { sprint: 7, id: "N-7a", title: "Remove the cutover pieces and Supabase" },
+  { sprint: 8, id: "C8-1", title: "Compliance checks: pass, review or fail for every rule" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -93,6 +94,14 @@ const RENDER_SIZES = "tests/lib/render-sizes.test.ts";
 const LOCALISE = "tests/agents/localise.test.ts";
 const PACK_DB = "tests/db/pack.test.ts";
 const CREATIVE = "tests/agents/creative.test.ts";
+
+const COMPLIANCE_SPEC = "compliance.spec.ts";
+const COMPLIANCE_PASSES =
+  "C8-1 #1, #8, #9: a Fernhollow Card ad passes every rule once its don't rules are accepted, the pack leaves out what fails or waits, and a redraw makes them Review again";
+const COMPLIANCE_HOSTILE =
+  "C8-1 #2, #3, #11: contrast near AA is Review with a palette colour, a German banned term added on the Languages page fails, and hostile words stay plain text";
+const COMPLIANCE_RULES = "tests/lib/compliance-rules.test.ts";
+const COMPLIANCE_DB = "tests/db/compliance.test.ts";
 
 const REAL_AI =
   "CI runs the mock model and has no real keys, so this needs real model output: checked by hand on production after the deploy";
@@ -524,6 +533,120 @@ export const CASES: Case[] = [
     story: "N-7a",
     words: "Rory confirms both Supabase projects are deleted.",
     checks: [{ kind: "hand", why: "Rory deletes them in Supabase's dashboard, on or after 12 November." }],
+  },
+
+  // ---------------------------------------------------------------- Sprint 8
+  // C8-1 Compliance checks
+  {
+    id: "C8-1.1",
+    sprint: 8,
+    story: "C8-1",
+    words: "A Fernhollow social ad that meets every rule shows Passes, and its Compliance view lists every rule as Pass in all four sizes and every language.",
+    checks: [
+      {
+        kind: "browser",
+        spec: COMPLIANCE_SPEC,
+        title: COMPLIANCE_PASSES,
+        note: "The ad is drawn in Card (the layout that keeps clear of a 9:16 story's platform zones) and translated by the mock model. The brand's don't rules are always Review until a person accepts them (test case 8), so Passes shows once they are accepted.",
+      },
+      { kind: "ci", file: COMPLIANCE_DB, test: "#1 a Fernhollow social ad in Card meets every rule in all four sizes and every language: only its don't rules wait, and accepted it Passes" },
+    ],
+  },
+  {
+    id: "C8-1.2",
+    sprint: 8,
+    story: "C8-1",
+    words: "Contrast between 4.5 and 4.9:1 is Review, with the ratio and a suggested palette colour.",
+    checks: [
+      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_HOSTILE, note: "One ad seeded through the database with a near-limit palette (4.67:1), as the case says." },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#2 contrast between 4.5 and 4.95:1 is Review, with the ratio and a palette colour that would do better" },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#2 the browser test's near-limit palette draws words at 4.67:1, so its ads are Review" },
+    ],
+  },
+  {
+    id: "C8-1.3",
+    sprint: 8,
+    story: "C8-1",
+    words: "A banned term added to the kit after the ad was made makes it Fail, with the term quoted; the same for a German term in a German translation.",
+    checks: [
+      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_HOSTILE, note: "A German term added on the Languages page, then taken out again. The English case is the CI test." },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#3 a banned term added to the kit after the ad was made fails, quoted; a German term in a German translation too" },
+      { kind: "ci", file: COMPLIANCE_DB, test: "#3 a banned term added to the kit after the ad was made fails with the term quoted, in English and in German" },
+    ],
+  },
+  {
+    id: "C8-1.4",
+    sprint: 8,
+    story: "C8-1",
+    words: "A missing legal line in a language is Fail, and that language is left out of the pack with the reason.",
+    checks: [
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#4 a legal line missing in a language fails, with the fix" },
+      { kind: "ci", file: COMPLIANCE_DB, test: "#4 a missing legal line in a language fails, and the pack leaves that language out with the reason", note: "The renderer refuses an ad without its words' legal lines, so this is a line added to the kit after the words were written." },
+    ],
+  },
+  {
+    id: "C8-1.5",
+    sprint: 8,
+    story: "C8-1",
+    words: "Logo safe zone: each layout's logo is measured in every size; under 2% fails, 2% to 4% is Review, touching words fails.",
+    checks: [
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#5 each layout's logo is measured in every size: the demo brands' social ads pass, the banners' corner logos are review" },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#5 under 2% fails, 2% to 4% is review, touching words fails (known boxes)" },
+    ],
+  },
+  {
+    id: "C8-1.6",
+    sprint: 8,
+    story: "C8-1",
+    words: "Text density: a long body on the Full bleed square is Review or Fail at the stated shares; banners show Not applied.",
+    checks: [{ kind: "ci", file: COMPLIANCE_RULES, test: "#6 a long body on the Full bleed square is Review or Fail at the stated shares; banners show Not applied" }],
+  },
+  {
+    id: "C8-1.7",
+    sprint: 8,
+    story: "C8-1",
+    words: "9:16 platform zones: words in the bottom 20% fail, and the fix suggests the Card layout.",
+    checks: [{ kind: "ci", file: COMPLIANCE_RULES, test: "#7 words in the bottom 20% of a 9:16 story fail, and the fix suggests the Card layout" }],
+  },
+  {
+    id: "C8-1.8",
+    sprint: 8,
+    story: "C8-1",
+    words: "Each kit don't rule appears once per ad as Review; Accept records the name and time and turns it green; a redraw makes it Review again.",
+    checks: [
+      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_PASSES, note: "The redraw shown is a layout switch (the ad drawn again in Split); a redraw with the current kit (F-26) is the CI test." },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#8 each don't rule is one Review item for the whole ad, and a decision applies only while its hash is unchanged" },
+      { kind: "ci", file: COMPLIANCE_DB, test: "#8 a decision names who and when; a layout switch or a redraw with the current kit makes the don't rules Review again" },
+    ],
+  },
+  {
+    id: "C8-1.9",
+    sprint: 8,
+    story: "C8-1",
+    words: "Pack: an ad with a Fail or an unaccepted Review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person.",
+    checks: [
+      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_PASSES },
+      { kind: "ci", file: PACK_DB, test: "#9 C8-1: a file with a fail or an unaccepted review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person" },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#9 a file with a fail or an open review is left out with the reason; accepted reviews go in" },
+    ],
+  },
+  {
+    id: "C8-1.10",
+    sprint: 8,
+    story: "C8-1",
+    words: "Another workspace can't read or write a decision: a 404 alike, and RLS in the database test.",
+    checks: [{ kind: "ci", file: COMPLIANCE_DB, test: "#10 another workspace can't read or write a decision: the same refusal as a missing ad, and RLS in the database" }],
+  },
+  {
+    id: "C8-1.11",
+    sprint: 8,
+    story: "C8-1",
+    words: "Hostile input: a 300-character don't rule with <script> renders as plain text in the Compliance view, and a decision's note is capped and escaped.",
+    checks: [
+      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_HOSTILE },
+      { kind: "ci", file: COMPLIANCE_RULES, test: "#11 hostile: a 300-character don't rule with <script> is kept as plain text, and a note is cleaned and cut to 500 characters" },
+      { kind: "ci", file: COMPLIANCE_DB, test: "#11 hostile: a decision's note is cut to 500 characters and stored as plain text, and a stale finding is refused" },
+    ],
   },
 ];
 
