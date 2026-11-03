@@ -183,17 +183,25 @@ Evidence: 718 unit, database and agent tests and 33 browser tests (22 Sprint 7 c
 | F-33 | Merge the sign-off pipeline, QA test fixes and the `data-words` attribute to `main` (a production deploy, with nothing visible to users), once Rory approves the deploy | Sprint 7 close | Backlog, from Sprint 7 review |
 | QA-7 | Folded: the independent QA review's 12 findings on the Sprint 7 tests | Sprint 7 QA review | Fixed in Sprint 7 (`68999d5`), before the demo |
 
+## Sprint 8: Compliance and pre-testing (confirmed 3 November 2026; refined, questions open)
+
+Every ad in the pack checked against the brand's and the channel's rules in every size and language, as pass, review or fail with the reason and a fix; a synthetic panel scores picked ads before spend. Demo gate 2. Detail: `docs/refinement/sprint-8.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| C8-1 | Compliance checks in code: contrast margin, legal lines, banned terms, logo safe zone, text density, 9:16 platform zones, don't rules for a person; decisions recorded; the pack holds only ads that pass or are accepted | L | Refined, Sprint 8 (Q1 to Q3, Q5, Q7 open) |
+| C8-2 | Vision checks for judgement calls (faces for finance brands, the kit's don't rules), with F-24 folded in; Check pictures for older campaigns | M | Refined, Sprint 8 (Q4 open) |
+| C8-3 | Check an uploaded ad: words read by AI, checked in code; estimates labelled | M | Refined, Sprint 8 |
+| C8-4 | Pre-test panel: the brief's personas score picked ads, labelled synthetic | M | Refined, Sprint 8 (Q6 open); first to move if over |
+| F-33 | Merge Sprint 7's tests and pipeline to `main` | S | Waiting for Rory (this session can't push a production deploy) |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 8 |
+| F-28a | Watch production's logs until 9 November | S | Ready, Sprint 8 |
+| N-8d | Rory's Sprint 7 hand checks | S | Ready, Sprint 8 |
+| N-8e | Sprint 8 test pack, hand checks of real AI output only | S | Refined, Sprint 8 |
+
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 7 close. Proposed for Sprint 8, Compliance and pre-testing (the roadmap's demo gate 2: a compliant, pre-tested launch pack, with every failure explained), to be refined once Rory confirms:
-
-- **C8-1 Compliance agent** (M): deterministic checks per rule (contrast, logo safe zone, text density, banned terms, legal lines present) with pass, review or fail and a suggested fix. It builds on the checks Sprint 7 already runs in every size and language.
-- **C8-2 Vision checks for judgement calls** (M), with **F-24** (faces for finance brands) folded in: the same picture check, one more question.
-- **C8-3 Check an uploaded asset** (M): any existing ad, against the brand kit and the rules.
-- **C8-4 Pre-test panel** (M): a synthetic audience scores variants before spend, labelled simulated. This is the first to move if the sprint runs over.
-- **F-33** (S): merge Sprint 7's tests and pipeline to `main`, once Rory approves the deploy. Nothing changes for users.
-- **N-7a** (S): on or after 12 November, which falls inside the sprint.
-- **F-28a and N-8d** (S, no build): the log watch until 9 November, and Rory's hand checks.
+Re-ranked at the Sprint 7 close.
 
 Then, in order:
 
