@@ -15,9 +15,9 @@
 // (6), and each file's picture size and upscale factor (7). C8-1 #9: a file
 // with a compliance failure or an unaccepted review item is left out with the
 // reason, and the manifests record each rule and who accepted any review item.
-// The C7-3 fixture's social ads are drawn in Card (the layout that keeps clear
-// of a 9:16 story's platform zones) and its banners' review items accepted, so
-// those tests still see every size that fits.
+// The C7-3 brands have no don't rules, and every layout passes the geometric
+// rules in every size (Rory's answers while building), so those tests see every
+// size that fits, as before.
 import sharp from "sharp";
 import { unzipSync, strFromU8 } from "fflate";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -183,10 +183,8 @@ beforeAll(async () => {
   const display = await m.words(2, "display", EN);
   for (const l of ["fr-FR", "de-DE", "es-ES"] as const) await m.translation(2, "paid social", social, l);
   for (const l of ["fr-FR", "de-DE"] as const) await m.translation(2, "display", display, l);
-  // C8-1: drawn in Card, the layout that keeps clear of a 9:16 story's platform zones, so every size can pass
-  // (Full bleed and Split fail there; the C8-1 #9 campaign below shows it).
-  const social1 = await m.ad(2, sim, social, "card", true);
-  const social2 = await m.ad(2, real, social, "card", true);
+  const social1 = await m.ad(2, sim, social, "full-bleed", true);
+  const social2 = await m.ad(2, real, social, "split", true);
   const display1 = await m.ad(2, sim, display, "full-bleed", true);
   const unpicked = await m.ad(2, extra, social, "card", false);
   const discarded = await m.ad(2, real, display, "card", true);
@@ -203,48 +201,43 @@ beforeAll(async () => {
   await n.ad(1, await n.image(pic.sim, true, "x"), await n.words(1, "paid social", EN), "full-bleed", false);
   const hostile = await campaign(a, brandA, 1);
   const h = builder(a, brandA, hostile);
-  await h.ad(1, await h.image(pic.sim, true, "../../etc/passwd"), await h.words(1, "paid social", { headline: "../../x/..\\evil:*?<>|", body: "/etc/passwd", cta: "C:\\x" }), "card", true);
+  await h.ad(1, await h.image(pic.sim, true, "../../etc/passwd"), await h.words(1, "paid social", { headline: "../../x/..\\evil:*?<>|", body: "/etc/passwd", cta: "C:\\x" }), "full-bleed", true);
 
   // Another workspace's signed-off campaign with a picked ad.
   const theirs = await campaign(b, brandB, 1);
   const t = builder(b, brandB, theirs);
-  await t.ad(1, await t.image(pic.sim, true, "x"), await t.words(1, "paid social", EN), "card", true);
+  await t.ad(1, await t.image(pic.sim, true, "x"), await t.words(1, "paid social", EN), "full-bleed", true);
 
   // A picked ad on a 1K picture (drawn before Sprint 7), English only: enlarged to fill the taller sizes.
   const upscaled = await campaign(a, brandA, 1);
   const u = builder(a, brandA, upscaled);
   const oneK = await toWebp(await drawMockImage({ prompt: "pack one k", palette: QUILLMOOR.kit.palette.map((p) => p.hex), size: "1K" }));
-  // Full bleed, which covers the canvas and so enlarges a 1K picture (its 9:16 story fails the platform zones, C8-1).
   await u.ad(1, await u.image(oneK, true, "A 1K picture"), await u.words(1, "paid social", EN), "full-bleed", true);
 
-  // C8-1: the display ad's corner logo is 2% to 4% from the banners' edges (Review); a person accepts each item, so
-  // the C7-3 tests here see every banner that fits. The C8-1 #9 test below leaves review items open.
-  await acceptReviews(a, display1);
-
-  // C8-1 #9: a brand with a don't rule; one ad whose rule is accepted (Card: every size passes), one accepted but in
-  // Full bleed (its 9:16 story fails the platform zones), and one whose rule waits for a person.
+  // C8-1 #9: a brand with a don't rule; one ad whose rule a person accepted, one where a person marked it not
+  // acceptable (a fail), and one whose rule waits for a person.
   const brandC = await brandFor(a, "quillmoor-c", true);
   await asUser(a.userId, (tx) => tx`update public.brands set dont_rules = ${[DONT_RULE]} where id = ${brandC}`);
   const checked = await campaign(a, brandC, 1);
   const k = builder(a, brandC, checked);
   const kImage = await k.image(pic.sim, true, "A jar of coins");
-  const accepted = await k.ad(1, kImage, await k.words(1, "paid social", EN), "card", true);
+  const accepted = await k.ad(1, kImage, await k.words(1, "paid social", EN), "split", true);
   const failing = await k.ad(1, kImage, await k.words(1, "paid social", { ...EN, headline: "Watch your savings grow" }), "full-bleed", true);
   const waiting = await k.ad(1, kImage, await k.words(1, "paid social", { ...EN, headline: "Money you can see" }), "card", true);
   await acceptReviews(a, accepted);
-  await acceptReviews(a, failing);
+  await acceptReviews(a, failing, "reject");
 
   ids = { main, draft, nothingPicked, hostile, theirs, upscaled, social1, social2, display1, unpicked, discarded, oldVersion, checked, accepted, failing, waiting };
 }, 180_000);
 
 const DONT_RULE = "Use urgency or fear to sell";
 
-/** Accepts every open review item on an ad, as a person does on its Compliance view. */
-async function acceptReviews(m: Member, variantId: string) {
+/** Accepts (or marks not acceptable) every open review item on an ad, as a person does on its Compliance view. */
+async function acceptReviews(m: Member, variantId: string, decision: "accept" | "reject" = "accept") {
   const ad = (await adCompliance(m.userId, variantId))!;
   for (const f of [...ad.perAd, ...ad.items.flatMap((i) => i.findings)]) {
     if (f.outcome !== "review") continue;
-    await decideFinding(m, variantId, { lang: f.lang, size: f.size, rule: f.key, hash: f.hash, decision: "accept", note: "Checked by hand" });
+    await decideFinding(m, variantId, { lang: f.lang, size: f.size, rule: f.key, hash: f.hash, decision, note: "Checked by hand" });
   }
 }
 beforeEach(() => {
@@ -547,11 +540,9 @@ describe("C7-3 the launch pack", () => {
     const res = await packResponse(a.userId, ids.upscaled);
     const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
     const m = JSON.parse(strFromU8(zip["manifest.json"])) as Manifest;
-    // C8-1: the Full bleed story is left out (its words are in the platforms' zones); the 4:5 portrait enlarges the most.
-    expect(m.files.map((f) => f.size.id).sort()).toEqual(["1080x1080", "1080x1350", "1200x628"]);
-    expect(m.leftOut.filter((l) => l.language.tag === "en-GB")).toEqual([expect.objectContaining({ size: { id: "1080x1920", name: "9:16 story" }, reason: "Fails: words in the 9:16 platform zones." })]);
-    const story = m.files.find((f) => f.size.id === "1080x1350")!;
-    expect(story.picture).toEqual({ source: { width: 1024, height: 1024 }, upscale: 1.32, note: "Upscaled from a 1K picture" });
+    expect(m.files.map((f) => f.size.id).sort()).toEqual([...SIZE_LIST("paid social")].sort());
+    const story = m.files.find((f) => f.size.id === "1080x1920")!;
+    expect(story.picture).toEqual({ source: { width: 1024, height: 1024 }, upscale: 1.88, note: "Upscaled from a 1K picture" });
     // The square fills 1080 from 1024: 1.05 times, too little to see, so no note (as in the Sizes view).
     const square = m.files.find((f) => f.size.id === "1080x1080")!;
     expect(square.picture).toMatchObject({ source: { width: 1024, height: 1024 }, note: null });
@@ -559,7 +550,7 @@ describe("C7-3 the launch pack", () => {
     const csv = readCsv(strFromU8(zip["manifest.csv"]).replace(/^\uFEFF/, ""));
     const col = (name: (typeof CSV_COLUMNS)[number]) => CSV_COLUMNS.indexOf(name);
     const row = csv.find((r) => r[col("file")] === story.file)!;
-    expect([row[col("picture_source_size")], row[col("picture_upscale")]]).toEqual(["1024x1024", "1.32"]);
+    expect([row[col("picture_source_size")], row[col("picture_upscale")]]).toEqual(["1024x1024", "1.88"]);
     const upscaledFiles = m.files.filter((f) => f.picture?.note).length;
     expect(upscaledFiles).toBeGreaterThanOrEqual(2);
     expect(strFromU8(zip["README.txt"])).toContain(
@@ -610,13 +601,11 @@ describe("C7-3 the launch pack", () => {
     const zip = unzipSync(new Uint8Array(await res.arrayBuffer()));
     const m = JSON.parse(strFromU8(zip["manifest.json"])) as Manifest;
     const social = SIZE_LIST("paid social");
-    // The accepted Card ad: every size. The Full bleed ad: all but its story. The ad whose don't rule waits: nothing.
-    expect(m.files.map((f) => `${f.ad.id} ${f.size.id}`).sort()).toEqual(
-      [...social.map((s) => `${ids.accepted} ${s}`), ...social.filter((s) => s !== "1080x1920").map((s) => `${ids.failing} ${s}`)].sort(),
-    );
+    // The accepted ad: every size. The ad marked not acceptable, and the one whose don't rule waits: nothing.
+    expect(m.files.map((f) => `${f.ad.id} ${f.size.id}`).sort()).toEqual(social.map((s) => `${ids.accepted} ${s}`).sort());
     // English (the brand's other languages have no words for these ads, and are left out as before).
     expect(m.leftOut.filter((l) => l.language.tag === "en-GB").map((l) => [l.ad.id, typeof l.size === "string" ? l.size : l.size.id, l.reason])).toEqual([
-      [ids.failing, "1080x1920", "Fails: words in the 9:16 platform zones."],
+      [ids.failing, "every size", `Fails: don't rule "${DONT_RULE}", marked not acceptable by ${email}.`],
       [ids.waiting, "every size", `Awaiting review: don't rule "${DONT_RULE}".`],
     ]);
     // Each file's compliance is the Compliance view's, rule by rule, with who accepted the don't rule.
@@ -642,7 +631,7 @@ describe("C7-3 the launch pack", () => {
       expect([r[col("compliance")], r[col("reviewed_by")]], r[col("file")]).toEqual(["Passes, 1 review item accepted", email]);
     }
     expect(csv.slice(1).filter((x) => x[col("status")] === "left out" && x[col("language")] === "en-GB").map((r) => [r[col("size")], r[col("reason_left_out")], r[col("compliance")]])).toEqual([
-      ["1080x1920", "Fails: words in the 9:16 platform zones.", ""],
+      ["every size", `Fails: don't rule "${DONT_RULE}", marked not acceptable by ${email}.`, ""],
       ["every size", `Awaiting review: don't rule "${DONT_RULE}".`, ""],
     ]);
     expect(strFromU8(zip["README.txt"])).toContain("Compliance: every file passed Studio's compliance rules (text contrast, legal lines, banned terms, logo clear space, text density, the 9:16 platform zones and the simulated label), or a person accepted each item that needed review");

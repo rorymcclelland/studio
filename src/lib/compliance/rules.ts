@@ -311,13 +311,18 @@ export function platformRule(boxes: AdBoxes, size: SizeId, layout: { drawn: stri
   const inside = parts.filter((p) => p.box.y < topEdge || p.box.y + p.box.height > bottomEdge);
   const near = parts.filter((p) => p.box.y < topEdge + z.near * H || p.box.y + p.box.height > bottomEdge - z.near * H);
   const names = (list: typeof parts) => join([...new Set(list.map((p) => p.what))]);
+  // "is" only for one singular thing ("the logo"); "the legal lines" and any list take "are".
+  const verb = (list: typeof parts) => {
+    const n = [...new Set(list.map((p) => p.what))];
+    return n.length === 1 && n[0] !== "the legal lines" ? "is" : "are";
+  };
   const fix = layout.drawn === "card" ? "Shorten the words" : layout.ownIsCard ? "Shorten the words, so the Card layout can hold them in a 9:16 story" : "Use the Card layout";
   const bands = `the top ${pct(z.top)} or bottom ${pct(z.bottom)}`;
   if (inside.length) {
-    return finding("platform", where, "fail", `${capitalise(names(inside))} ${inside.length === 1 ? "is" : "are"} in ${bands} of the story, where the platforms' own controls sit.`, fix, "words in the 9:16 platform zones");
+    return finding("platform", where, "fail", `${capitalise(names(inside))} ${verb(inside)} in ${bands} of the story, where the platforms' own controls sit.`, fix, "words in the 9:16 platform zones");
   }
   if (near.length) {
-    return finding("platform", where, "review", `${capitalise(names(near))} ${near.length === 1 ? "is" : "are"} within ${pct(z.near)} of ${bands} of the story.`, fix, "words near the 9:16 platform zones");
+    return finding("platform", where, "review", `${capitalise(names(near))} ${verb(near)} within ${pct(z.near)} of ${bands} of the story.`, fix, "words near the 9:16 platform zones");
   }
   return finding("platform", where, "pass", `No words or logo in ${bands} of the story, or within ${pct(z.near)} of them.`, null, "9:16 platform zones");
 }

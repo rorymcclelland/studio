@@ -1,15 +1,17 @@
 // C8-1 Compliance checks through the UI, with the mock models. Two
 // Fernhollow campaigns:
 //
-// 1. Cases 1, 8 and 9: a picked ad drawn in Card and translated. Its
-//    Compliance view lists each of the brand's don't rules once, for the
-//    whole ad, as Review; Accept records the name and time and turns each
-//    green; then every rule passes in all four sizes and every language, and
-//    the gallery's pill says Passes. A second picked ad in Full bleed fails
-//    the 9:16 platform zones and waits on its don't rules, so the launch pack
-//    leaves it out with the reasons; the downloaded manifest's compliance
-//    matches the view and names who accepted. Drawing the first ad in Split
-//    (a redraw) makes its don't rules Review again.
+// 1. Cases 1, 8 and 9: a picked ad, translated, in its own layout (every
+//    layout keeps clear of a 9:16 story's bands). Its Compliance view lists
+//    each of the brand's don't rules once, for the whole ad, as Review;
+//    Accept records the name and time and turns each green; then every rule
+//    passes in all four sizes and every language, and the gallery's pill says
+//    Passes. A second picked ad waits on its don't rules, so the launch pack
+//    leaves it out with the reason; the downloaded manifest's compliance
+//    matches the view and names who accepted. Then "Accept for every picked
+//    ad" on the campaign accepts each rule for the second ad too, recording
+//    its own decision with name and time. Drawing the first ad in another
+//    layout (a redraw) makes its don't rules Review again.
 // 2. Cases 2, 3 and 11: one ad seeded (through the database, as the case
 //    says) with a near-limit palette shows Text contrast as Review with the
 //    ratio and a palette colour; a German banned term added on the Languages
@@ -78,7 +80,7 @@ test.beforeEach(async ({ page }) => {
 });
 
 test(
-  "C8-1 #1, #8, #9: a Fernhollow Card ad passes every rule once its don't rules are accepted, the pack leaves out what fails or waits, and a redraw makes them Review again",
+  "C8-1 #1, #8, #9: a Fernhollow ad passes every rule once its don't rules are accepted, one by one or for every picked ad, the pack leaves out what waits, and a redraw makes them Review again",
   { annotation: [{ type: "case", description: "C8-1.1" }, { type: "case", description: "C8-1.8" }, { type: "case", description: "C8-1.9" }] },
   async ({ page }) => {
     test.setTimeout(900_000);
@@ -92,16 +94,14 @@ test(
       await makeCreative(page, 12);
     });
 
-    await step(page, "Pick ad 1, draw it in Card and translate it into French, German and Spanish", async () => {
+    await step(page, "Pick ad 1 and translate it into French, German and Spanish", async () => {
       await pick(page, 1);
-      await drawInLayout(page, 1, "Card");
       first = (await ads(page).first().getAttribute("data-ad"))!;
       await translate(page, ads(page).first());
     });
 
-    await step(page, "Pick ad 2 and draw it in Full bleed, which puts words in a 9:16 story's platform zones", async () => {
+    await step(page, "Pick ad 2, whose don't rules no one has looked at yet", async () => {
       await pick(page, 2);
-      await drawInLayout(page, 2, "Full bleed");
       second = (await ads(page).nth(1).getAttribute("data-ad"))!;
     });
 
@@ -153,22 +153,21 @@ test(
     });
 
     let viewRules: string[][] = [];
-    await step(page, "The gallery: ad 1 Passes, ad 2 Fails, and the picked ads' summary line", async () => {
+    await step(page, "The gallery: ad 1 Passes, ad 2 waits on its don't rules, and the picked ads' summary line", async () => {
       viewRules = await page
         .locator('[data-compliance-lang="en-GB"] [data-compliance-size="1080x1080"] [data-rule]')
         .evaluateAll((rows) => rows.map((r) => [r.getAttribute("data-rule")!, r.getAttribute("data-status")!]));
       await page.goto(campaignPath);
       await settle(page);
       await expect(ads(page).first().locator("[data-compliance-pill]")).toHaveText("Passes");
-      await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText("Fails");
-      await expect(page.locator("[data-compliance-summary]")).toHaveText(/^Compliance of the picked ads: 16 ads pass, \d+ to review, \d+ fails?, over every size and language\./);
+      await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText(`${rules} to review`);
+      await expect(page.locator("[data-compliance-summary]")).toHaveText(/^Compliance of the picked ads: 16 ads pass, \d+ to review, 0 fail, over every size and language\./);
     });
 
-    await step(page, "C8-1.9: the launch pack leaves ad 2 out with the reasons, and downloads ad 1's 16 files with their compliance", async () => {
+    await step(page, "C8-1.9: the launch pack leaves ad 2 out with the reason, and downloads ad 1's 16 files with their compliance", async () => {
       await pack(page).locator("[data-pack-left-out] summary").click();
       const left = pack(page).locator("[data-pack-left-out] li");
-      await expect(left.filter({ hasText: "Ad 2, 9:16 story, English: Fails: words in the 9:16 platform zones." })).toHaveCount(1);
-      await expect(left.filter({ hasText: /^Ad 2, .*Awaiting review: don't rule/ }).first()).toBeVisible();
+      await expect(left.filter({ hasText: /^Ad 2, every size, English: Awaiting review: don't rule/ })).toHaveCount(1);
       await checkWidths(page, "launch pack with compliance left out");
       const download = pack(page).getByRole("link", { name: "Build launch pack (16 ads)" });
       const [file] = await Promise.all([page.waitForEvent("download"), download.click()]);
@@ -186,10 +185,10 @@ test(
       const square = manifest.files.find((f: { size: { id: string }; language: { tag: string } }) => f.size.id === "1080x1080" && f.language.tag === "en-GB");
       expect(square.compliance.rules.filter((r: { scope: string }) => r.scope === "file").map((r: { rule: string; status: string }) => [r.rule, r.status])).toEqual(viewRules);
       const reasons = manifest.leftOut.filter((l: { ad: { id: string } }) => l.ad.id === second).map((l: { reason: string }) => l.reason);
-      expect(reasons).toContain("Fails: words in the 9:16 platform zones.");
-      expect(reasons.some((r: string) => r.startsWith("Awaiting review: don't rule"))).toBe(true);
+      expect(reasons.length).toBeGreaterThan(0);
+      for (const r of reasons) expect(r).toMatch(/^Awaiting review: don't rule/);
       // The CSV names the person who accepted, and the README says what the rules are.
-      const csv = strFromU8(entries["manifest.csv"]).replace(/^﻿/, "").split("\r\n");
+      const csv = strFromU8(entries["manifest.csv"]).replace(/^\uFEFF/, "").split("\r\n");
       expect(csv[0]).toContain('"compliance","reviewed_by"');
       const included = csv.filter((r) => r.startsWith('"included"'));
       expect(included).toHaveLength(16);
@@ -197,8 +196,41 @@ test(
       expect(strFromU8(entries["README.txt"])).toContain("Compliance: every file passed Studio's compliance rules");
     });
 
-    await step(page, "C8-1.8: drawing ad 1 in Split redraws it, and its don't rules are Review again", async () => {
-      await drawInLayout(page, 1, "Split");
+    await step(page, "C8-1.8: on the campaign, Accept for every picked ad accepts each don't rule for ad 2, with its own decision", async () => {
+      await page.goto(campaignPath);
+      await settle(page);
+      const bulk = page.locator("[data-bulk-dont-rule]");
+      await expect(bulk).toHaveCount(rules);
+      for (let i = 0; i < rules; i++) {
+        // Ad 1's were accepted one by one: each rule waits on ad 2 alone.
+        const row = page.locator('[data-bulk-dont-rule]:not([data-open="0"])').first();
+        await expect(row.locator("[data-bulk-status]")).toHaveText("Waits on 1 of 2 picked ads.");
+        await row.getByRole("button", { name: /^Accept for every picked ad/ }).click();
+        await expect(toast(page, /^Accepted for 1 picked ad: don't rule\./).first()).toBeVisible({ timeout: 30_000 });
+        await expect(page.locator('[data-bulk-dont-rule][data-open="0"]')).toHaveCount(i + 1, { timeout: 30_000 });
+      }
+      for (const row of await bulk.all()) {
+        await expect(row.locator("[data-bulk-status]")).toHaveText("Decided on all 2 picked ads.");
+        await expect(row.getByRole("button")).toHaveCount(0);
+      }
+      await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText("Passes");
+      // Nothing waits for review any more (a language ad 2 has no words in is still left out, as before C8-1).
+      await expect(pack(page).locator("[data-pack-left-out] li", { hasText: "Awaiting review" })).toHaveCount(0);
+      await checkWidths(page, "gallery, don't rules accepted for every picked ad");
+      // Each of ad 2's rules has its own decision, with the name and the time.
+      await page.goto(`${campaignPath}/ads/${second}/compliance`);
+      await settle(page);
+      for (const row of await dontRows(page).all()) {
+        await expect(row).toHaveAttribute("data-status", "accepted");
+        await expect(row.locator("[data-decision=accept]")).toHaveText(new RegExp(`^Accepted by ${escape(DEV_EMAIL)}, .*\\d{1,2}:\\d{2}`));
+      }
+    });
+
+    await step(page, "C8-1.8: drawing ad 1 in another layout redraws it, and its don't rules are Review again", async () => {
+      await page.goto(campaignPath);
+      await settle(page);
+      const own = await ads(page).first().locator('button[aria-pressed="true"]').getAttribute("aria-label");
+      await drawInLayout(page, 1, own?.startsWith("Split") ? "Card" : "Split");
       await page.goto(`${campaignPath}/ads/${first}/compliance`);
       await settle(page);
       await expect(dontRows(page)).toHaveCount(rules);

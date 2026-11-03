@@ -12,7 +12,7 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { insertImage, toWebp } from "@/lib/assets/store";
 import { clearSizeCache } from "@/lib/creative/ad-sizes";
-import { adCompliance, ComplianceError, complianceFor, decideFinding, galleryCompliance, type AdCompliance } from "@/lib/compliance/compute";
+import { acceptDontRuleForPicked, adCompliance, ComplianceError, complianceFor, decideFinding, galleryCompliance, type AdCompliance } from "@/lib/compliance/compute";
 import { clearFitCache } from "@/lib/creative/fit-cache";
 import { getCreative, redrawVariant, setLayout } from "@/lib/creative/gallery";
 import { DEMO_LANGUAGES, insertDemoLanguages } from "@/lib/creative/languages";
@@ -129,9 +129,10 @@ describe("C8-1 compliance in the database", () => {
     const view = await getCreative(a.userId, ids.campaign);
     const g = await galleryCompliance(a.userId, view!);
     expect(g.pills[ids.card]).toEqual({ tone: "pass", label: "Passes" });
-    // The Full bleed ad: its 9:16 story has words in the platforms' bands, so it fails.
-    expect(g.pills[ids.fullBleed]).toEqual({ tone: "fail", label: "Fails" });
-    expect(g.summary!.text).toBe("8 ads pass, 3 to review, 1 fails");
+    // The Full bleed ad keeps clear of a story's bands too (every layout does), so only its don't rules wait.
+    expect(g.pills[ids.fullBleed]).toEqual({ tone: "review", label: "3 to review" });
+    expect(g.summary!.text).toBe("8 ads pass, 4 to review, 0 fail");
+    expect(g.dontRules.map((r) => [r.rule, r.open, r.picked])).toEqual(FERNHOLLOW.kit.dontRules.map((r) => [r, 1, 2]));
   });
 
   it("#3 a banned term added to the kit after the ad was made fails with the term quoted, in English and in German", async () => {
@@ -214,6 +215,40 @@ describe("C8-1 compliance in the database", () => {
     } finally {
       await sql`update public.brands set palette = ${sql.json(FERNHOLLOW.kit.palette)} where id = ${ids.brand}`;
     }
+  });
+
+  it("#8 Accept for every picked ad records one decision per picked ad, each with name, time and its own hash; decided ads are left as they are", async () => {
+    const [key, other] = (await must(a.userId, ids.fullBleed)).perAd.map((f) => f.key);
+    // A person marks the second rule not acceptable on the Full bleed ad first; the bulk accept leaves that alone.
+    const theirs = (await must(a.userId, ids.fullBleed)).perAd.find((f) => f.key === other)!;
+    await decideFinding(a, ids.fullBleed, { lang: null, size: null, rule: other, hash: theirs.hash, decision: "reject", note: "Not on this one" });
+
+    const before = await asUser(a.userId, (tx) => tx`select count(*)::int as n from public.compliance_decisions where rule = ${key}`);
+    // The Card ad already accepted it (test case 1): only the Full bleed ad gets a new decision.
+    expect(await acceptDontRuleForPicked(a, ids.campaign, key)).toEqual({ accepted: 1, alreadyDecided: 1, rejected: 0 });
+    const rows = await asUser(a.userId, (tx) => tx`select variant_id, finding_hash, decision, decided_by, decided_by_name, decided_at from public.compliance_decisions where rule = ${key} order by decided_at`);
+    expect(rows).toHaveLength(before[0].n + 1);
+    const mine = (await must(a.userId, ids.fullBleed)).perAd.find((f) => f.key === key)!;
+    expect(rows.at(-1)).toMatchObject({ variant_id: ids.fullBleed, finding_hash: mine.hash, decision: "accept", decided_by: a.userId, decided_by_name: aEmail });
+    expect(mine).toMatchObject({ outcome: "accepted", decision: { decidedByName: aEmail } });
+    // Each ad's decision is tied to its own finding: the two ads' hashes differ.
+    const card = (await must(a.userId, ids.card)).perAd.find((f) => f.key === key)!;
+    expect(card.hash).not.toBe(mine.hash);
+    expect(card.outcome).toBe("accepted");
+
+    // Again: nothing is left to accept. The rejected rule stays not acceptable.
+    expect(await acceptDontRuleForPicked(a, ids.campaign, key)).toEqual({ accepted: 0, alreadyDecided: 2, rejected: 0 });
+    expect(await acceptDontRuleForPicked(a, ids.campaign, other)).toEqual({ accepted: 0, alreadyDecided: 1, rejected: 1 });
+    expect((await must(a.userId, ids.fullBleed)).perAd.find((f) => f.key === other)!.outcome).toBe("fail");
+    // The gallery's counts follow.
+    const g = await galleryCompliance(a.userId, (await getCreative(a.userId, ids.campaign))!);
+    expect(g.dontRules.find((r) => r.key === key)).toMatchObject({ open: 0, picked: 2, rejected: 0 });
+    expect(g.dontRules.find((r) => r.key === other)).toMatchObject({ open: 0, picked: 2, rejected: 1 });
+
+    // Another workspace sees nothing picked in A's campaign; a key that isn't a rule, or a malformed one, is refused.
+    await expect(acceptDontRuleForPicked(b, ids.campaign, key)).rejects.toThrow("Nothing is picked in this campaign, so there is nothing to accept.");
+    await expect(acceptDontRuleForPicked(a, ids.campaign, "dont:0000000000000000")).rejects.toThrow(/isn't one of the brand's don't rules/);
+    for (const bad of ["logo", "dont:'; drop", ""]) await expect(acceptDontRuleForPicked(a, ids.campaign, bad)).rejects.toThrow("That rule couldn't be read.");
   });
 
   it("#10 another workspace can't read or write a decision: the same refusal as a missing ad, and RLS in the database", async () => {

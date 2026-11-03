@@ -274,16 +274,16 @@ export async function makeCreative(page: Page, count: number) {
 }
 
 /**
- * C8-1: on an ad's Compliance view, accepts every item that waits for review
- * (each don't rule, and any size's review item), one at a time as a person
- * does, waiting for each to show as accepted.
+ * C8-1: on a campaign's page, accepts each of the brand's don't rules for
+ * every picked ad ("Accept for every picked ad"), one rule at a time as a
+ * person does, waiting for each to show as decided.
  */
-export async function acceptReviews(page: Page, compliancePath: string) {
-  await page.goto(compliancePath);
+export async function acceptDontRulesForPicked(page: Page) {
   await settle(page);
-  const open = page.locator('[data-status="review"]');
+  await expect(page.locator("[data-bulk-dont-rule]").first()).toBeVisible({ timeout: 60_000 });
+  const open = page.locator('[data-bulk-dont-rule]:not([data-open="0"])');
   for (let n = await open.count(); n > 0; n--) {
-    await open.first().getByRole("button", { name: /^Accept/ }).click();
+    await open.first().getByRole("button", { name: /^Accept for every picked ad/ }).click();
     await expect(open).toHaveCount(n - 1, { timeout: 30_000 });
   }
 }

@@ -98,7 +98,7 @@ const CREATIVE = "tests/agents/creative.test.ts";
 
 const COMPLIANCE_SPEC = "compliance.spec.ts";
 const COMPLIANCE_PASSES =
-  "C8-1 #1, #8, #9: a Fernhollow Card ad passes every rule once its don't rules are accepted, the pack leaves out what fails or waits, and a redraw makes them Review again";
+  "C8-1 #1, #8, #9: a Fernhollow ad passes every rule once its don't rules are accepted, one by one or for every picked ad, the pack leaves out what waits, and a redraw makes them Review again";
 const COMPLIANCE_HOSTILE =
   "C8-1 #2, #3, #11: contrast near AA is Review with a palette colour, a German banned term added on the Languages page fails, and hostile words stay plain text";
 const COMPLIANCE_RULES = "tests/lib/compliance-rules.test.ts";
@@ -553,7 +553,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: COMPLIANCE_SPEC,
         title: COMPLIANCE_PASSES,
-        note: "The ad is drawn in Card (the layout that keeps clear of a 9:16 story's platform zones) and translated by the mock model. The brand's don't rules are always Review until a person accepts them (test case 8), so Passes shows once they are accepted.",
+        note: "The ad is in its own layout and translated by the mock model. The brand's don't rules are always Review until a person accepts them (test case 8), so Passes shows once they are accepted.",
       },
       { kind: "ci", file: COMPLIANCE_DB, test: "#1 a Fernhollow social ad in Card meets every rule in all four sizes and every language: only its don't rules wait, and accepted it Passes" },
     ],
@@ -596,7 +596,12 @@ export const CASES: Case[] = [
     story: "C8-1",
     words: "Logo safe zone: each layout's logo is measured in every size; under 2% fails, 2% to 4% is Review, touching words fails.",
     checks: [
-      { kind: "ci", file: COMPLIANCE_RULES, test: "#5 each layout's logo is measured in every size: the demo brands' social ads pass, the banners' corner logos are review" },
+      {
+        kind: "ci",
+        file: COMPLIANCE_RULES,
+        test: "#5 each layout's logo is measured in every size: the demo brands' ads pass in every layout and size, banners included",
+        note: "Rory, while building: the two banners place their corner logo at the 4% clear space, so no drawn ad's logo is Review or Fail; the thresholds are the known-boxes test.",
+      },
       { kind: "ci", file: COMPLIANCE_RULES, test: "#5 under 2% fails, 2% to 4% is review, touching words fails (known boxes)" },
     ],
   },
@@ -612,7 +617,14 @@ export const CASES: Case[] = [
     sprint: 8,
     story: "C8-1",
     words: "9:16 platform zones: words in the bottom 20% fail, and the fix suggests the Card layout.",
-    checks: [{ kind: "ci", file: COMPLIANCE_RULES, test: "#7 words in the bottom 20% of a 9:16 story fail, and the fix suggests the Card layout" }],
+    checks: [
+      {
+        kind: "ci",
+        file: COMPLIANCE_RULES,
+        test: "#7 words in the bottom 20% of a 9:16 story fail, and the fix suggests the Card layout",
+        note: "Rory, while building: every layout keeps clear of a story's bands, so the test shows each drawn layout passing, and the fail and its fix on known boxes (as an uploaded ad, C8-3, would be laid out).",
+      },
+    ],
   },
   {
     id: "C8-1.8",
@@ -620,9 +632,15 @@ export const CASES: Case[] = [
     story: "C8-1",
     words: "Each kit don't rule appears once per ad as Review; Accept records the name and time and turns it green; a redraw makes it Review again.",
     checks: [
-      { kind: "browser", spec: COMPLIANCE_SPEC, title: COMPLIANCE_PASSES, note: "The redraw shown is a layout switch (the ad drawn again in Split); a redraw with the current kit (F-26) is the CI test." },
+      {
+        kind: "browser",
+        spec: COMPLIANCE_SPEC,
+        title: COMPLIANCE_PASSES,
+        note: "Shows Accept on each rule of one ad, then Rory's \"Accept for every picked ad\" (while building) for the second ad, each ad recording its own decision with name and time. The redraw shown is a layout switch; a redraw with the current kit (F-26) is the CI test.",
+      },
       { kind: "ci", file: COMPLIANCE_RULES, test: "#8 each don't rule is one Review item for the whole ad, and a decision applies only while its hash is unchanged" },
       { kind: "ci", file: COMPLIANCE_DB, test: "#8 a decision names who and when; a layout switch or a redraw with the current kit makes the don't rules Review again" },
+      { kind: "ci", file: COMPLIANCE_DB, test: "#8 Accept for every picked ad records one decision per picked ad, each with name, time and its own hash; decided ads are left as they are" },
     ],
   },
   {

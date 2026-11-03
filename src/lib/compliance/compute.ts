@@ -301,6 +301,8 @@ export type GalleryCompliance = {
   pills: Record<string, AdCompliance["pill"]>;
   /** Over the picked ads' drawn files (null when nothing is picked). */
   summary: ReturnType<typeof complianceSummary> | null;
+  /** Each don't rule on the picked ads, with how many still wait for a person (for "Accept for every picked ad"). */
+  dontRules: PickedDontRule[];
 };
 
 /** What the gallery shows: a pill per current ad, and the picked ads' summary line. */
@@ -310,7 +312,68 @@ export async function galleryCompliance(userId: string, view: { variants: { id: 
   return {
     pills: Object.fromEntries([...all.entries()].map(([id, a]) => [id, a.pill])),
     summary: picked.length ? complianceSummary(picked) : null,
+    dontRules: pickedDontRules(picked),
   };
+}
+
+// ---------------------------------------------------------------- accept a don't rule for every picked ad
+
+export type PickedDontRule = {
+  key: string;
+  rule: string;
+  /** Picked ads where it still waits for a person. */
+  open: number;
+  /** Picked ads a person marked not acceptable on it (left as they are by the bulk accept). */
+  rejected: number;
+  picked: number;
+};
+
+/** The don't rules on the picked ads, in the kit's order, each with how many ads still wait on it. */
+export function pickedDontRules(picked: AdCompliance[]): PickedDontRule[] {
+  const out = new Map<string, PickedDontRule>();
+  for (const ad of picked) {
+    for (const f of ad.perAd) {
+      const r = out.get(f.key) ?? { key: f.key, rule: f.fix ?? "", open: 0, rejected: 0, picked: 0 };
+      r.picked++;
+      if (f.outcome === "review") r.open++;
+      if (f.outcome === "fail") r.rejected++;
+      out.set(f.key, r);
+    }
+  }
+  return [...out.values()];
+}
+
+/**
+ * Rory, while building: accepts one don't rule for every picked ad of the
+ * campaign's signed-off version at once. Each ad still gets its own decision,
+ * with the person's name and the time and tied to that ad's own finding hash,
+ * exactly as if it were accepted on the ad's Compliance view. Ads already
+ * decided on the rule (accepted, or marked not acceptable by a person) are
+ * left as they are.
+ */
+export async function acceptDontRuleForPicked(member: Member, campaignId: string, key: string): Promise<{ accepted: number; alreadyDecided: number; rejected: number }> {
+  if (!UUID.test(campaignId) || !/^dont:[0-9a-f]{16}$/.test(key)) throw new ComplianceError("That rule couldn't be read. Reload the page and try again.");
+  const ids = await asUser(member.userId, (tx) => tx`
+    select v.id from public.ad_variants v join public.campaigns c on c.id = v.campaign_id
+    where v.campaign_id = ${campaignId} and c.approved_version is not null and v.brief_version = c.approved_version
+      and v.picked_at is not null and v.discarded_at is null`);
+  if (ids.length === 0) throw new ComplianceError("Nothing is picked in this campaign, so there is nothing to accept.");
+  const ads = [...(await complianceFor(member.userId, ids.map((r) => r.id as string))).values()];
+  const found = ads.flatMap((ad) => ad.perAd.filter((f) => f.key === key).map((f) => ({ ad, f })));
+  if (found.length === 0) throw new ComplianceError("That rule isn't one of the brand's don't rules any more. Reload the page.");
+  const open = found.filter((x) => x.f.outcome === "review");
+  if (open.length > 0) {
+    await asUser(member.userId, async (tx) => {
+      for (const { ad, f } of open) {
+        await tx`
+          insert into public.compliance_decisions (workspace_id, variant_id, lang, size, rule, finding_hash, decision, note, decided_by, decided_by_name)
+          select v.workspace_id, v.id, null, null, ${f.key}, ${f.hash}, 'accept', null, ${member.userId}, 'set by the database'
+          from public.ad_variants v where v.id = ${ad.variantId}`;
+      }
+    });
+  }
+  const rejected = found.filter((x) => x.f.outcome === "fail").length;
+  return { accepted: open.length, alreadyDecided: found.length - open.length - rejected, rejected };
 }
 
 // ---------------------------------------------------------------- decisions

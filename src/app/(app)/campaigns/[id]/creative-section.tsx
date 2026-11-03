@@ -35,6 +35,7 @@ import {
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
 import { PretestBar, PretestScores } from "./pretest-panel";
 import { CompliancePillView } from "./ads/[variantId]/compliance/compliance-view";
+import { BulkAcceptDontRules } from "./ads/[variantId]/compliance/bulk-accept";
 
 const RUNNING = new Set(["queued", "running"]);
 
@@ -180,7 +181,7 @@ export function CreativeSection({ view, pack, compliance = null }: { view: Creat
               </p>
               {compliance && (
                 <Suspense fallback={<Skeleton className="h-6 w-72" />}>
-                  <ComplianceSummaryLine compliance={compliance} />
+                  <ComplianceSummaryLine compliance={compliance} campaignId={view.campaignId} />
                 </Suspense>
               )}
               <Languages view={view} />
@@ -799,13 +800,16 @@ async function CompliancePill({ compliance, variantId }: { compliance: NonNullab
 }
 
 /** C8-1: the picked ads' compliance, over every size and language: "40 ads pass, 6 to review, 2 fail". */
-async function ComplianceSummaryLine({ compliance }: { compliance: NonNullable<ComplianceP> }) {
+async function ComplianceSummaryLine({ compliance, campaignId }: { compliance: NonNullable<ComplianceP>; campaignId: string }) {
   const c = await compliance;
   if (!c?.summary) return null;
   return (
-    <p className="text-ink-2" data-compliance-summary="">
-      <span className="font-semibold text-ink">Compliance of the picked ads:</span> {c.summary.text}, over every size and language. Only
-      ads that pass, or whose review items a person accepted, go in the launch pack.
-    </p>
+    <div className="space-y-3">
+      <p className="text-ink-2" data-compliance-summary="">
+        <span className="font-semibold text-ink">Compliance of the picked ads:</span> {c.summary.text}, over every size and language. Only
+        ads that pass, or whose review items a person accepted, go in the launch pack.
+      </p>
+      <BulkAcceptDontRules campaignId={campaignId} rules={c.dontRules} />
+    </div>
   );
 }

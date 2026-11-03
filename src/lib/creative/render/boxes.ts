@@ -179,8 +179,8 @@ export function layOutBoxes(i: BoxInput): AdBoxes {
         placeButton(g.W - g.padX - i.cta.width, Math.round((g.H - ctaH) / 2));
       } else {
         picture = box(0, 0, g.W, pb.height);
-        // The logo's plate sits on the picture's top left corner, as the simulated label's offset (layouts.tsx).
-        logo = logoAt(spec.label.top, spec.label.top, true);
+        // The logo's plate sits on the picture's top left corner, at the logo rule's clear space (layouts.tsx).
+        logo = logoAt(g.logoLeft, g.logoTop, true);
         const top = pb.height + g.padY;
         headline(g.padX, top);
         placeButton(g.padX, top + hH + g.gap);

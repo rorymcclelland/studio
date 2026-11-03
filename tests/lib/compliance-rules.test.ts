@@ -159,7 +159,7 @@ describe("C8-1 #4: legal lines present", () => {
 });
 
 describe("C8-1 #5: logo clear space, per layout and size", () => {
-  it("#5 each layout's logo is measured in every size: the demo brands' social ads pass, the banners' corner logos are review", async () => {
+  it("#5 each layout's logo is measured in every size: the demo brands' ads pass in every layout and size, banners included", async () => {
     const seen: string[] = [];
     for (const key of ["fernhollow", "quillmoor"] as const) {
       for (const size of SIZE_IDS) {
@@ -180,16 +180,19 @@ describe("C8-1 #5: logo clear space, per layout and size", () => {
           }
           const f = logoRule(b, [], { size, lang: "en-GB" });
           seen.push(`${key} ${layout} ${size} ${f.status}`);
-          const expected = size === "300x250" || size === "300x600" ? "review" : "pass";
-          expect(f.status, `${key} ${layout} ${size}: ${f.reason}`).toBe(expected);
+          // Rory, while building: the two banners place their corner logo at the 4% clear space, so they pass too.
+          expect(f.status, `${key} ${layout} ${size}: ${f.reason}`).toBe("pass");
         }
       }
     }
     expect(seen).toHaveLength(2 * (4 * 3 + 3) - 1);
-    // The medium rectangle's logo sits 8 px from the top: 3.2% of 250.
+    // The medium rectangle's logo sits 11 px from the top and left: 4% of 250, and a pixel more. The half page's 13 px of 300.
     const rect = await plan("fernhollow", "banner", "300x250");
-    expect(logoClearance(rect.boxes)!.edge).toBeCloseTo(8 / 250, 3);
-    expect(logoRule(rect.boxes, [], where)).toMatchObject({ status: "review", fix: "Use a smaller logo" });
+    expect(logoClearance(rect.boxes)!.edge).toBeCloseTo(11 / 250, 3);
+    expect(rect.boxes.logo!.mark).toMatchObject({ x: 11, y: 11 });
+    expect(logoRule(rect.boxes, [], where).status).toBe("pass");
+    const half = await plan("fernhollow", "banner", "300x600");
+    expect(half.boxes.logo!.mark).toMatchObject({ x: 13, y: 13 });
   });
 
   it("#5 under 2% fails, 2% to 4% is review, touching words fails (known boxes)", () => {
@@ -247,19 +250,23 @@ describe("C8-1 #6: text density", () => {
 
 describe("C8-1 #7: 9:16 platform zones", () => {
   it("#7 words in the bottom 20% of a 9:16 story fail, and the fix suggests the Card layout", async () => {
+    // Rory, while building: every layout keeps its words, logo and legal lines clear of both bands and their margin
+    // in a story (layouts.tsx, storyClearance), so a drawn ad passes in each.
     for (const key of ["fernhollow", "quillmoor"] as const) {
-      for (const layout of ["full-bleed", "split"] as const) {
-        const f = platformRule((await plan(key, layout, "1080x1920")).boxes, "1080x1920", { drawn: layout, ownIsCard: false }, { size: "1080x1920", lang: "en-GB" })!;
-        expect(f.status, `${key} ${layout}`).toBe("fail");
-        expect(f.fix).toBe("Use the Card layout");
-        expect(f.reason).toMatch(/the legal lines .*are in the top 14\.0% or bottom 20\.0% of the story/i);
+      for (const layout of ["full-bleed", "split", "card"] as const) {
+        const f = platformRule((await plan(key, layout, "1080x1920")).boxes, "1080x1920", { drawn: layout, ownIsCard: layout === "card" }, { size: "1080x1920", lang: "en-GB" })!;
+        expect(f.status, `${key} ${layout}: ${f.reason}`).toBe("pass");
       }
-      // Card keeps clear of both bands and their margins in a story (layouts.tsx).
-      const card = platformRule((await plan(key, "card", "1080x1920")).boxes, "1080x1920", { drawn: "card", ownIsCard: true }, { size: "1080x1920", lang: "en-GB" })!;
-      expect(card.status, `${key} card: ${card.reason}`).toBe("pass");
     }
-    // Known boxes: within 4% of a band is review; any other size isn't checked.
+    // Known boxes (an ad laid out some other way, such as an uploaded one): words in the bottom 20% fail, and the fix
+    // suggests the Card layout; within 4% of a band is review; any other size isn't checked.
     const H = 1920;
+    const inside = boxes(1080, H, null, [{ part: "legal", x: 72, y: Math.round(0.9 * H), width: 600, height: 30 }]);
+    expect(platformRule(inside, "1080x1920", { drawn: "full-bleed", ownIsCard: false }, where)).toMatchObject({
+      status: "fail",
+      fix: "Use the Card layout",
+      reason: "The legal lines are in the top 14.0% or bottom 20.0% of the story, where the platforms' own controls sit.",
+    });
     const near = boxes(1080, H, null, [{ x: 100, y: Math.round(0.78 * H) - 40, width: 200, height: 40 }]);
     expect(platformRule(near, "1080x1920", { drawn: "card", ownIsCard: true }, where)).toMatchObject({ status: "review", fix: "Shorten the words" });
     const top = boxes(1080, H, { x: 72, y: 80, width: 200, height: 50 }, []);
