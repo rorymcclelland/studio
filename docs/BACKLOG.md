@@ -180,7 +180,7 @@ Evidence: 718 unit, database and agent tests and 33 browser tests (22 Sprint 7 c
 | N-8d | Rory's four production hand checks, HC-1 to HC-4 in `docs/testing/sprint-7-test-pack.md`: crops on real 2K pictures, the demo legal lines, translation quality, a launch pack from real creative. About 20 minutes and 26p; a failure becomes a BUG- row | N-8b split | Backlog, returned from Sprint 7 (Rory, 3 Nov) |
 | F-28a | Watch production's logs for connection errors (`CONNECT_TIMEOUT`, `Cannot read properties of null`) until 9 November; Vercel keeps one hour, so Claude checks on each visit | F-28 split | Backlog, returned from Sprint 7 |
 | F-32 | The results branch grows the repository: each push adds about 25 MB of recordings, and force-pushes leave old objects for GitHub to collect. Keep fewer recordings, shorten them, or store them outside git | Demo pipeline build | Backlog, from Sprint 7 review |
-| F-33 | Merge the sign-off pipeline, QA test fixes and the `data-words` attribute to `main` (a production deploy, with nothing visible to users), once Rory approves the deploy | Sprint 7 close | Backlog, from Sprint 7 review |
+| F-33 | Merge the sign-off pipeline, QA test fixes and the `data-words` attribute to `main` (a production deploy, with nothing visible to users), once Rory approves the deploy | Sprint 7 close | Done, Sprint 8 (deployed with Sprint 8 at `3be96cf`, 3 November) |
 | QA-7 | Folded: the independent QA review's 12 findings on the Sprint 7 tests | Sprint 7 QA review | Fixed in Sprint 7 (`68999d5`), before the demo |
 
 ## Sprint 8: Compliance and pre-testing (confirmed and refined 3 November 2026)
@@ -193,7 +193,7 @@ Every ad in the pack checked against the brand's and the channel's rules in ever
 | C8-2 | Vision checks for judgement calls (faces for finance brands, the kit's don't rules), with F-24 folded in; Check pictures for older campaigns | M | Ready, Sprint 8 |
 | C8-3 | Check an uploaded ad: words read by AI, checked in code; estimates labelled | M | Ready, Sprint 8 |
 | C8-4 | Pre-test panel: the brief's personas score picked ads, labelled synthetic | M | Ready, Sprint 8 (first to move if over) |
-| F-33 | Merge Sprint 7's tests and pipeline to `main` | S | Waiting for Rory (this session can't push a production deploy) |
+| F-33 | Merge Sprint 7's tests and pipeline to `main` | S | Done, Sprint 8 (merged with Sprint 8 at `3be96cf`) |
 | N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 8 |
 | F-28a | Watch production's logs until 9 November | S | Ready, Sprint 8 |
 | N-8d | Rory's Sprint 7 hand checks | S | Ready, Sprint 8 |
@@ -237,3 +237,4 @@ Re-ranked at the Sprint 7 close; Sprint 8 is above.
 | 2 Nov 2026 | Sprint 7 refined and confirmed (all as recommended): 2K pictures; three banners with honest refusals; per-brand languages, French, German and Spanish first; legal lines per language written by a person; Sonnet translates; picked ads in the pack, no approval to download; N-7a on or after 12 Nov |
 | 3 Nov 2026 | Sprint 7 closed: Rory signed off from the demo page (CI run 41547303603); all five stories and N-8c done; F-28 and N-8b split (F-28a log watch, N-8d hand checks); N-7a returned (12 Nov); new rows F-32 and F-33; the independent QA review's 12 findings fixed before the demo; Sprint 8 (Compliance and pre-testing) proposed |
 | 3 Nov 2026 | Sprint 8 (Compliance and pre-testing) refined; Rory took all seven answers as recommended: Studio's own thresholds in one config file, density not on banners, review items accepted inline, only the finance face rule fails on the model's word, unaccepted reviews left out of the pack, pre-test on a click, the 9:16 zone rule in Sprint 8 |
+| 3 Nov 2026 | Sprint 8 signed off from the demo page (CI run 41717589833) and deployed with Rory's approval: five migrations applied to preview, then production (both match a fresh build in all 11 fingerprint parts), merged to `main` as `3be96cf`; CI and After production deploy passed, health OK. Hand checks (N-8d, N-8e) follow on production |
