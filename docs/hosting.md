@@ -13,7 +13,7 @@ The sections below describe the set-up as it stands. The Cutover section and the
    | Branch | Holds | Used by |
    | --- | --- | --- |
    | `production` | the app's data | Vercel Production |
-   | `ci` | retired 5 November 2026: CI now has its own project (step 7) | nothing |
+   | `ci` | no longer used by CI (5 November 2026: CI has its own project, step 7), but kept: `preview` was made from it and Neon keeps a parent while a child exists | `preview`'s parent only |
    | `preview` | made from `ci`, every migration applied, demo data only | Vercel Preview |
 
    Never reset `preview` from `production`, so no invitee's data reaches a copy. The free plan allows 10 branches and 1 GB of storage per project, and every branch's writes count towards the project's storage.
