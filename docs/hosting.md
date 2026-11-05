@@ -6,22 +6,23 @@ The sections below describe the set-up as it stands. The Cutover section and the
 
 ## 1. Neon (the database)
 
-1. Create the project on the free plan: name `campaign-studio`, region **AWS Europe (London)** (`aws-eu-west-2`, beside the functions in `lhr1`), Postgres 17. Studio's project id is `misty-moon-16212068` (CI uses it). Leave **Neon Auth** and the **Data API** off: Studio has its own sign-in, and its `anon` role must only ever be reached by the app's own server.
+1. Create the project on the free plan: name `campaign-studio`, region **AWS Europe (London)** (`aws-eu-west-2`, beside the functions in `lhr1`), Postgres 17. Studio's project id is `misty-moon-16212068`. Leave **Neon Auth** and the **Data API** off: Studio has its own sign-in, and its `anon` role must only ever be reached by the app's own server.
 2. Database `studio`, owned by the role `studio_owner`. The owner is not a superuser; the baseline migration needs none.
 3. Three permanent branches:
 
    | Branch | Holds | Used by |
    | --- | --- | --- |
    | `production` | the app's data | Vercel Production |
-   | `ci` | nothing: an empty database, so every CI run builds from all the files | the parent of CI's throwaway branch per run |
+   | `ci` | retired 5 November 2026: CI now has its own project (step 7) | nothing |
    | `preview` | made from `ci`, every migration applied, demo data only | Vercel Preview |
 
-   Never reset `ci` or `preview` from `production`, so no invitee's data reaches a copy. The free plan allows 10 branches per project; CI deletes its branch at the end of each run.
+   Never reset `preview` from `production`, so no invitee's data reaches a copy. The free plan allows 10 branches and 1 GB of storage per project, and every branch's writes count towards the project's storage.
 4. Apply the migrations through the Neon connector (see "Migrations" below): a new file on a fresh branch first, then `production`, then `preview`. `ci` stays empty.
 5. **Connection strings.** On the branch's **Connect** page choose database `studio` and role `studio_owner`.
    - **Pooled** (Connection pooling on; the host has `-pooler`): the app's `DATABASE_URL` on Vercel. The pooler runs in transaction mode, so the app switches prepared statements off (`src/lib/db/client.ts`).
    - **Direct** (Connection pooling off): for the migration runner and one-off scripts only, and never needed on a laptop for production.
 6. Nothing keeps the database awake. Compute suspends after 5 minutes idle and resumes on the next connection in a few hundred milliseconds; Neon doesn't pause projects.
+7. **A separate project for CI** (F-34, 5 November 2026): `campaign-studio-ci` (id `little-shadow-88992377`), London, Postgres 17, history window 1 hour. Its only permanent branch is `ci`, holding database `studio` owned by `studio_owner` and nothing else: never migrate it. CI makes a throwaway branch from it per run and deletes it at the end. It exists because CI's throwaway branches rebuild the test database many times a run, and in the same project as production that filled the 1 GB storage allowance (Neon's alert of early November), which would block writes on the live site. It holds no app data and no copy of production.
 
 ## 2. Resend (sign-in emails)
 
@@ -71,7 +72,7 @@ Only production sends email. Local work, CI and previews use the console mailer:
 
 **Settings → Secrets and variables → Actions → Repository secrets:**
 
-- `NEON_API_KEY`: added by Neon's **GitHub integration** when the Neon project was connected to this repository (installed for this repository only; its sample Actions are not used). A key made by hand in Neon's **API keys** settings works the same. CI's required job uses it to make and delete its throwaway branch; without it the job fails, naming the secret. CI takes the project id from `.github/workflows/ci.yml` and fetches the branch's connection string itself, masking it before anything prints.
+- `NEON_API_KEY`: a **project-scoped** organization API key for `campaign-studio-ci` only (Neon → organization **Settings → API keys → Create**, choose project-scoped and that project), so CI can never reach production's connection details (F-29). Paste it straight into the GitHub secret. CI's required job uses it to make and delete its throwaway branch; without it the job fails, naming the secret. CI takes the project id from `.github/workflows/ci.yml` and fetches the branch's connection string itself, masking it before anything prints.
 - `ANTHROPIC_API_KEY` (optional): a key with its own spending limit, for the manual **Real-model evals** Action (F-16).
 
 ## 7. Check it works
@@ -86,7 +87,7 @@ Only production sends email. Local work, CI and previews use the console mailer:
 - If the database check fails, `/api/health` logs the user, host and port it tried (never the password) in Vercel's runtime logs.
 - **Resync Inngest by hand** when the after-deploy Action fails: open the project in Vercel, then **Integrations → Inngest → Open in Inngest** (this signs in to the linked account; signing in at app.inngest.com directly makes a separate, empty one), choose **Production → Apps → campaign-studio → Resync**, and check **Functions** lists what the code serves (**Agent run**). Until then, new runs stay queued.
 - **Inviting someone:** sign in, open the account menu → **Invites**, enter their email, copy the link and send it in your own message. It works once, for 7 days. After that they sign in by email themselves. Revoke an invite to stop the link, or to remove someone who has used it (their sessions end too).
-- **Neon's free plan:** 0.5 GB storage per project, 10 branches, 100 CU-hours of compute a month. Check **Storage** on the `production` branch now and then.
+- **Neon's free plan:** 1 GB storage per project (every branch's writes count), 10 branches, 100 CU-hours of compute and 5 GB of transfer a month. When storage is full, inserts and updates fail until it is freed. Check **Storage** on the `campaign-studio` project now and then.
 
 ## Migrations
 
@@ -96,7 +97,7 @@ Every database is built from the files in `db/migrations`, in file-name order. T
 - **On Neon (Rory's answer to Q4): Claude applies migrations through the Neon connector.** No connection string leaves Vercel or GitHub.
   1. Through the connector, run `select file_name, sha256 from public.schema_migrations order by file_name` (on a new project, run the `bootstrapSql` from step 2 first) and save the rows as JSON.
   2. `node scripts/db-migrate.mjs --list-pending --json --applied rows.json --with-sql` prints `bootstrapSql`, and for each pending file its `name`, `sha256`, `path`, `recordSql` (the `schema_migrations` insert) and `applySql` (begin, the file, its record, commit). It refuses, naming the file, if a row's sha256 differs from the file on disk.
-  3. `node scripts/neon-statements.mjs pending.json OUTDIR` writes each pending file as a list of statements, with its `schema_migrations` insert last. Apply each list with the connector's `run_sql_transaction`, one file per call, so a file and its record commit together or not at all. (The connector's migration tool can't be used: it splits on every `;` and breaks on function bodies.) Try a new file on the `ci` branch's copy or a fresh branch first, then production, then `preview`.
+  3. `node scripts/neon-statements.mjs pending.json OUTDIR` writes each pending file as a list of statements, with its `schema_migrations` insert last. Apply each list with the connector's `run_sql_transaction`, one file per call, so a file and its record commit together or not at all. (The connector's migration tool can't be used: it splits on every `;` and breaks on function bodies.) Try a new file on a fresh branch first, then production, then `preview`.
   4. Repeat step 1: the rows should now list every file.
   5. Check the schema: run `scripts/schema-fingerprint.sql` on the Neon branch (through the connector) and on a local database built with `db:migrate`; every row should match. It hashes each kind of object (columns, constraints, indexes, policies, function bodies, triggers, row-level security, grants) and the ledger. Postgres 17's `MAINTAIN` privilege is left out, since local Postgres is 16.
 - **Neon branches:** see section 1. `ci` began as a copy of `production` before production held any rows, and was then emptied.

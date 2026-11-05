@@ -296,3 +296,10 @@ No acceptance criteria changed. C8-1 to C8-4 and N-8e are Ready, Sprint 8. Build
 - C8-1: every 9:16 layout (Full bleed and Split as well as Card) keeps its words, logo and legal lines clear of the top 14% and bottom 20%, so no layout loses its 9:16 size to the zone rule. Only 9:16 drawings change.
 - C8-1: the 300 × 250 and 300 × 600 banners place the logo at the 4% clear space, so banners pass the logo rule without a review. Only those two banner drawings change.
 - C8-3: uploads are limited to 4 MB, not 5 MB, because production's host refuses a request over 4.5 MB before Studio sees it; the page and checks say 4 MB (decision 0025).
+
+## Sign-off and deploy (3 November 2026)
+
+- Demo signed off by Rory from the demo page (CI run 41717589833 at `cf94641`: 29 cases, 12 browser, 14 CI, 3 hand; none failed or not run).
+- Rory approved the deploy. The five Sprint 8 migrations were applied to the `preview` Neon branch, checked, then applied to `production`; both match a fresh build from `db/migrations` in all 11 fingerprint parts.
+- `sprint-8` merged to `main` as `3be96cf`, which also carried Sprint 7's sign-off pipeline (F-33). CI on `main` and After production deploy passed; `/api/health` reports database ok and commit `3be96cf`.
+- Still open before the close: the hand checks in `docs/testing/sprint-8-test-pack.md` (N-8e) and Sprint 7's (N-8d), F-28a's log watch to 9 November, and N-7a on or after 12 November.
