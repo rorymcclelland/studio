@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "42077223657",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/campaign-studio/actions/runs/42077223657",
+  "repository": "rorymcclelland/campaign-studio",
+  "commit": "959c98239808470673dbdb55d81827a08ca2d9b7",
+  "branch": "neon-ci-followup",
+  "date": "2026-11-05T18:12:08.262Z",
+  "checksJob": "success"
+}

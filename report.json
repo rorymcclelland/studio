@@ -1,0 +1,4715 @@
+{
+ "config": {
+  "argv": [
+   "/opt/hostedtoolcache/node/22.23.4/x64/bin/node",
+   "/home/runner/work/campaign-studio/campaign-studio/node_modules/.bin/playwright",
+   "test"
+  ],
+  "configFile": "/home/runner/work/campaign-studio/campaign-studio/playwright.config.ts",
+  "rootDir": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e",
+  "failOnFlakyTests": false,
+  "forbidOnly": false,
+  "fullyParallel": false,
+  "globalSetup": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/global-setup.ts",
+  "globalTeardown": null,
+  "globalTimeout": 0,
+  "grep": {},
+  "grepInvert": null,
+  "maxFailures": 0,
+  "metadata": {
+   "ci": {
+    "commitHref": "https://github.com/rorymcclelland/campaign-studio/commit/959c98239808470673dbdb55d81827a08ca2d9b7",
+    "commitHash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+    "buildHref": "https://github.com/rorymcclelland/campaign-studio/actions/runs/42077223657"
+   },
+   "gitCommit": {
+    "shortHash": "959c982",
+    "hash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+    "subject": "Keep the old ci branch as preview's parent; close F-34 and F-29",
+    "body": "Keep the old ci branch as preview's parent; close F-34 and F-29\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016y2sgCedZZHrSZWTsY4YMT\n",
+    "author": {
+     "name": "Claude",
+     "email": "noreply@anthropic.com",
+     "time": 1793900125000
+    },
+    "committer": {
+     "name": "Claude",
+     "email": "noreply@anthropic.com",
+     "time": 1793900125000
+    },
+    "branch": "neon-ci-followup"
+   },
+   "actualWorkers": 1
+  },
+  "preserveOutput": "always",
+  "projects": [
+   {
+    "outputDir": "/home/runner/work/campaign-studio/campaign-studio/test-results",
+    "repeatEach": 1,
+    "retries": 1,
+    "metadata": {
+     "ci": {
+      "commitHref": "https://github.com/rorymcclelland/campaign-studio/commit/959c98239808470673dbdb55d81827a08ca2d9b7",
+      "commitHash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "buildHref": "https://github.com/rorymcclelland/campaign-studio/actions/runs/42077223657"
+     },
+     "gitCommit": {
+      "shortHash": "959c982",
+      "hash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "subject": "Keep the old ci branch as preview's parent; close F-34 and F-29",
+      "body": "Keep the old ci branch as preview's parent; close F-34 and F-29\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016y2sgCedZZHrSZWTsY4YMT\n",
+      "author": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "committer": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "branch": "neon-ci-followup"
+     },
+     "actualWorkers": 1
+    },
+    "id": "sign-in",
+    "name": "sign-in",
+    "testDir": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e",
+    "testIgnore": [],
+    "testMatch": [
+     "/sign-in\\.setup\\.ts/"
+    ],
+    "timeout": 60000
+   },
+   {
+    "outputDir": "/home/runner/work/campaign-studio/campaign-studio/test-results",
+    "repeatEach": 1,
+    "retries": 1,
+    "metadata": {
+     "ci": {
+      "commitHref": "https://github.com/rorymcclelland/campaign-studio/commit/959c98239808470673dbdb55d81827a08ca2d9b7",
+      "commitHash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "buildHref": "https://github.com/rorymcclelland/campaign-studio/actions/runs/42077223657"
+     },
+     "gitCommit": {
+      "shortHash": "959c982",
+      "hash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "subject": "Keep the old ci branch as preview's parent; close F-34 and F-29",
+      "body": "Keep the old ci branch as preview's parent; close F-34 and F-29\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016y2sgCedZZHrSZWTsY4YMT\n",
+      "author": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "committer": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "branch": "neon-ci-followup"
+     },
+     "actualWorkers": 1
+    },
+    "id": "demo-brands",
+    "name": "demo-brands",
+    "testDir": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e",
+    "testIgnore": [],
+    "testMatch": [
+     "/demo-brands\\.setup\\.ts/"
+    ],
+    "timeout": 60000
+   },
+   {
+    "outputDir": "/home/runner/work/campaign-studio/campaign-studio/test-results",
+    "repeatEach": 1,
+    "retries": 1,
+    "metadata": {
+     "ci": {
+      "commitHref": "https://github.com/rorymcclelland/campaign-studio/commit/959c98239808470673dbdb55d81827a08ca2d9b7",
+      "commitHash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "buildHref": "https://github.com/rorymcclelland/campaign-studio/actions/runs/42077223657"
+     },
+     "gitCommit": {
+      "shortHash": "959c982",
+      "hash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "subject": "Keep the old ci branch as preview's parent; close F-34 and F-29",
+      "body": "Keep the old ci branch as preview's parent; close F-34 and F-29\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016y2sgCedZZHrSZWTsY4YMT\n",
+      "author": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "committer": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "branch": "neon-ci-followup"
+     },
+     "actualWorkers": 1
+    },
+    "id": "chromium",
+    "name": "chromium",
+    "testDir": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e",
+    "testIgnore": [],
+    "testMatch": [
+     "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+    ],
+    "timeout": 60000
+   },
+   {
+    "outputDir": "/home/runner/work/campaign-studio/campaign-studio/test-results",
+    "repeatEach": 1,
+    "retries": 1,
+    "metadata": {
+     "ci": {
+      "commitHref": "https://github.com/rorymcclelland/campaign-studio/commit/959c98239808470673dbdb55d81827a08ca2d9b7",
+      "commitHash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "buildHref": "https://github.com/rorymcclelland/campaign-studio/actions/runs/42077223657"
+     },
+     "gitCommit": {
+      "shortHash": "959c982",
+      "hash": "959c98239808470673dbdb55d81827a08ca2d9b7",
+      "subject": "Keep the old ci branch as preview's parent; close F-34 and F-29",
+      "body": "Keep the old ci branch as preview's parent; close F-34 and F-29\n\nCo-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>\nClaude-Session: https://claude.ai/code/session_016y2sgCedZZHrSZWTsY4YMT\n",
+      "author": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "committer": {
+       "name": "Claude",
+       "email": "noreply@anthropic.com",
+       "time": 1793900125000
+      },
+      "branch": "neon-ci-followup"
+     },
+     "actualWorkers": 1
+    },
+    "id": "brand-kit",
+    "name": "brand-kit",
+    "testDir": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e",
+    "testIgnore": [],
+    "testMatch": [
+     "**/*.@(spec|test).?(c|m)[jt]s?(x)"
+    ],
+    "timeout": 60000
+   }
+  ],
+  "quiet": false,
+  "reporter": [
+   [
+    "dot",
+    null
+   ],
+   [
+    "json",
+    {
+     "outputFile": "playwright-report/results.json"
+    }
+   ]
+  ],
+  "reportSlowTests": {
+   "max": 5,
+   "threshold": 300000
+  },
+  "shard": null,
+  "tags": [],
+  "updateSnapshots": "missing",
+  "updateSourceMethod": "patch",
+  "version": "1.63.0",
+  "workers": 1,
+  "webServer": null
+ },
+ "suites": [
+  {
+   "title": "sign-in.setup.ts",
+   "file": "sign-in.setup.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "sign in as the owner by email and keep the session",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "sign-in",
+       "projectName": "sign-in",
+       "results": [
+        {
+         "workerIndex": 0,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 2245,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:53:15.116Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "bf2e2c073f57e6858521-c8c063e301ae12df7325",
+     "file": "sign-in.setup.ts",
+     "line": 11,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "demo-brands.setup.ts",
+   "file": "demo-brands.setup.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "S2-4 #5: Add demo brands adds both; pressing it again adds nothing and says why",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "demo-brands",
+       "projectName": "demo-brands",
+       "results": [
+        {
+         "workerIndex": 1,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 5053,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:53:18.343Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "25b3fcd2fc8293679bc5-b43c79cfca4cbb8c0fdb",
+     "file": "demo-brands.setup.ts",
+     "line": 20,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "audience.spec.ts",
+   "file": "audience.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "Find audiences adds labelled, simulated, removable segments",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 9226,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:53:24.045Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "3bbecd8f27ab040d0c84-297c1da8b431ec141c03",
+     "file": "audience.spec.ts",
+     "line": 11,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "brands.spec.ts",
+   "file": "brands.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [],
+   "suites": [
+    {
+     "title": "S2-3 #5: simulated data is labelled",
+     "file": "brands.spec.ts",
+     "line": 223,
+     "column": 6,
+     "specs": [
+      {
+       "title": "every customer and order figure of a simulated brand says Simulated data",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2300,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:33.433Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-675042b252455ba2b06b",
+       "file": "brands.spec.ts",
+       "line": 224,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-3 #6: another workspace's brand",
+     "file": "brands.spec.ts",
+     "line": 244,
+     "column": 6,
+     "specs": [
+      {
+       "title": "another workspace's brand id, or a malformed id, shows not found",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2263,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:38.286Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-944caac96ff219eb1078",
+       "file": "brands.spec.ts",
+       "line": 245,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-3 #7: keyboard (layout and contrast are in design-system.spec.ts)",
+     "file": "brands.spec.ts",
+     "line": 270,
+     "column": 6,
+     "specs": [
+      {
+       "title": "every control on the brand screens is reachable with Tab and shows a focus ring",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 10369,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:40.562Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-9362af26ab4fb3339c86",
+       "file": "brands.spec.ts",
+       "line": 271,
+       "column": 7
+      },
+      {
+       "title": "brand controls work with Enter and Space",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2764,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:50.944Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-bbfd107f4f78409ff418",
+       "file": "brands.spec.ts",
+       "line": 285,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-5: the search box on the overview",
+     "file": "brands.spec.ts",
+     "line": 315,
+     "column": 6,
+     "specs": [
+      {
+       "title": "S2-5 #1: searching “lapsed” on Fernhollow shows the lapsed segment first, with its kind and source",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2447,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:53.719Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-b161d1c9377d1efdc65f",
+       "file": "brands.spec.ts",
+       "line": 316,
+       "column": 7
+      },
+      {
+       "title": "an empty search and a search with no results say so",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2310,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:56.180Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-92b3ca3bc217199c869c",
+       "file": "brands.spec.ts",
+       "line": 331,
+       "column": 7
+      },
+      {
+       "title": "S2-5 #5: hostile searches show a normal empty or results state, never an error",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 7439,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:53:58.502Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-ba225265c292953d1615",
+       "file": "brands.spec.ts",
+       "line": 341,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-3 #1: editing the kit",
+     "file": "brands.spec.ts",
+     "line": 67,
+     "column": 6,
+     "specs": [
+      {
+       "title": "change the tone words and a don't rule, save, reload: the overview shows the change",
+       "ok": true,
+       "tags": [
+        "brand-kit"
+       ],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "brand-kit",
+         "projectName": "brand-kit",
+         "results": [
+          {
+           "workerIndex": 3,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 6335,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T18:06:55.261Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-f671034d0cd08639c350",
+       "file": "brands.spec.ts",
+       "line": 68,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-3 #2: validation",
+     "file": "brands.spec.ts",
+     "line": 96,
+     "column": 6,
+     "specs": [
+      {
+       "title": "messages appear beside the right field, and nothing is saved while any field is invalid",
+       "ok": true,
+       "tags": [
+        "brand-kit"
+       ],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "brand-kit",
+         "projectName": "brand-kit",
+         "results": [
+          {
+           "workerIndex": 3,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 3280,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T18:07:04.590Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-b371d21c7988db09b092",
+       "file": "brands.spec.ts",
+       "line": 97,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-3 #3: unsaved changes",
+     "file": "brands.spec.ts",
+     "line": 144,
+     "column": 6,
+     "specs": [
+      {
+       "title": "leaving by a link or the back button with unsaved changes asks first; staying keeps them",
+       "ok": true,
+       "tags": [
+        "brand-kit"
+       ],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "brand-kit",
+         "projectName": "brand-kit",
+         "results": [
+          {
+           "workerIndex": 3,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 3183,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T18:07:07.884Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-2b34789141a9eb631c8d",
+       "file": "brands.spec.ts",
+       "line": 145,
+       "column": 7
+      },
+      {
+       "title": "the back button can leave too, after asking",
+       "ok": true,
+       "tags": [
+        "brand-kit"
+       ],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "brand-kit",
+         "projectName": "brand-kit",
+         "results": [
+          {
+           "workerIndex": 3,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2768,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T18:07:11.080Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-95e23a088b7ad2c3b635",
+       "file": "brands.spec.ts",
+       "line": 177,
+       "column": 7
+      },
+      {
+       "title": "closing the tab with unsaved changes asks (the browser's own prompt)",
+       "ok": true,
+       "tags": [
+        "brand-kit"
+       ],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "brand-kit",
+         "projectName": "brand-kit",
+         "results": [
+          {
+           "workerIndex": 3,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 2397,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T18:07:13.861Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-c95d4cad9ef0c2886f3e",
+       "file": "brands.spec.ts",
+       "line": 187,
+       "column": 7
+      },
+      {
+       "title": "saved changes, or none, leave without asking",
+       "ok": true,
+       "tags": [
+        "brand-kit"
+       ],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "brand-kit",
+         "projectName": "brand-kit",
+         "results": [
+          {
+           "workerIndex": 3,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 5878,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T18:07:16.278Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "d4ab753751429ae94db7-b9fa56e18aa6e2b54056",
+       "file": "brands.spec.ts",
+       "line": 195,
+       "column": 7
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "campaigns.spec.ts",
+   "file": "campaigns.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "S3-2 #1 and S3-3 #1, #3, #5, #7: brief, hand edit, revision, stale save and restore",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 180000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 19362,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:54:05.963Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "aa29092239d104d541ba-6296c601febb6a2c3bdd",
+     "file": "campaigns.spec.ts",
+     "line": 47,
+     "column": 5
+    },
+    {
+     "title": "S3-3 #2: a hand edit that removes every audience is refused and nothing is saved",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 6174,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:54:25.345Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "aa29092239d104d541ba-b5742f468e1025d2d9f5",
+     "file": "campaigns.spec.ts",
+     "line": 134,
+     "column": 5
+    },
+    {
+     "title": "the objective is checked: too short is refused with the reason",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 3035,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:54:31.529Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "aa29092239d104d541ba-5d79a4b1ec7f8b5aaab8",
+     "file": "campaigns.spec.ts",
+     "line": 151,
+     "column": 5
+    },
+    {
+     "title": "another workspace's campaign id, or a malformed one, shows not found",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 1344,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:54:34.573Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "aa29092239d104d541ba-bdc14e8c35a8c5f70380",
+     "file": "campaigns.spec.ts",
+     "line": 166,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "creative.spec.ts",
+   "file": "creative.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, through the UI",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 300000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 44033,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:54:35.937Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "9270947d73d4fb58aa40-1e13a2000c5c7b6a43e1",
+     "file": "creative.spec.ts",
+     "line": 79,
+     "column": 5
+    },
+    {
+     "title": "S5-4 #6: every action on an ad is reachable by keyboard at 375 px",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 240000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 21748,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:55:19.984Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "9270947d73d4fb58aa40-434af39e802e99e0fac1",
+     "file": "creative.spec.ts",
+     "line": 221,
+     "column": 5
+    },
+    {
+     "title": "F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit redraws one or all at no AI cost, with undo",
+     "ok": true,
+     "tags": [
+      "brand-kit"
+     ],
+     "tests": [
+      {
+       "timeout": 600000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "F-26.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+          "line": 286,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "F-26.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+          "line": 286,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "F-26.3",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+          "line": 286,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "F-26.4",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+          "line": 286,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "brand-kit",
+       "projectName": "brand-kit",
+       "results": [
+        {
+         "workerIndex": 3,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 46984,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:09:38.845Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "F-26.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+            "line": 286,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "F-26.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+            "line": 286,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "F-26.3",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+            "line": 286,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "F-26.4",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/creative.spec.ts",
+            "line": 286,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/creative-1.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "9270947d73d4fb58aa40-6ae00bfc8c233a4a0b0a",
+     "file": "creative.spec.ts",
+     "line": 286,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "design-system.spec.ts",
+   "file": "design-system.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [],
+   "suites": [
+    {
+     "title": "S2-1 #1 and #2: layout and contrast on every screen",
+     "file": "design-system.spec.ts",
+     "line": 68,
+     "column": 6,
+     "specs": [
+      {
+       "title": "every screen fits 375px with no sideways scroll and passes AA contrast",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 180000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 27292,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:55:41.757Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-80a0940af7333559d2bc",
+       "file": "design-system.spec.ts",
+       "line": 70,
+       "column": 9
+      },
+      {
+       "title": "every screen fits 1440px with no sideways scroll and passes AA contrast",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 180000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 28125,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:56:13.709Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-0fe44ef5b40fd637c327",
+       "file": "design-system.spec.ts",
+       "line": 70,
+       "column": 9
+      }
+     ]
+    },
+    {
+     "title": "S2-1 #3: a dark operating system still gets the light theme",
+     "file": "design-system.spec.ts",
+     "line": 85,
+     "column": 6,
+     "specs": [
+      {
+       "title": "every screen looks the same with the system set to dark",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 240000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 52425,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:56:41.842Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-2a3a0d24bbc917977bb5",
+       "file": "design-system.spec.ts",
+       "line": 88,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-1 #4: keyboard",
+     "file": "design-system.spec.ts",
+     "line": 130,
+     "column": 6,
+     "specs": [
+      {
+       "title": "every control on home, runs and run detail is reachable with Tab and shows a focus ring",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 5644,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:57:34.277Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-c7113f8b369df315651c",
+       "file": "design-system.spec.ts",
+       "line": 131,
+       "column": 7
+      },
+      {
+       "title": "controls work with Enter and Space",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 7097,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:57:39.930Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-7f1d0177f4cac2606512",
+       "file": "design-system.spec.ts",
+       "line": 145,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-1 #7: reduced motion",
+     "file": "design-system.spec.ts",
+     "line": 193,
+     "column": 6,
+     "specs": [
+      {
+       "title": "with reduced motion the ring and toasts do not animate",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 3279,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:57:47.038Z",
+           "annotations": [],
+           "attachments": []
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-8a625f9255df77d123a6",
+       "file": "design-system.spec.ts",
+       "line": 194,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-1 #8: hostile names",
+     "file": "design-system.spec.ts",
+     "line": 222,
+     "column": 6,
+     "specs": [
+      {
+       "title": "a 300-character name and a <script> name render as wrapped plain text",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 15502,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:57:50.326Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-44a62e18744eb36922fa",
+       "file": "design-system.spec.ts",
+       "line": 226,
+       "column": 7
+      }
+     ]
+    },
+    {
+     "title": "S2-1 #9: no real brands",
+     "file": "design-system.spec.ts",
+     "line": 286,
+     "column": 6,
+     "specs": [
+      {
+       "title": "no real brand or trademark appears on any screen or the component page",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 120000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 18152,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:05.841Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-10c2f1bbe0f42329cd1e",
+       "file": "design-system.spec.ts",
+       "line": 299,
+       "column": 7
+      },
+      {
+       "title": "sample figures on the component page are labelled",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 1418,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:24.003Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "cb9959aea8a42eda7d1c-d20b50b6997f41023445",
+       "file": "design-system.spec.ts",
+       "line": 315,
+       "column": 7
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "directions.spec.ts",
+   "file": "directions.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "F-6: the index lists only Soft machine, and A and B are gone",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 756,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:58:25.441Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "c6bdbf035c593d006095-6533466aae2df5899c85",
+     "file": "directions.spec.ts",
+     "line": 9,
+     "column": 5
+    }
+   ],
+   "suites": [
+    {
+     "title": "soft-machine",
+     "file": "directions.spec.ts",
+     "line": 36,
+     "column": 8,
+     "specs": [
+      {
+       "title": "S1-6 #1: both screens fit 375px with no sideways scroll",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 532,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:26.210Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "c6bdbf035c593d006095-8f26ff8a87c98f5ccc0c",
+       "file": "directions.spec.ts",
+       "line": 38,
+       "column": 11
+      },
+      {
+       "title": "S1-6 #1: both screens fit 1440px with no sideways scroll",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 679,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:26.751Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "c6bdbf035c593d006095-695121ab257a66e09663",
+       "file": "directions.spec.ts",
+       "line": 38,
+       "column": 11
+      },
+      {
+       "title": "S1-6 #2: text meets WCAG AA contrast in light and dark themes",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 3347,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:27.441Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            },
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "c6bdbf035c593d006095-4da82f6c4788f732996a",
+       "file": "directions.spec.ts",
+       "line": 47,
+       "column": 9
+      },
+      {
+       "title": "S1-6 #3: every control does something",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 882,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:30.798Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "c6bdbf035c593d006095-9b10cba7113bdc050c36",
+       "file": "directions.spec.ts",
+       "line": 61,
+       "column": 9
+      },
+      {
+       "title": "S1-6 #4: only the fictional brand appears, and data is labelled as sample",
+       "ok": true,
+       "tags": [],
+       "tests": [
+        {
+         "timeout": 60000,
+         "annotations": [],
+         "expectedStatus": "passed",
+         "projectId": "chromium",
+         "projectName": "chromium",
+         "results": [
+          {
+           "workerIndex": 2,
+           "parallelIndex": 0,
+           "status": "passed",
+           "duration": 540,
+           "errors": [],
+           "stdout": [],
+           "stderr": [],
+           "retry": 0,
+           "startTime": "2026-11-05T17:58:31.692Z",
+           "annotations": [],
+           "attachments": [
+            {
+             "name": "video",
+             "contentType": "video/webm"
+            }
+           ]
+          }
+         ],
+         "status": "expected"
+        }
+       ],
+       "id": "c6bdbf035c593d006095-fa380faea9307afe1db3",
+       "file": "directions.spec.ts",
+       "line": 88,
+       "column": 9
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "title": "languages.spec.ts",
+   "file": "languages.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C7-2: the demo brand's languages, Translate on a picked ad, machine-translation badges and the German ad in every size",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 600000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C7-2.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+          "line": 65,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-2.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+          "line": 65,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-2.6",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+          "line": 65,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-2.8",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+          "line": 65,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 50543,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:58:32.250Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C7-2.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+            "line": 65,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-2.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+            "line": 65,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-2.6",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+            "line": 65,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-2.8",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+            "line": 65,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/languages-2.webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "6bbf76e5a834ebccd126-7b80be1befc6722e14d7",
+     "file": "languages.spec.ts",
+     "line": 65,
+     "column": 5
+    },
+    {
+     "title": "C7-2 #5: a brand with no German legal lines leaves German out, and the Languages bar says why",
+     "ok": true,
+     "tags": [
+      "brand-kit"
+     ],
+     "tests": [
+      {
+       "timeout": 480000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C7-2.5",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+          "line": 180,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "brand-kit",
+       "projectName": "brand-kit",
+       "results": [
+        {
+         "workerIndex": 3,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 47192,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "A signed-off Fernhollow brief and its ads (simulated pictures)",
+           "duration": 35363
+          },
+          {
+           "title": "Pick an ad: French, German and Spanish are all offered",
+           "duration": 958
+          },
+          {
+           "title": "Clear Fernhollow's German legal lines on its Languages page and save",
+           "duration": 1373
+          },
+          {
+           "title": "C7-2.5: back on the campaign, German is left out and the reason shows beside Translate",
+           "duration": 4913
+          },
+          {
+           "title": "Put Fernhollow's German back, with the legal lines written for the demo",
+           "duration": 2811
+          }
+         ],
+         "startTime": "2026-11-05T18:10:25.848Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C7-2.5",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/languages.spec.ts",
+            "line": 180,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/languages-3.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "6bbf76e5a834ebccd126-53821cac7d05dce4dfbf",
+     "file": "languages.spec.ts",
+     "line": 180,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "launch-pack.spec.ts",
+   "file": "launch-pack.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C7-3: the launch pack of four picked social ads in four languages downloads as one zip of 64 ads with its manifests",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 900000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C7-3.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+          "line": 42,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-3.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+          "line": 42,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-3.4",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+          "line": 42,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-3.5",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+          "line": 42,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-3.6",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+          "line": 42,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-2.6",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+          "line": 42,
+          "column": 5
+         }
+        },
+        {
+         "type": "measure",
+         "description": "64-ad demo pack: 15.5 s from click to complete download, 21.7 MB"
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 77593,
+         "errors": [],
+         "stdout": [
+          {
+           "text": "[pack] 64-ad demo pack: 15.5 s from click to complete download, 21.7 MB\n"
+          }
+         ],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T17:59:22.817Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C7-3.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+            "line": 42,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-3.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+            "line": 42,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-3.4",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+            "line": 42,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-3.5",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+            "line": 42,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-3.6",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+            "line": 42,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-2.6",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/launch-pack.spec.ts",
+            "line": 42,
+            "column": 5
+           }
+          },
+          {
+           "type": "measure",
+           "description": "64-ad demo pack: 15.5 s from click to complete download, 21.7 MB"
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/launch-pack-4.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "2fd4d0e395cf17cbecf2-09bba7385704d742328b",
+     "file": "launch-pack.spec.ts",
+     "line": 42,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "logo-upload.spec.ts",
+   "file": "logo-upload.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "F-10: logo upload accepts SVG and PNG, refuses hostile files with the reason, and removes",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 11908,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:00:40.459Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "13c62344a12c4ff50bc1-a0a145c2e274ae3c1663",
+     "file": "logo-upload.spec.ts",
+     "line": 41,
+     "column": 5
+    },
+    {
+     "title": "S5-3 Q7: the brand page says which open font draws each brand font",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 3058,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:00:52.377Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "13c62344a12c4ff50bc1-ef5536020ea58783f8a5",
+     "file": "logo-upload.spec.ts",
+     "line": 118,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "market.spec.ts",
+   "file": "market.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "S4-3: refresh market notes, see their sources and dates, and confirm a second refresh within a day",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 240000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 13001,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:00:55.460Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "fc1cfe5185f27e4cbced-bf13af672c8b31501ad4",
+     "file": "market.spec.ts",
+     "line": 18,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "not-found.spec.ts",
+   "file": "not-found.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "F-12 #1 malformed ids answer 404",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 1130,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:01:08.474Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "9c5515d55a18ba2e575e-0a59fc7b6bd37ec066ae",
+     "file": "not-found.spec.ts",
+     "line": 12,
+     "column": 5
+    },
+    {
+     "title": "F-12 #2 a well-formed id that isn't in the workspace shows not found and is not indexed",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 2105,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:01:09.615Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "9c5515d55a18ba2e575e-9868f0241300446e6b3c",
+     "file": "not-found.spec.ts",
+     "line": 20,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "pretest.spec.ts",
+   "file": "pretest.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C8-4 #1: Pre-test picked ads gives four picked ads each persona's scores with reasons, the panel average and the synthetic label",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 600000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C8-4.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/pretest.spec.ts",
+          "line": 32,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 57264,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "A signed-off Quillmoor brief (sign-off runs the persona review), then Make creative with simulated pictures",
+           "duration": 35201
+          },
+          {
+           "title": "Nothing is picked yet: Pre-test picked ads says why and can't be pressed",
+           "duration": 105
+          },
+          {
+           "title": "Pick four paid-social ads",
+           "duration": 2840
+          },
+          {
+           "title": "The button shows its cost before the click, once the panel is ready",
+           "duration": 3391
+          },
+          {
+           "title": "Pre-test picked ads: the panel scores each picked ad",
+           "duration": 3601
+          },
+          {
+           "title": "Each picked ad shows its panel average, four personas' scores and reasons, and the label",
+           "duration": 11246
+          }
+         ],
+         "startTime": "2026-11-05T18:01:11.735Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C8-4.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/pretest.spec.ts",
+            "line": 32,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/pretest-5.webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "2c908587e534eca8947f-8289ae71ed1ae6de8134",
+     "file": "pretest.spec.ts",
+     "line": 32,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "run-flow.spec.ts",
+   "file": "run-flow.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "start a run, approve a tagline, see the completed trail",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 4722,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:02:09.059Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "4cb4cd3e6d72689683ca-6650880143adcdf3ecbe",
+     "file": "run-flow.spec.ts",
+     "line": 6,
+     "column": 5
+    },
+    {
+     "title": "rejecting ends the run as Rejected",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 4859,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:02:13.792Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "4cb4cd3e6d72689683ca-597417e82279f20989fa",
+     "file": "run-flow.spec.ts",
+     "line": 29,
+     "column": 5
+    },
+    {
+     "title": "a hostile brand name is shown as text, never run as markup",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 1159,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:02:18.661Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "4cb4cd3e6d72689683ca-44de93cb36f12927cf6c",
+     "file": "run-flow.spec.ts",
+     "line": 39,
+     "column": 5
+    },
+    {
+     "title": "another workspace's run id shows not found",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 1336,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:02:19.828Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "4cb4cd3e6d72689683ca-8319a8d435271808c0b6",
+     "file": "run-flow.spec.ts",
+     "line": 52,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "several-audiences.spec.ts",
+   "file": "several-audiences.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "F-27 #1 and #2: a brief with two audiences gets 24 social ads grouped by audience, and New words on the second redraws only its ads",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 600000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "F-27.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/several-audiences.spec.ts",
+          "line": 33,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "F-27.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/several-audiences.spec.ts",
+          "line": 33,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "F-27.4",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/several-audiences.spec.ts",
+          "line": 33,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 66719,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "Write a Quillmoor brief with the mock Brief agent (one audience)",
+           "duration": 4893
+          },
+          {
+           "title": "F-27.4: sign version 1 off and note the cost on Make creative with one audience",
+           "duration": 1632
+          },
+          {
+           "title": "Add a second audience to the brief and sign version 2 off",
+           "duration": 1602
+          },
+          {
+           "title": "F-27.4: with two audiences, the cost on Make creative is unchanged (pictures are shared, the words are one Copy run)",
+           "duration": 1239
+          },
+          {
+           "title": "F-27.1: Make creative gives 24 paid-social ads, 12 under each audience's heading",
+           "duration": 49431
+          },
+          {
+           "title": "F-27.2: New words on an ad of the second audience: the new words wait beside the four ads on those words only",
+           "duration": 6497,
+           "steps": [
+            {
+             "title": "Keep the new words: only those four ads are redrawn; the first audience's ads are untouched",
+             "duration": 3197
+            }
+           ]
+          }
+         ],
+         "startTime": "2026-11-05T18:02:21.180Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "F-27.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/several-audiences.spec.ts",
+            "line": 33,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "F-27.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/several-audiences.spec.ts",
+            "line": 33,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "F-27.4",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/several-audiences.spec.ts",
+            "line": 33,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/several-audiences-6.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "bf517717c38b6122b4ad-09b4bd1544ef7ec6129c",
+     "file": "several-audiences.spec.ts",
+     "line": 33,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "sign-in.spec.ts",
+   "file": "sign-in.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "N-3 #1 and #5: an allow-listed email gets a link; opening it uses nothing; Continue signs in once; then it has expired",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 8580,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:03:27.963Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "1029c30c7f8b1b06acf3-1a1b72bc69df889c1b70",
+     "file": "sign-in.spec.ts",
+     "line": 37,
+     "column": 5
+    },
+    {
+     "title": "N-3 #2 and #3, N-2 #4 and #5: an invitee signs out, signs back in by email to their own workspace, and once revoked gets nothing",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 180000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 14646,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:03:36.558Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "1029c30c7f8b1b06acf3-3e4937ea45abf12be672",
+     "file": "sign-in.spec.ts",
+     "line": 89,
+     "column": 5
+    },
+    {
+     "title": "N-3 #6: a header-injection or over-long address is refused on the page, with no reply",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 1240,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:03:51.220Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "1029c30c7f8b1b06acf3-b1a208a2402df5eaa3d4",
+     "file": "sign-in.spec.ts",
+     "line": 156,
+     "column": 5
+    },
+    {
+     "title": "the console mailer route answers off Vercel only, and tells nothing beyond its own outbox",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 11,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:03:52.475Z",
+         "annotations": [],
+         "attachments": []
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "1029c30c7f8b1b06acf3-edbc06a14a83699ffd2d",
+     "file": "sign-in.spec.ts",
+     "line": 180,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "signoff.spec.ts",
+   "file": "signoff.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "S4-1 #1-#3, S4-2 and S4-4: sign-off through the inbox, with personas and a test plan",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 240000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 17138,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:03:52.502Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "d9cc6ee72522df6aea07-9fdcf0fe423f9094ef2e",
+     "file": "signoff.spec.ts",
+     "line": 49,
+     "column": 5
+    },
+    {
+     "title": "the inbox says when nothing is waiting, or lists what is",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 3264,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:04:09.650Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "d9cc6ee72522df6aea07-49032ad76a0d5165d2cf",
+     "file": "signoff.spec.ts",
+     "line": 129,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "sizes.spec.ts",
+   "file": "sizes.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C7-1 #1, #2, #5, #7: Sizes on a social ad and a display ad, every size listed with its checks and drawn full size",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 600000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C7-1.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+          "line": 95,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-1.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+          "line": 95,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-1.5",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+          "line": 95,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C7-1.7",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+          "line": 95,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 63780,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "Write a Fernhollow Outfitters brief with the mock Brief agent",
+           "duration": 4953
+          },
+          {
+           "title": "Add display to the brief's channels and sign version 2 off",
+           "duration": 1359
+          },
+          {
+           "title": "Make creative: 12 paid-social and 12 display ads (simulated pictures)",
+           "duration": 38465
+          },
+          {
+           "title": "C7-1.1: open Sizes on a paid-social ad: the four social sizes, each with contrast, fit, legal lines and the simulated label",
+           "duration": 8983
+          },
+          {
+           "title": "Every social size is drawn at its full size, and the 9:16 story opens full size in a new tab",
+           "duration": 4533
+          },
+          {
+           "title": "C7-1.7: an unknown size, or a banner size of a social ad, is not found",
+           "duration": 94
+          },
+          {
+           "title": "C7-1.2 and C7-1.5: open Sizes on a display ad: the three banners, each drawn with its checks and the simulated label",
+           "duration": 4483
+          }
+         ],
+         "startTime": "2026-11-05T18:04:12.936Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C7-1.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+            "line": 95,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-1.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+            "line": 95,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-1.5",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+            "line": 95,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C7-1.7",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+            "line": 95,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/sizes-7.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "5009c509eba14ca4b231-c8ad3ff0e50bd58f78e4",
+     "file": "sizes.spec.ts",
+     "line": 95,
+     "column": 5
+    },
+    {
+     "title": "C7-1 #4: a size the legal lines don't fit is left out with the reason, and the other sizes still draw",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 540000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C7-1.4",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+          "line": 153,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 52358,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "Write a Quillmoor Money brief with the mock Brief agent",
+           "duration": 5048
+          },
+          {
+           "title": "Add display to the brief's channels and sign version 2 off",
+           "duration": 1158
+          },
+          {
+           "title": "Make creative: 12 paid-social and 12 display ads (simulated pictures)",
+           "duration": 40469
+          },
+          {
+           "title": "C7-1.4: Sizes on a Quillmoor display ad: its three legal lines don't fit the 728 × 90 leaderboard, so it is left out with the reason",
+           "duration": 3388
+          },
+          {
+           "title": "The medium rectangle and the half page still draw, with their checks",
+           "duration": 1499
+          }
+         ],
+         "startTime": "2026-11-05T18:05:16.736Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C7-1.4",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/sizes.spec.ts",
+            "line": 153,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/sizes-8.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "5009c509eba14ca4b231-b0515c141a193d34989e",
+     "file": "sizes.spec.ts",
+     "line": 153,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "upload.spec.ts",
+   "file": "upload.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C8-3 #1: a clean fictional Fernhollow ad, uploaded on Check an ad with the cost shown, gets every rule Pass or Review, each saying how it was found, with the words read by AI in full",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 240000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C8-3.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/upload.spec.ts",
+          "line": 54,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 10587,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "The brand's Check an ad page: the cost is on the button before anything runs",
+           "duration": 4692
+          },
+          {
+           "title": "Upload a clean Fernhollow ad (a fixture made in code); the Read ad agent reads it",
+           "duration": 2435
+          },
+          {
+           "title": "Checked in code on the words read: banned terms, legal lines and real company names pass",
+           "duration": 256
+          },
+          {
+           "title": "Estimates are Review: contrast from the pixels under the AI's boxes, and text density",
+           "duration": 104
+          },
+          {
+           "title": "The AI's own findings are Review at most: the logo, and each don't rule with No issues found by AI",
+           "duration": 142
+          },
+          {
+           "title": "The words read by AI, in full",
+           "duration": 1720
+          },
+          {
+           "title": "The upload is listed on Check an ad with its outcome",
+           "duration": 499
+          }
+         ],
+         "startTime": "2026-11-05T18:06:09.146Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C8-3.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/upload.spec.ts",
+            "line": 54,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/upload-9.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "64f97298e5aac3754605-9a11d813f8cd302678d7",
+     "file": "upload.spec.ts",
+     "line": 54,
+     "column": 5
+    },
+    {
+     "title": "C8-3 #2 and #4: a banned term fails with the term, no legal lines fails with the fix, and an SVG or a script named .png is refused with the reason and nothing stored",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 300000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C8-3.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/upload.spec.ts",
+          "line": 129,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C8-3.4",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/upload.spec.ts",
+          "line": 129,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 13812,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "An SVG is refused with the reason, and nothing is stored",
+           "duration": 2209
+          },
+          {
+           "title": "An upload whose words include a banned term fails, with the term",
+           "duration": 2263
+          },
+          {
+           "title": "An upload with no legal lines fails, with the fix",
+           "duration": 5541
+          }
+         ],
+         "startTime": "2026-11-05T18:06:19.744Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C8-3.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/upload.spec.ts",
+            "line": 129,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C8-3.4",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/upload.spec.ts",
+            "line": 129,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/upload-10.webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "64f97298e5aac3754605-a6a54835343b4f2131b8",
+     "file": "upload.spec.ts",
+     "line": 129,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "welcome-and-invites.spec.ts",
+   "file": "welcome-and-invites.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "F-3 #1: signed out, / is the welcome page with no app data, and app routes go to sign-in",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 60000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 3876,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:06:33.583Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "13a66338a60044a38fc4-0305851616d60efda803",
+     "file": "welcome-and-invites.spec.ts",
+     "line": 13,
+     "column": 5
+    },
+    {
+     "title": "F-3 #2 and #3: an invite signs someone in once, to their own workspace, until it is revoked",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 10023,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:06:37.474Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "13a66338a60044a38fc4-9d9faf58ec574b24b36d",
+     "file": "welcome-and-invites.spec.ts",
+     "line": 42,
+     "column": 5
+    },
+    {
+     "title": "F-18a: New sign-in link sits beside Revoke, and its link opens below the row without moving them",
+     "ok": true,
+     "tags": [],
+     "tests": [
+      {
+       "timeout": 120000,
+       "annotations": [],
+       "expectedStatus": "passed",
+       "projectId": "chromium",
+       "projectName": "chromium",
+       "results": [
+        {
+         "workerIndex": 2,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 6550,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "startTime": "2026-11-05T18:06:47.513Z",
+         "annotations": [],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "13a66338a60044a38fc4-353d7aaf51dea57b56ec",
+     "file": "welcome-and-invites.spec.ts",
+     "line": 118,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "compliance.spec.ts",
+   "file": "compliance.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C8-1 #1, #8, #9: a Fernhollow ad passes every rule once its don't rules are accepted, one by one or for every picked ad, the pack leaves out what waits, and a redraw makes them Review again",
+     "ok": true,
+     "tags": [
+      "brand-kit"
+     ],
+     "tests": [
+      {
+       "timeout": 900000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C8-1.1",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+          "line": 85,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C8-1.8",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+          "line": 85,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C8-1.9",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+          "line": 85,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "brand-kit",
+       "projectName": "brand-kit",
+       "results": [
+        {
+         "workerIndex": 3,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 73107,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "A signed-off Fernhollow brief and its ads (simulated pictures)",
+           "duration": 34234
+          },
+          {
+           "title": "Pick ad 1 and translate it into French, German and Spanish",
+           "duration": 4597
+          },
+          {
+           "title": "Pick ad 2, whose don't rules no one has looked at yet",
+           "duration": 4572
+          },
+          {
+           "title": "C8-1.8: ad 1's Compliance view lists each don't rule once, for the whole ad, as Review",
+           "duration": 1352
+          },
+          {
+           "title": "C8-1.8: Accept on each records the name and the time, and turns it green",
+           "duration": 1364
+          },
+          {
+           "title": "C8-1.1: every rule passes in all four sizes and in English and every language the ad was translated into",
+           "duration": 2593
+          },
+          {
+           "title": "The gallery: ad 1 Passes, ad 2 waits on its don't rules, and the picked ads' summary line",
+           "duration": 1492
+          },
+          {
+           "title": "C8-1.9: the launch pack leaves ad 2 out with the reason, and downloads ad 1's files with their compliance",
+           "duration": 7726
+          },
+          {
+           "title": "C8-1.8: on the campaign, Accept for every picked ad accepts each don't rule for ad 2, with its own decision",
+           "duration": 7739
+          },
+          {
+           "title": "C8-1.8: drawing ad 1 in another layout redraws it, and its don't rules are Review again",
+           "duration": 6755
+          }
+         ],
+         "startTime": "2026-11-05T18:07:22.182Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C8-1.1",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+            "line": 85,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C8-1.8",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+            "line": 85,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C8-1.9",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+            "line": 85,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/compliance-11.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "8235b007d48aa1a16924-0067c5ffbd7299c9e2bd",
+     "file": "compliance.spec.ts",
+     "line": 85,
+     "column": 5
+    },
+    {
+     "title": "C8-1 #2, #3, #11: contrast near AA is Review with a palette colour, a German banned term added on the Languages page fails, and hostile words stay plain text",
+     "ok": true,
+     "tags": [
+      "brand-kit"
+     ],
+     "tests": [
+      {
+       "timeout": 900000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C8-1.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+          "line": 253,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C8-1.3",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+          "line": 253,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C8-1.11",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+          "line": 253,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "brand-kit",
+       "projectName": "brand-kit",
+       "results": [
+        {
+         "workerIndex": 3,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 63528,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "A signed-off Fernhollow brief and its ads (simulated pictures)",
+           "duration": 34530
+          },
+          {
+           "title": "Seed one ad with a near-limit palette (Mist words on Slate, 4.67:1), picked, in Card",
+           "duration": 10993
+          },
+          {
+           "title": "C8-1.2: its Compliance view shows Text contrast as Review, with the ratio and a palette colour to use",
+           "duration": 5886
+          },
+          {
+           "title": "C8-1.11: a 300-character don't rule with <script> shows as plain text, and a note with markup is kept as text, cut to 500 characters",
+           "duration": 4353
+          },
+          {
+           "title": "C8-1.3: add \"Neuheiten ansehen\" to Fernhollow's German banned terms on the Languages page",
+           "duration": 1235
+          },
+          {
+           "title": "C8-1.3: the German ad now fails Banned terms in every size, with the term quoted; English still passes",
+           "duration": 1316
+          },
+          {
+           "title": "Take the German banned term out again",
+           "duration": 1235
+          },
+          {
+           "title": "C8-1.3: with the term gone, the German ad passes Banned terms again",
+           "duration": 995
+          }
+         ],
+         "startTime": "2026-11-05T18:08:35.300Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C8-1.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+            "line": 253,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C8-1.3",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+            "line": 253,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C8-1.11",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/compliance.spec.ts",
+            "line": 253,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/compliance-12.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "8235b007d48aa1a16924-1108359a7b6e3fc1b7cb",
+     "file": "compliance.spec.ts",
+     "line": 253,
+     "column": 5
+    }
+   ]
+  },
+  {
+   "title": "vision.spec.ts",
+   "file": "vision.spec.ts",
+   "column": 0,
+   "line": 0,
+   "specs": [
+    {
+     "title": "C8-2 #2, #4: Check pictures on a campaign made before Sprint 8 shows its cost and adds results once, and a picture the AI says breaks a don't rule is Review on every ad using it until accepted",
+     "ok": true,
+     "tags": [
+      "brand-kit"
+     ],
+     "tests": [
+      {
+       "timeout": 900000,
+       "annotations": [
+        {
+         "type": "case",
+         "description": "C8-2.2",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/vision.spec.ts",
+          "line": 59,
+          "column": 5
+         }
+        },
+        {
+         "type": "case",
+         "description": "C8-2.4",
+         "location": {
+          "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/vision.spec.ts",
+          "line": 59,
+          "column": 5
+         }
+        }
+       ],
+       "expectedStatus": "passed",
+       "projectId": "brand-kit",
+       "projectName": "brand-kit",
+       "results": [
+        {
+         "workerIndex": 3,
+         "parallelIndex": 0,
+         "status": "passed",
+         "duration": 53753,
+         "errors": [],
+         "stdout": [],
+         "stderr": [],
+         "retry": 0,
+         "steps": [
+          {
+           "title": "A signed-off Quillmoor brief and its ads (simulated pictures)",
+           "duration": 21716
+          },
+          {
+           "title": "Make its pictures look as if made before Sprint 8 (no picture-check results)",
+           "duration": 2152
+          },
+          {
+           "title": "C8-2.4: Check pictures shows its cost for the four pictures before the click",
+           "duration": 4612
+          },
+          {
+           "title": "C8-2.4: it checks each picture once; then the button says every picture is checked",
+           "duration": 4845
+          },
+          {
+           "title": "C8-2.4: the ad's Compliance view shows the results, each Checked by AI; the face rule and the don't rules say No issues found by AI, not Pass",
+           "duration": 2555
+          },
+          {
+           "title": "C8-2.2: add a don't rule about abstract shapes, and check picture 1 again",
+           "duration": 4747
+          },
+          {
+           "title": "C8-2.2: every ad using picture 1 shows the don't rules as Review, with the AI's reason and Checked by AI",
+           "duration": 4803
+          },
+          {
+           "title": "C8-2.2: Accept clears it in each ad, one at a time, with the name and the time",
+           "duration": 6340
+          }
+         ],
+         "startTime": "2026-11-05T18:11:13.078Z",
+         "annotations": [
+          {
+           "type": "case",
+           "description": "C8-2.2",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/vision.spec.ts",
+            "line": 59,
+            "column": 5
+           }
+          },
+          {
+           "type": "case",
+           "description": "C8-2.4",
+           "location": {
+            "file": "/home/runner/work/campaign-studio/campaign-studio/tests/e2e/vision.spec.ts",
+            "line": 59,
+            "column": 5
+           }
+          }
+         ],
+         "attachments": [
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm"
+          },
+          {
+           "name": "video",
+           "contentType": "video/webm",
+           "path": "videos/vision-13.webm"
+          }
+         ]
+        }
+       ],
+       "status": "expected"
+      }
+     ],
+     "id": "25472900828a21a5e34e-fc0eb70be13c8b127b9d",
+     "file": "vision.spec.ts",
+     "line": 59,
+     "column": 5
+    }
+   ]
+  }
+ ],
+ "errors": [],
+ "stats": {
+  "startTime": "2026-11-05T17:53:13.792Z",
+  "duration": 1133369.439,
+  "expected": 68,
+  "skipped": 0,
+  "unexpected": 0,
+  "flaky": 0
+ }
+}
