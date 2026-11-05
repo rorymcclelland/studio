@@ -138,11 +138,14 @@ jobs:
     needs: checks
     # Required: a failure here fails CI. One run at a time, to stay well inside the
     # free plan's 10 branches; a waiting run starts when the previous one ends.
+    # CI has its own Neon project, campaign-studio-ci, so its writes never count against
+    # production's 1 GB storage allowance (F-34, 5 Nov 2026), and NEON_API_KEY is a key
+    # scoped to that project only, so CI can't reach production (F-29).
     concurrency:
       group: neon-ci-branch
       cancel-in-progress: false
     env:
-      NEON_PROJECT_ID: misty-moon-16212068
+      NEON_PROJECT_ID: little-shadow-88992377
       CI_BRANCH: ci-run-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check the Neon API key is set
