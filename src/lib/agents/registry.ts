@@ -6,6 +6,7 @@ import { copyAgent } from "./copy";
 import { imageCheckAgent, imageryAgent } from "./imagery";
 import { localiseAgent } from "./localise";
 import { marketAgent } from "./market";
+import { monitorAnswerAgent, monitorPlanAgent } from "./monitor";
 import { personaAgent } from "./persona";
 import { pretestAgent } from "./pretest";
 import { readAdAgent } from "./read-ad";
@@ -25,10 +26,12 @@ export const AGENTS = {
   localise: localiseAgent,
   pretest: pretestAgent,
   readAd: readAdAgent,
+  // P9-4: Ask about this campaign (the Monitor's plan step starts the run; its answer step runs inside it).
+  monitorPlan: monitorPlanAgent,
 } as const;
 
-// Definitions that run inside another agent's workflow, never as runs of their own (S5-1: the picture check).
-const INNER_AGENTS = [imageCheckAgent] as unknown as AgentDefinition<unknown, unknown>[];
+// Definitions that run inside another agent's workflow, never as runs of their own (S5-1: the picture check; P9-4: the Monitor's answer).
+const INNER_AGENTS = [imageCheckAgent, monitorAnswerAgent] as unknown as AgentDefinition<unknown, unknown>[];
 
 export type RegisteredAgent = keyof typeof AGENTS;
 

@@ -114,27 +114,28 @@ const shown = (s: string) => s.split("­").join("");
 
 /** The ads and everything their findings need, read in one transaction. Ads whose picture or words were discarded can't be drawn, and are left out. */
 async function loadSources(tx: Tx, ids: string[]): Promise<{ sources: AdSource[]; kits: Map<string, CurrentKit>; decisions: Map<string, Decision> }> {
+  // Each ad with its words' translations (oldest first), in one query: the clock works compliance out on
+  // every simulated step (P9-4), so this read is kept to a fixed few queries.
   const rows = await tx`
     select v.id, v.campaign_id, v.layout, v.kit, v.copy_set_id, a.sha256, a.simulated, a.discarded_at as image_discarded, a.meta -> 'vision' as vision,
-      s.channel, s.set, s.legal_lines, s.discarded_at as words_discarded, c.brand_id
+      s.channel, s.set, s.legal_lines, s.discarded_at as words_discarded, c.brand_id,
+      (select coalesce(json_agg(json_build_object('id', t.id, 'lang', t.lang, 'set', t.set, 'legal_lines', t.legal_lines) order by t.created_at), '[]'::json)
+        from public.copy_sets t where t.translated_from = v.copy_set_id and t.discarded_at is null) as translations
     from public.ad_variants v
     join public.assets a on a.id = v.image_asset_id
     join public.copy_sets s on s.id = v.copy_set_id
     join public.campaigns c on c.id = v.campaign_id
     where v.id = any(${ids}::uuid[])`;
   const live = rows.filter((r) => !r.image_discarded && !r.words_discarded);
-  const setIds = live.map((r) => r.copy_set_id as string);
-  const translations = setIds.length
-    ? await tx`
-        select id, translated_from, lang, set, legal_lines from public.copy_sets
-        where translated_from = any(${setIds}::uuid[]) and discarded_at is null
-        order by created_at`
-    : [];
   const brandIds = [...new Set(live.map((r) => r.brand_id as string))];
   const kits = new Map<string, CurrentKit>();
   for (const brandId of brandIds) {
-    const [b] = await tx`select legal_lines, banned_terms, dont_rules, palette, category from public.brands where id = ${brandId}`;
-    const langs = await tx`select lang, legal_lines, banned_terms from public.brand_languages where brand_id = ${brandId}`;
+    const [b] = await tx`
+      select legal_lines, banned_terms, dont_rules, palette, category,
+        (select coalesce(json_agg(json_build_object('lang', l.lang, 'legal_lines', l.legal_lines, 'banned_terms', l.banned_terms)), '[]'::json)
+          from public.brand_languages l where l.brand_id = ${brandId}) as langs
+      from public.brands where id = ${brandId}`;
+    const langs = (b?.langs as { lang: string; legal_lines: string[]; banned_terms: string[] }[] | undefined) ?? [];
     kits.set(brandId, {
       legalLines: (b?.legal_lines as string[]) ?? [],
       bannedTerms: (b?.banned_terms as string[]) ?? [],
@@ -148,7 +149,7 @@ async function loadSources(tx: Tx, ids: string[]): Promise<{ sources: AdSource[]
   const sources: AdSource[] = [];
   for (const r of live) {
     const kit = r.kit as KitSnapshot;
-    const mine = translations.filter((t) => t.translated_from === r.copy_set_id);
+    const mine = r.translations as { id: string; lang: string; set: AdWords; legal_lines: string[] }[];
     const latest = new Map<string, (typeof mine)[number]>();
     for (const t of mine) latest.set(t.lang as string, t);
     sources.push({
@@ -294,10 +295,24 @@ async function complianceOf(src: AdSource, kit: CurrentKit, decisions: Map<strin
 
 /** Compliance for ads the user can see, by id (others, and ads that can't be drawn, are left out). */
 export async function complianceFor(userId: string, variantIds: string[]): Promise<Map<string, AdCompliance>> {
+  return complianceIn(null, userId, variantIds);
+}
+
+/**
+ * complianceFor inside a transaction the caller already holds as the user
+ * (P9-4: the clock works compliance out on every step, in its own
+ * transaction, so a step costs a fixed few queries more, not a second
+ * transaction).
+ */
+export async function complianceForTx(tx: Tx, variantIds: string[]): Promise<Map<string, AdCompliance>> {
+  return complianceIn(tx, null, variantIds);
+}
+
+async function complianceIn(tx: Tx | null, userId: string | null, variantIds: string[]): Promise<Map<string, AdCompliance>> {
   const ids = [...new Set(variantIds.filter((id) => UUID.test(id)))];
   const out = new Map<string, AdCompliance>();
   if (ids.length === 0) return out;
-  const { sources, kits, decisions } = await asUser(userId, (tx) => loadSources(tx, ids));
+  const { sources, kits, decisions } = tx ? await loadSources(tx, ids) : await asUser(userId!, (t) => loadSources(t, ids));
   for (const src of sources) out.set(src.id, await complianceOf(src, kits.get(src.brandId)!, decisions));
   return out;
 }

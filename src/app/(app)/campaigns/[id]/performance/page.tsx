@@ -11,11 +11,17 @@ import { TextLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Pill, type PillTone } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
-import { formatPrice } from "@/lib/format";
+import { AutoRefresh } from "@/components/auto-refresh";
+import { formatPrice, formatWhen } from "@/lib/format";
+import { ALERT_NAMES, NO_ALERTS, type AlertKind } from "@/lib/performance/alerts";
+import { listAlerts, type AlertView } from "@/lib/performance/alerts-store";
+import { askPanel, questionsFor, type AskPanel, type QuestionView } from "@/lib/performance/ask";
+import { ANSWER_LABEL, CANNOT_ANSWER, MEASURE_LABELS, type QueryResult } from "@/lib/performance/ask-rules";
 import { NOT_LAUNCHED, performanceFor, TREND_NOTE, type PerformanceView } from "@/lib/performance/dashboard";
 import { HEALTHY_DEFINITION, NOT_ENOUGH_DATA, shareText, STATUS_NAMES, type AdHealth, type AdStatus, type DayHealth } from "@/lib/performance/health";
 import { isKpiMeasure, thresholdPhrase } from "@/lib/performance/launch-rules";
 import { adName, MEASURE_SHORT, PerformanceChart } from "./chart";
+import { AskForm, MarkSeenButton } from "./monitor-controls";
 
 const STATUS_TONE: Record<AdStatus, PillTone> = {
   healthy: "good",
@@ -206,11 +212,165 @@ function AdsTable({ view }: { view: PerformanceView }) {
   );
 }
 
+const ALERT_TONE: Record<AlertKind, PillTone> = { below_threshold: "attention", tiring: "review", not_compliant: "attention" };
+
+/** P9-4: the monitor's alerts. They only tell: the one control is Mark as seen (rule 3). */
+function Alerts({ campaignId, alerts }: { campaignId: string; alerts: AlertView[] }) {
+  return (
+    <Card as="section" aria-labelledby="perf-alerts-heading" className="space-y-4" data-perf-alerts="">
+      <div className="space-y-1">
+        <h2 id="perf-alerts-heading" className="text-2xl font-strong tracking-tight">
+          Alerts (simulated)
+        </h2>
+        <p className="max-w-prose text-sm text-ink-2">
+          Raised after each simulated day when an ad misses its threshold two days in a row, tires (its three-day click-through rate 25% or more below its best), or stops passing compliance. Alerts change nothing on their own.
+        </p>
+      </div>
+      {alerts.length === 0 ? (
+        <p className="text-ink-2">{NO_ALERTS}</p>
+      ) : (
+        <ul className="divide-y divide-line">
+          {alerts.map((a) => (
+            <li key={a.id} data-perf-alert={a.id} data-kind={a.kind} data-day={String(a.day)} className="flex flex-col gap-2 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:gap-4">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <span data-alert-kind="">
+                    <Pill tone={ALERT_TONE[a.kind]}>{ALERT_NAMES[a.kind]}</Pill>
+                  </span>
+                  <span className="text-sm font-semibold text-ink-2 tabular-nums" data-alert-day="">{`Simulated day ${a.day}`}</span>
+                </p>
+                <p id={`alert-${a.id}-facts`} className="max-w-prose wrap-anywhere" data-alert-facts="">
+                  {a.line}
+                </p>
+              </div>
+              <div className="shrink-0">
+                {a.seenAt ? (
+                  <p className="text-sm text-ink-2 wrap-anywhere" data-alert-seen="">{`Seen by ${a.seenByName ?? "a member of this workspace"}, ${formatWhen(a.seenAt)}`}</p>
+                ) : (
+                  <MarkSeenButton campaignId={campaignId} alertId={a.id} describedBy={`alert-${a.id}-facts`} />
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
+  );
+}
+
+function ResultTable({ result }: { result: QueryResult }) {
+  const span = result.from === result.to ? `Simulated day ${result.from}` : `Simulated days ${result.from} to ${result.to}`;
+  const first = result.groupBy === "ad" ? "Ad" : result.groupBy === "day" ? "Day" : "Ads";
+  return (
+    <div className="overflow-x-auto" tabIndex={0} role="region" aria-label="The query result (simulated)">
+      <table className="w-full min-w-max text-left text-sm" data-ask-result="">
+        <caption className="pb-2 text-left font-semibold text-ink-2">{`${span} (simulated)`}</caption>
+        <thead className="text-ink-2">
+          <tr>
+            <th scope="col" className="py-2 pr-4 font-semibold">
+              {first}
+            </th>
+            {result.measures.map((m) => (
+              <th key={m} scope="col" className="px-3 py-2 text-right font-semibold">
+                {MEASURE_LABELS[m]}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {result.rows.map((r, i) => (
+            <tr key={i} className="border-t border-line align-top">
+              <th scope="row" className="py-2 pr-4 text-left font-normal">
+                {r.adNumber !== null ? (
+                  <>
+                    <span className="font-semibold whitespace-nowrap">{`Ad ${r.adNumber}`}</span>
+                    {r.headline && <span className="hidden max-w-56 text-ink-2 wrap-anywhere sm:block">{r.headline}</span>}
+                  </>
+                ) : r.day !== null ? (
+                  <span className="font-semibold whitespace-nowrap">{`Day ${r.day}`}</span>
+                ) : (
+                  <span className="font-semibold">{result.ads.length === 1 ? `Ad ${result.ads[0]}` : result.ads.length > 1 ? `Ads ${result.ads.join(", ")}` : "All ads"}</span>
+                )}
+              </th>
+              {result.measures.map((m) => (
+                <td key={m} className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+                  {r.shown[m]}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/** One question, as asked (plain text), with its answer and the table it used. */
+function Question({ q }: { q: QuestionView }) {
+  return (
+    <li data-ask-question={q.id} data-status={q.status} className="space-y-3 border-t border-line pt-5">
+      <div className="space-y-1">
+        <p className="font-semibold wrap-anywhere whitespace-pre-wrap" data-ask-text="">
+          {q.question}
+        </p>
+        <p className="text-sm text-ink-2 wrap-anywhere">{`Asked by ${q.askedByName ?? "a member of this workspace"}, ${formatWhen(q.askedAt)}`}</p>
+      </div>
+      {q.status === "pending" ? (
+        <p className="text-ink-2" role="status" data-ask-pending="">
+          Working out the answer from the simulated results…
+        </p>
+      ) : q.status === "refused" ? (
+        <p className="max-w-prose font-medium text-attention-ink wrap-anywhere" data-ask-answer="">
+          {q.refused}
+        </p>
+      ) : (
+        <div className="space-y-1.5">
+          <p className="max-w-prose text-lg wrap-anywhere" data-ask-answer="">
+            {q.status === "cannot_answer" ? CANNOT_ANSWER : q.answer}
+          </p>
+          {q.status === "answered" && (
+            <p data-ask-label="">
+              <Pill tone="review">{ANSWER_LABEL}</Pill>
+            </p>
+          )}
+        </div>
+      )}
+      {q.result && q.status !== "cannot_answer" && <ResultTable result={q.result} />}
+    </li>
+  );
+}
+
+/** P9-4: Ask about this campaign: the box, then the questions about the shown launch, newest first. */
+function Ask({ campaignId, panel, questions }: { campaignId: string; panel: AskPanel; questions: QuestionView[] }) {
+  const pending = questions.some((q) => q.status === "pending");
+  return (
+    <Card as="section" aria-labelledby="perf-ask-heading" className="space-y-5">
+      <AutoRefresh active={pending} intervalMs={2000} />
+      <div className="space-y-1">
+        <h2 id="perf-ask-heading" className="text-2xl font-strong tracking-tight">
+          Ask about this campaign
+        </h2>
+        <p className="max-w-prose text-sm text-ink-2">
+          AI plans a query of the stored simulated results and words the answer; code runs the query and checks every figure in the answer against the table shown under it.
+        </p>
+      </div>
+      <AskForm campaignId={campaignId} cost={panel.estimate.label} reason={panel.reason} maxLength={panel.maxLength} />
+      {questions.length > 0 && (
+        <ol className="space-y-5" aria-label="Questions asked, newest first">
+          {questions.map((q) => (
+            <Question key={q.id} q={q} />
+          ))}
+        </ol>
+      )}
+    </Card>
+  );
+}
+
 async function PerformancePageContent(props: PageProps<"/campaigns/[id]/performance">) {
   const { id } = await props.params;
   const member = await requireMember();
-  const view = await performanceFor(member.userId, id);
-  if (!view) notFound();
+  const [view, alerts, panel, questions] = await Promise.all([performanceFor(member.userId, id), listAlerts(member.userId, id), askPanel(member, id), questionsFor(member.userId, id)]);
+  if (!view || !alerts || !panel || !questions) notFound();
   const l = view.launch;
   return (
     <div className="space-y-8">
@@ -231,6 +391,7 @@ async function PerformancePageContent(props: PageProps<"/campaigns/[id]/performa
       ) : (
         <>
           <Headline view={view} />
+          <Alerts campaignId={view.campaignId} alerts={alerts} />
           {view.series.length > 0 && isKpiMeasure(l.kpiMeasure) && (
             <Card as="section" aria-labelledby="perf-chart-heading" className="space-y-4">
               <div className="space-y-1">
@@ -243,6 +404,7 @@ async function PerformancePageContent(props: PageProps<"/campaigns/[id]/performa
             </Card>
           )}
           <AdsTable view={view} />
+          <Ask campaignId={view.campaignId} panel={panel} questions={questions.filter((q) => q.launchId === l.id)} />
         </>
       )}
     </div>

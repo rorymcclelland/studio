@@ -12,6 +12,8 @@ import { Ring, countTones } from "@/components/ui/ring";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatCost, formatWhen } from "@/lib/format";
 import { homeHealth } from "@/lib/performance/dashboard";
+import { alertsLine } from "@/lib/performance/alerts";
+import { unseenAlertCount } from "@/lib/performance/alerts-store";
 import { SimulatedCostNote } from "@/components/simulated-cost-note";
 import { StartRunForm } from "./start-run-form";
 
@@ -19,7 +21,7 @@ const RECENT = 5;
 
 async function HomePageContent() {
   const member = await requireMember();
-  const [runs, health] = await Promise.all([listRuns(member.userId, RECENT), homeHealth(member.userId)]);
+  const [runs, health, unseen] = await Promise.all([listRuns(member.userId, RECENT), homeHealth(member.userId), unseenAlertCount(member.userId)]);
   const tones = runs.map((r) => statusRingTone(r.status));
   const counts = countTones(tones);
   return (
@@ -28,9 +30,17 @@ async function HomePageContent() {
       {health && (
         <Card as="section" aria-label="Healthy spend share (simulated)" className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <Pill tone="review">Simulated</Pill>
-          <p className="min-w-0 font-semibold wrap-anywhere" data-home-health="">
-            {health.line}
-          </p>
+          <div className="min-w-0 space-y-1">
+            <p className="font-semibold wrap-anywhere" data-home-health="">
+              {health.line}
+            </p>
+            {/* P9-4: unseen alerts on the live campaigns; nothing at 0. */}
+            {unseen > 0 && (
+              <p className="font-medium text-attention-ink wrap-anywhere" data-home-alerts="">
+                {alertsLine(unseen)}
+              </p>
+            )}
+          </div>
           <TextLink href="/campaigns" className="text-sm sm:ml-auto">
             See the campaigns
           </TextLink>

@@ -3,7 +3,7 @@
 // judged by health.ts. No model is called (rule 5), and every read goes
 // through asUser() (rule 7): another workspace's campaign is the same null as
 // one that isn't there, and nothing about another workspace's ad is told.
-import { complianceFor, fileCompliance, type AdCompliance } from "@/lib/compliance/compute";
+import { complianceFor, complianceForTx, fileCompliance, type AdCompliance } from "@/lib/compliance/compute";
 import { getCreative } from "@/lib/creative/gallery";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { clockLabel } from "./clock-rules";
@@ -35,6 +35,15 @@ function judgeToday(compliance: AdCompliance | undefined, ad: LaunchAd): AdCompl
 export async function complianceToday(userId: string, ads: LaunchAd[]): Promise<Map<string, AdComplianceToday>> {
   const all = await complianceFor(
     userId,
+    ads.map((a) => a.variantId),
+  );
+  return new Map(ads.map((a) => [a.variantId, judgeToday(all.get(a.variantId), a)]));
+}
+
+/** complianceToday inside a transaction the caller holds as the user (the clock's, P9-4). */
+export async function complianceTodayIn(tx: Tx, ads: LaunchAd[]): Promise<Map<string, AdComplianceToday>> {
+  const all = await complianceForTx(
+    tx,
     ads.map((a) => a.variantId),
   );
   return new Map(ads.map((a) => [a.variantId, judgeToday(all.get(a.variantId), a)]));
