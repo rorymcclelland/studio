@@ -258,8 +258,8 @@ function matches(figure: number, decimals: number, value: number, unit: Unit): b
  * are allowed only where the answer names an ad or a day (NAMED, DAY_COUNT), so
  * a bare "14 conversions" can't pass because day 14 is in the range.
  */
-function allowed(result: QueryResult): { value: number; units: Set<Unit> }[] {
-  const out: { value: number; units: Set<Unit> }[] = [];
+function allowed(result: QueryResult): { value: number; shown: number | null; units: Set<Unit> }[] {
+  const out: { value: number; shown: number | null; units: Set<Unit> }[] = [];
   for (const r of result.rows) {
     for (const [m, v] of Object.entries(r.values) as [Measure, number | null][]) {
       if (v === null || v === undefined) continue;
@@ -267,10 +267,22 @@ function allowed(result: QueryResult): { value: number; units: Set<Unit> }[] {
       if (MONEY.has(m)) units.add("£");
       if (PERCENT.has(m)) units.add("%");
       if (RATIO.has(m)) units.add("×");
-      out.push({ value: v, units });
+      out.push({ value: v, shown: shownNumber(r.shown[m]), units });
     }
   }
   return out;
+}
+
+/**
+ * The number a shown value writes ("£8.34", "0.47%", "2.10×", "12,345"), or
+ * null. The table rounds in its own way (whole pence, toFixed), and at a
+ * half-way tie floating point can round the stored value the other way
+ * (833.5p is 8.334999… pounds), so a figure written exactly as the table shows
+ * it is always allowed, as well as the value rounded.
+ */
+function shownNumber(shown: string | undefined): number | null {
+  const m = /^£?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(%|×)?$/u.exec(shown ?? "");
+  return m ? Number(`${m[1].replace(/,/g, "")}${m[2] ?? ""}`) : null;
 }
 
 const notInResult = (written: string) => `the answer states ${written}, which is not in the result; use only figures from the result, as they are shown`;
@@ -320,7 +332,8 @@ export function checkAnswer(answer: string, result: QueryResult): string[] {
     const value = Number(`${m[2].replace(/,/g, "")}${m[3] ?? ""}`);
     const decimals = m[3] ? m[3].length - 1 : 0;
     const unit: Unit = m[1] ? "£" : m[4] === "%" ? "%" : m[4] ? "×" : "";
-    if ((m[1] && m[4]) || !ok.some((a) => a.units.has(unit) && matches(value, decimals, a.value, unit))) {
+    const fits = (a: (typeof ok)[number]) => matches(value, decimals, a.value, unit) || (a.shown !== null && Math.abs(a.shown - value) < 1e-9);
+    if ((m[1] && m[4]) || !ok.some((a) => a.units.has(unit) && fits(a))) {
       found.push({ at: m.index, problem: notInResult(written) });
     }
     blank(m.index, written.length);

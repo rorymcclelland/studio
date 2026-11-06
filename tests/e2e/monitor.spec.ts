@@ -129,14 +129,27 @@ async function storedRows(sql: Sql, launchId: string): Promise<SimRow[]> {
   }));
 }
 
-/** Asks a question in the box and waits for its answer to show (the page refreshes; a reload always lands). */
-async function askAndWait(page: Page, question: string) {
+/**
+ * Asks a question in the box and waits for its answer to show (the page
+ * refreshes; a reload always lands). The mock model always answers, so a
+ * refusal fails here, with the sentence the page shows and the run's error from
+ * its trail (the checks' problems), so a failure explains itself.
+ */
+async function askAndWait(page: Page, sql: Sql, launchId: string, question: string) {
   await askBox(page).getByRole("textbox", { name: "Ask about this campaign" }).fill(question);
   await askBox(page).getByRole("button", { name: "Ask" }).click();
   await untilShown(page, async () => {
     await expect(asked(page, question).locator("[data-ask-answer]")).not.toBeEmpty({ timeout: 2_000 });
   }, 120_000);
-  return asked(page, question);
+  const item = asked(page, question);
+  if ((await item.getAttribute("data-status")) === "refused") {
+    const shown = ((await item.locator("[data-ask-answer]").textContent()) ?? "").trim();
+    const [run] = await sql`
+      select r.status, r.error from public.performance_questions q left join public.agent_runs r on r.id = q.run_id
+      where q.launch_id = ${launchId} and q.question = ${question} order by q.created_at desc limit 1`;
+    throw new Error(`"${question}" was refused: ${shown} (run ${run?.status ?? "not found"}: ${run?.error ?? "no error recorded"})`);
+  }
+  return item;
 }
 
 test.beforeEach(async ({ page }) => {
@@ -251,7 +264,7 @@ test(
         const input = box.getByRole("textbox", { name: "Ask about this campaign" });
         await expect(input).toHaveAttribute("maxlength", "300");
         await expect(box.locator("[data-ask-cost]")).toHaveText(/about [\d.]+p/);
-        const item = await askAndWait(page, MOCK_CPA_QUESTION);
+        const item = await askAndWait(page, sql, launchId, MOCK_CPA_QUESTION);
         const answer = (await item.locator("[data-ask-answer]").textContent())!.trim();
         await expect(item.locator("[data-ask-label]")).toHaveText(ANSWER_LABEL);
 
@@ -289,7 +302,7 @@ test(
       });
 
       await step(page, "The failure path: What did our rivals spend? gets the fixed reply, and no table", async () => {
-        const item = await askAndWait(page, "What did our rivals spend?");
+        const item = await askAndWait(page, sql, launchId, "What did our rivals spend?");
         await expect(item.locator("[data-ask-answer]")).toHaveText(CANNOT_ANSWER);
         await expect(item.locator("[data-ask-result]")).toHaveCount(0);
         await expect(item.locator("[data-ask-label]")).toHaveCount(0);

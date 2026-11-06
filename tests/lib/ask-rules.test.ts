@@ -26,6 +26,7 @@ import {
   type AnswerablePlan,
   type QueryResult,
 } from "@/lib/performance/ask-rules";
+import { mockAnswerFor } from "@/lib/agents/monitor";
 import type { LaunchAdView } from "@/lib/performance/launch";
 import type { SimRow } from "@/lib/performance/simulate";
 import { SOCIAL_SIZES, sums } from "../helpers/monitor";
@@ -193,6 +194,31 @@ describe("P9-4 every figure in an answer is in the result", () => {
     expect(checkAnswer(`Ad ${best.adNumber} cost £${Math.round(pounds)} a conversion.`, result)).toEqual([]);
     const wrong = `£${(pounds + 0.3).toFixed(2)}`;
     expect(checkAnswer(`Ad ${best.adNumber} cost ${wrong} a conversion.`, result)).toEqual([`the answer states ${wrong}, which is not in the result; use only figures from the result, as they are shown`]);
+  });
+
+  it("#5 a figure written exactly as the table shows it passes at a half-way tie, whichever way floating point rounds the value (the monitor.spec.ts flake)", () => {
+    // £116.69 over 14 conversions is 833.5p: the table shows £8.34, while the value in pounds is 8.334999999999999.
+    // 19 clicks from 4,000 impressions is 0.475%, shown 0.47%; £0.57 of revenue from £1.20 of spend is 0.475×, shown 0.47×.
+    const day = (d: number, over: Partial<SimRow>): SimRow => ({ variantId: IDS[0], day: d, date: dateOf(d), impressions: 0, clicks: 0, conversions: 0, spendPence: 0, revenuePence: 0, events: [], ...over });
+    const one = [VIEWS[0]];
+    const between = { kind: "between", from: 8, to: 9 } as const;
+    const tie = resultFrom(plan({ days: between }), [day(8, { conversions: 7, spendPence: 5835 }), day(9, { conversions: 7, spendPence: 5834 })], one, 9);
+    const top = tie.rows[0];
+    expect(top.shown.cpa).toBe("£8.34");
+    expect(top.values.cpa).not.toBe(8.335);
+    expect(checkAnswer(`Ad 1 had the lowest cost per acquisition over simulated days 8 to 9: ${top.shown.cpa}.`, tie)).toEqual([]);
+    const rates = resultFrom(
+      plan({ measures: ["ctr", "roas"], sort: null, days: between }),
+      [day(8, { impressions: 2000, clicks: 9, spendPence: 60, revenuePence: 30 }), day(9, { impressions: 2000, clicks: 10, spendPence: 60, revenuePence: 27 })],
+      one,
+      9,
+    );
+    expect(rates.rows[0].shown).toEqual({ ctr: "0.47%", roas: "0.47×" });
+    expect(checkAnswer(`Its click-through rate was ${rates.rows[0].shown.ctr} and its return on ad spend ${rates.rows[0].shown.roas}.`, rates)).toEqual([]);
+    // The mock model's answer, which quotes the table, passes its own check.
+    expect(checkAnswer(mockAnswerFor(tie), tie)).toEqual([]);
+    // Only the figure as shown, or the value rounded: £8.35 is neither.
+    expect(checkAnswer("Ad 1 cost £8.35 a conversion.", tie)).toEqual(["the answer states £8.35, which is not in the result; use only figures from the result, as they are shown"]);
   });
 
   it("#5 display formats: pounds, percentages, ratios and counts with or without the thousands comma", () => {
