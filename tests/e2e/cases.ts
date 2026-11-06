@@ -81,6 +81,7 @@ export const STORIES: Story[] = [
   { sprint: 8, id: "C8-2", title: "Vision checks for judgement calls, with F-24" },
   { sprint: 8, id: "C8-3", title: "Check an uploaded ad" },
   { sprint: 8, id: "C8-4", title: "Pre-test panel" },
+  { sprint: 9, id: "P9-1", title: "Launch a simulated campaign" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -133,6 +134,12 @@ const UPLOAD_RULES = "tests/lib/upload-rules.test.ts";
 const PRETEST_SPEC = "pretest.spec.ts";
 const PRETEST = "C8-4 #1: Pre-test picked ads gives four picked ads each persona's scores with reasons, the panel average and the synthetic label";
 const PRETEST_CI = "tests/agents/pretest.test.ts";
+
+// P9-1 Launch a simulated campaign
+const LAUNCH_SPEC = "launch.spec.ts";
+const LAUNCH =
+  "P9-1 #1, #2, #7: a signed-off Fernhollow campaign's four passing ads launch with the defaults once approved in the inbox, an ad still waiting is left out with the pack's reason, and End the launch ends it";
+const LAUNCH_DB = "tests/db/launch.test.ts";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -946,6 +953,127 @@ export const CASES: Case[] = [
     story: "C8-4",
     words: "Real model quality: whether the panel's reasons are sensible.",
     checks: [{ kind: "hand", why: `${REAL_AI}. Whether the panel's reasons are sensible (hand check HC-3 in ${HAND_PACK_8}).` }],
+  },
+
+  // ---------------------------------------------------------------- Sprint 9
+  // P9-1 Launch a simulated campaign
+  {
+    id: "P9-1.1",
+    sprint: 9,
+    story: "P9-1",
+    words: "A signed-off Fernhollow campaign with four picked ads that pass: Ask to launch with the defaults, approve in the inbox, and the campaign shows Live (simulated) with four ads, £50 a day for 30 days.",
+    checks: [
+      { kind: "browser", spec: LAUNCH_SPEC, title: LAUNCH },
+      { kind: "ci", file: LAUNCH_DB, test: "#1 Ask to launch with the defaults, then Approve in the inbox: the launch is live with exactly the eligible ads, £50 a day for 30 days" },
+      { kind: "ci", file: LAUNCH_DB, test: "#1 through the server actions: Ask to launch, then Approve, as the signed-in person" },
+      {
+        kind: "ci",
+        file: LAUNCH_DB,
+        test: "#1 the defaults: £50 a day for 30 days from today, and the threshold the brief's KPI suggests, labelled as Studio's own simulated default",
+        note: "The refinement's table of default measures. The suggested values are Studio's own simulated defaults, not benchmarks (rule 1).",
+      },
+    ],
+  },
+  {
+    id: "P9-1.2",
+    sprint: 9,
+    story: "P9-1",
+    words: "A picked ad with a failure, or an unaccepted review, is left out with the same reason the pack gives; with no eligible ads, Ask to launch is disabled: \"No picked ads pass compliance yet\".",
+    checks: [
+      {
+        kind: "browser",
+        spec: LAUNCH_SPEC,
+        title: LAUNCH,
+        note: "The browser shows an ad waiting on its don't rules left out, with the pack's reason read from the same page. An ad marked not acceptable (a fail) is the CI test.",
+      },
+      { kind: "ci", file: LAUNCH_DB, test: "#2 the launch's ads are the pack's: an ad is in when the pack has a file for it, with those sizes and languages; a fail or an unaccepted review is left out with the pack's reason" },
+      { kind: "ci", file: LAUNCH_DB, test: "#2 with no eligible ads, Ask to launch is refused: No picked ads pass compliance yet" },
+      {
+        kind: "ci",
+        file: PACK_DB,
+        test: "#9 C8-1: a file with a fail or an unaccepted review is left out with the reason; the manifest's compliance matches the Compliance view, and reviewed_by names the person",
+        note: "The pack's own rule, which the launch's eligibility is built on (src/lib/performance/launch.ts uses planPack), so the two can't disagree.",
+      },
+    ],
+  },
+  {
+    id: "P9-1.3",
+    sprint: 9,
+    story: "P9-1",
+    words: "A campaign whose brief isn't signed off can't ask to launch, in the UI or the server action.",
+    checks: [
+      {
+        kind: "ci",
+        file: LAUNCH_DB,
+        test: "#3 a campaign whose brief isn't signed off can't ask to launch: the panel says why, and the server action refuses",
+        note: "A brief never signed off, and one edited after its sign-off. The UI's part is the panel's input (the refusal it shows instead of the form); the page itself isn't drawn in CI.",
+      },
+    ],
+  },
+  {
+    id: "P9-1.4",
+    sprint: 9,
+    story: "P9-1",
+    words: "Out-of-range input is refused with a plain reason (a budget of £0 or £501, 0 or 61 days, a start before 1 January 2026 or after 31 December 2027, a threshold of 0 or a CTR over 100%); a tampered request with another campaign's ad is refused like a 404.",
+    checks: [
+      { kind: "ci", file: LAUNCH_DB, test: "#4 out-of-range input is refused with a plain reason, and the limits themselves are allowed" },
+      { kind: "ci", file: LAUNCH_DB, test: "#4 the action refuses out-of-range input with every reason and stores nothing; the database refuses it too" },
+      { kind: "ci", file: LAUNCH_DB, test: "#4 a tampered request with another campaign's ad is refused like a 404, and stores nothing" },
+    ],
+  },
+  {
+    id: "P9-1.5",
+    sprint: 9,
+    story: "P9-1",
+    words: "Refusing in the inbox leaves the campaign unlaunched, with the refusal and its reason; a second Ask to launch while one is open is refused.",
+    checks: [
+      { kind: "ci", file: LAUNCH_DB, test: "#5 Refuse in the inbox leaves the campaign unlaunched, with the refusal and its reason; it can be asked for again" },
+      { kind: "ci", file: LAUNCH_DB, test: "#5 a second Ask to launch while one is open is refused, in the app and by the database's indexes" },
+      { kind: "ci", file: LAUNCH_DB, test: "#5 two Ask to launch clicks at once make one launch request" },
+    ],
+  },
+  {
+    id: "P9-1.6",
+    sprint: 9,
+    story: "P9-1",
+    words: "An approved launch's budget, ads and threshold can't be changed, even by an update straight to the database: the guard trigger refuses it.",
+    checks: [{ kind: "ci", file: LAUNCH_DB, test: "#6 an approved launch's budget, ads and threshold can't be changed, even by an update straight to the database" }],
+  },
+  {
+    id: "P9-1.7",
+    sprint: 9,
+    story: "P9-1",
+    words: "End the launch: the campaign shows Ended on its last simulated day, with who ended it.",
+    checks: [
+      {
+        kind: "browser",
+        spec: LAUNCH_SPEC,
+        title: LAUNCH,
+        note: "P9-1 has no simulated clock (that is P9-2), so the launch ends before its first simulated day; the day it ends on is shown once the clock runs.",
+      },
+      { kind: "ci", file: LAUNCH_DB, test: "#7 End the launch records who ended it and when; only a live launch can end, and the campaign can launch again" },
+    ],
+  },
+  {
+    id: "P9-1.8",
+    sprint: 9,
+    story: "P9-1",
+    words: "Another workspace can't see, approve or end a launch.",
+    checks: [{ kind: "ci", file: LAUNCH_DB, test: "#8 another workspace can't see, approve or end a launch: the same refusal as a missing one, and RLS in the database" }],
+  },
+  {
+    id: "P9-1.9",
+    sprint: 9,
+    story: "P9-1",
+    words: "Hostile input: a refusal reason of 2,000 characters with <script> is capped at 500 and shown as text.",
+    checks: [
+      {
+        kind: "ci",
+        file: LAUNCH_DB,
+        test: "#9 hostile: a refusal reason of 2,000 characters with <script> is capped at 500, kept as plain text and shown as text",
+        note: "Shown as text: the refusal's component is rendered to HTML in the test, and the markup comes out escaped.",
+      },
+    ],
   },
 ];
 

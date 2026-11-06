@@ -33,6 +33,7 @@ import {
   type FieldSpec,
 } from "./creative-controls";
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
+import { LaunchPanel, LaunchPanelSkeleton, type LaunchPanelData } from "./launch-panel";
 import { PictureCheckBar } from "./picture-check-bar";
 import { PretestBar, PretestScores } from "./pretest-panel";
 import { CompliancePillView } from "./ads/[variantId]/compliance/compliance-view";
@@ -80,7 +81,18 @@ function specFor(channel: CopyChannel, copy: AnyCopy): { fields: FieldSpec[]; va
 
 type ComplianceP = Promise<GalleryCompliance | null> | null;
 
-export function CreativeSection({ view, pack, compliance = null }: { view: CreativeView; pack: Promise<PackSummary | null> | null; compliance?: ComplianceP }) {
+export function CreativeSection({
+  view,
+  pack,
+  compliance = null,
+  launch = null,
+}: {
+  view: CreativeView;
+  pack: Promise<PackSummary | null> | null;
+  compliance?: ComplianceP;
+  /** P9-1: the Launch (simulated) panel's data, streamed in after the pack. */
+  launch?: Promise<LaunchPanelData | null> | null;
+}) {
   const make = view.makeCreative;
   const running = !!make.runningRunId;
   const anyBusy =
@@ -193,6 +205,11 @@ export function CreativeSection({ view, pack, compliance = null }: { view: Creat
               {pack && (
                 <Suspense fallback={<LaunchPackSkeleton />}>
                   <LaunchPack summary={pack} />
+                </Suspense>
+              )}
+              {launch && (
+                <Suspense fallback={<LaunchPanelSkeleton />}>
+                  <LaunchPanel data={launch} view={view} />
                 </Suspense>
               )}
               {view.olderKitCount > 0 && (

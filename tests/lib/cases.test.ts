@@ -51,6 +51,19 @@ describe("the case list", () => {
     expect(c81.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["C8-1.1", "C8-1.2", "C8-1.3", "C8-1.8", "C8-1.9", "C8-1.11"]);
   });
 
+  it("has every agreed P9-1 case, once each, in order, checked as the refinement says", () => {
+    const p91 = CASES.filter((c) => c.story === "P9-1");
+    expect(p91.map((c) => c.id)).toEqual(Array.from({ length: 9 }, (_, i) => `P9-1.${i + 1}`));
+    for (const c of p91) {
+      expect(c.sprint, c.id).toBe(9);
+      expect(["browser", "ci"], c.id).toContain(caseKind(c));
+      // Every case has a CI check in tests/db/launch.test.ts, browser cases too.
+      expect(c.checks.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/db/launch.test.ts"), c.id).toBe(true);
+    }
+    // The browser tests the refinement names: cases 1, 2 and 7; the rest are CI.
+    expect(p91.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["P9-1.1", "P9-1.2", "P9-1.7"]);
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);
@@ -138,8 +151,8 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("C8-1")).toBeLessThan(order.indexOf("C8-3"));
     expect(order.lastIndexOf("C8-2")).toBeLessThan(order.indexOf("C8-3"));
-    const stories = STORIES.map((s) => s.id);
-    expect(stories.slice(stories.indexOf("C8-1"))).toEqual(["C8-1", "C8-2", "C8-3", "C8-4"]);
+    const stories = STORIES.filter((s) => s.sprint === 8).map((s) => s.id);
+    expect(stories).toEqual(["C8-1", "C8-2", "C8-3", "C8-4"]);
   });
 
   it("has every agreed C8-4 case, once each, in order; the real model's reasons are a hand check", () => {
