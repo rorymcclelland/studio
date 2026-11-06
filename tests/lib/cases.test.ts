@@ -64,6 +64,26 @@ describe("the case list", () => {
     expect(p91.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["P9-1.1", "P9-1.2", "P9-1.7"]);
   });
 
+  it("has every agreed P9-2 case, once each, in order, after P9-1's, checked as the refinement says", () => {
+    const p92 = CASES.filter((c) => c.story === "P9-2");
+    expect(p92.map((c) => c.id)).toEqual(Array.from({ length: 8 }, (_, i) => `P9-2.${i + 1}`));
+    for (const c of p92) {
+      expect(c.sprint, c.id).toBe(9);
+      // Every case has a CI check in the simulator's or the clock's tests, the browser case too.
+      expect(c.checks.some((x) => x.kind === "ci" && "file" in x && ["tests/lib/simulate.test.ts", "tests/db/simulation.test.ts"].includes(x.file)), c.id).toBe(true);
+      expect(c.checks.every((x) => x.kind === "ci" || x.kind === "browser"), c.id).toBe(true);
+    }
+    // Cases 1 to 4 are the pure simulator's, and 5 to 8 the clock's in the database.
+    for (const id of ["P9-2.1", "P9-2.2", "P9-2.3", "P9-2.4"]) expect(CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/lib/simulate.test.ts"), id).toBe(true);
+    for (const id of ["P9-2.5", "P9-2.6", "P9-2.7", "P9-2.8"]) expect(CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/db/simulation.test.ts"), id).toBe(true);
+    // The browser test the refinement names: case 5's Run to the end; the rest are CI.
+    expect(p92.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["P9-2.5"]);
+    expect(CASES.find((c) => c.id === "P9-2.5")!.checks[0]).toMatchObject({ kind: "browser", spec: "simulation.spec.ts" });
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("P9-1")).toBeLessThan(order.indexOf("P9-2"));
+    expect(STORIES.find((s) => s.id === "P9-2")).toEqual({ sprint: 9, id: "P9-2", title: "The simulator: daily results with fatigue and events" });
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);

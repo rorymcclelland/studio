@@ -1,9 +1,11 @@
 "use server";
 
-// P9-1 on the campaign page: Ask to launch, and End the launch. Each returns
-// a brief action's state, so the page's forms show the error and its problems.
+// P9-1 on the campaign page: Ask to launch, and End the launch; P9-2's
+// simulated clock: Next day, Next week and Run to the end. Each returns a
+// brief action's state, so the page's forms show the error and its problems.
 import { revalidatePath } from "next/cache";
 import { requireMember } from "@/lib/auth/session";
+import { advance, ClockError, clockLabel, type ClockStep } from "@/lib/performance/clock";
 import { endLaunch, LaunchError, requestLaunch, type LaunchRequest } from "@/lib/performance/launch";
 import type { BriefActionState } from "../actions";
 
@@ -41,5 +43,23 @@ export async function endTheLaunch(campaignId: string, launchId: string): Promis
     if (k) return k;
     console.error("[endTheLaunch]", err);
     return { error: "Couldn't end the launch. It is still live; try again." };
+  }
+}
+
+/**
+ * Moves a live launch's simulated clock on from the day the page showed, by a
+ * day, a week or to the end. A second click on the same day writes nothing:
+ * the page just shows where the clock is now.
+ */
+export async function advanceClock(campaignId: string, launchId: string, by: ClockStep, fromDay: number): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    const r = await advance(member, launchId, by, fromDay, { campaignId });
+    revalidatePath(`/campaigns/${campaignId}`);
+    return { done: r.written > 0 ? `${clockLabel(r.simDay, r.days)}.` : `The clock had already moved on: ${clockLabel(r.simDay, r.days).toLowerCase()}.` };
+  } catch (err) {
+    if (err instanceof ClockError) return { error: err.message };
+    console.error("[advanceClock]", err);
+    return { error: "Couldn't move the simulation on. Nothing was written; try again." };
   }
 }

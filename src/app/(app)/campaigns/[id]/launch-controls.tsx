@@ -2,12 +2,15 @@
 
 // P9-1: the Launch (simulated) panel's controls. The settings form, which asks
 // for a launch (an approval in the inbox, rule 3), and End the launch with its
-// confirm step. The rules are the server's own (launch-rules.ts); the server
+// confirm step. P9-2: the simulated clock, Next day, Next week and Run to the
+// end, each sending the day the page shows, so a double click moves it once.
+// The rules are the server's own (launch-rules.ts, clock-rules.ts); the server
 // checks everything again.
 import { useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Input, Select } from "@/components/ui/input";
+import { clockLabel, SIM_AT_END, type ClockStep } from "@/lib/performance/clock-rules";
 import {
   DEFAULT_VALUES,
   formatThreshold,
@@ -21,7 +24,7 @@ import {
   type LaunchSettings,
 } from "@/lib/performance/launch-rules";
 import { ActionError } from "./brief-actions";
-import { askToLaunch, endTheLaunch } from "./launch-actions";
+import { advanceClock, askToLaunch, endTheLaunch } from "./launch-actions";
 import { useBriefAction } from "./use-brief-action";
 
 const UNIT: Record<KpiMeasure, string> = {
@@ -188,5 +191,56 @@ export function EndLaunchButton({ campaignId, launchId }: { campaignId: string; 
     <Button ref={endButton} type="button" variant="quiet" size="sm" onClick={() => setConfirming(true)}>
       End the launch
     </Button>
+  );
+}
+
+const STEPS: { by: ClockStep; label: string }[] = [
+  { by: 1, label: "Next day" },
+  { by: 7, label: "Next week" },
+  { by: "end", label: "Run to the end" },
+];
+
+/** The simulated clock: where it is, how far through the launch, and the steps that move it on. */
+export function SimClock({ campaignId, launchId, simDay, days }: { campaignId: string; launchId: string; simDay: number; days: number }) {
+  const { run, pending, error } = useBriefAction();
+  const atEnd = simDay >= days;
+  const percent = days > 0 ? Math.round((Math.min(simDay, days) / days) * 100) : 0;
+  return (
+    <div className="space-y-3 rounded-field border border-line px-4 py-3" role="group" aria-label="Simulated clock">
+      <div className="space-y-2">
+        <p className="font-semibold" data-sim-clock="">
+          {clockLabel(simDay, days)}
+        </p>
+        <div aria-hidden className="h-2 w-full max-w-md overflow-hidden rounded-full bg-surface-2">
+          <div className="h-full rounded-full bg-primary" style={{ width: `${percent}%` }} />
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {STEPS.map((s) => (
+          <Button
+            key={String(s.by)}
+            type="button"
+            variant={s.by === 1 ? "primary" : "quiet"}
+            size="sm"
+            disabled={atEnd || pending}
+            aria-describedby={atEnd ? `sim-at-end-${launchId}` : undefined}
+            onClick={() => run(() => advanceClock(campaignId, launchId, s.by, simDay))}
+          >
+            {s.label}
+          </Button>
+        ))}
+        <span className="text-sm text-ink-2" aria-live="polite">
+          {pending ? "Moving the simulation on…" : ""}
+        </span>
+      </div>
+      {atEnd ? (
+        <p id={`sim-at-end-${launchId}`} className="text-sm" data-sim-at-end="">
+          {SIM_AT_END}
+        </p>
+      ) : (
+        <p className="text-sm text-ink-2">Each step writes the simulated results of every ad for each new day. Nothing real is spent.</p>
+      )}
+      <ActionError error={error} />
+    </div>
   );
 }

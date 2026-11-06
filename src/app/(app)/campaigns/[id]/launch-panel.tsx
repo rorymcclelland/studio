@@ -1,4 +1,5 @@
 // P9-1 in the Creative section, after the launch pack: Launch (simulated).
+// P9-2 adds the simulated clock to a live launch.
 // The ads that would launch (the pack's rule), the ones left out with the
 // pack's reason, the settings and Ask to launch; then the launch itself:
 // waiting for approval in the inbox (rule 3), Live (simulated), Ended or
@@ -18,7 +19,7 @@ import {
   type LaunchStatus,
   type LaunchView,
 } from "@/lib/performance/launch";
-import { EndLaunchButton, LaunchForm } from "./launch-controls";
+import { EndLaunchButton, LaunchForm, SimClock } from "./launch-controls";
 import { LaunchAdList, LaunchRefusal, startDay } from "./launch-view";
 
 export type LaunchPanelData = { eligibility: LaunchEligibility | { refused: string }; launches: LaunchView[] };
@@ -92,13 +93,15 @@ function CurrentLaunch({ launch, view }: { launch: LaunchView; view: CreativeVie
       )}
       {launch.status === "live" && (
         <>
-          <p className="text-sm text-ink-2">The simulated results start once its first simulated day has run.</p>
+          <SimClock campaignId={launch.campaignId} launchId={launch.id} simDay={launch.simDay} days={launch.days} />
+          {launch.simDay === 0 && <p className="text-sm text-ink-2">The simulated results start once its first simulated day has run.</p>}
           <EndLaunchButton campaignId={launch.campaignId} launchId={launch.id} />
         </>
       )}
       {launch.status === "ended" && (
         <p className="text-sm" data-launch-ended="">
-          Ended by {launch.endedByName ?? "a member of this workspace"} before its first simulated day.
+          Ended by {launch.endedByName ?? "a member of this workspace"}{" "}
+          {launch.simDay > 0 ? `on simulated day ${launch.simDay} of ${launch.days}.` : "before its first simulated day."}
         </p>
       )}
       {launch.status === "refused" && launch.decision.reason && (

@@ -82,6 +82,7 @@ export const STORIES: Story[] = [
   { sprint: 8, id: "C8-3", title: "Check an uploaded ad" },
   { sprint: 8, id: "C8-4", title: "Pre-test panel" },
   { sprint: 9, id: "P9-1", title: "Launch a simulated campaign" },
+  { sprint: 9, id: "P9-2", title: "The simulator: daily results with fatigue and events" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -140,6 +141,13 @@ const LAUNCH_SPEC = "launch.spec.ts";
 const LAUNCH =
   "P9-1 #1, #2, #7: a signed-off Fernhollow campaign's four passing ads launch with the defaults once approved in the inbox, an ad still waiting is left out with the pack's reason, and End the launch ends it";
 const LAUNCH_DB = "tests/db/launch.test.ts";
+
+// P9-2 The simulator
+const SIM_SPEC = "simulation.spec.ts";
+const SIM_RUN =
+  "P9-2 #5: a live 30-day Fernhollow launch moves on by Next day and Next week, then Run to the end shows simulated day 30 of 30 with the controls disabled";
+const SIM_LIB = "tests/lib/simulate.test.ts";
+const SIM_DB = "tests/db/simulation.test.ts";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -1074,6 +1082,119 @@ export const CASES: Case[] = [
         note: "Shown as text: the refusal's component is rendered to HTML in the test, and the markup comes out escaped.",
       },
     ],
+  },
+
+  // P9-2 The simulator: daily results with fatigue and events
+  {
+    id: "P9-2.1",
+    sprint: 9,
+    story: "P9-2",
+    words: "The same launch and seed give identical rows, day by day, in any order of Next day, Next week and Run to the end.",
+    checks: [
+      {
+        kind: "ci",
+        file: SIM_LIB,
+        test: "#1 property: the same launch and seed give identical rows, day by day, in any order of Next day, Next week and Run to the end",
+        note: "A property test over 40 random launches and random interleavings, from a fixed seeded loop (no new dependency), so every run checks the same cases.",
+      },
+      { kind: "ci", file: SIM_LIB, test: "#1 a day's rows don't depend on the order the days are worked out, or on whether the earlier days are passed in" },
+      {
+        kind: "ci",
+        file: SIM_LIB,
+        test: "#1 base rates come from the launch's seed and the ad alone, within Studio's assumed ranges, with an order value from the brand's products",
+        note: "Q3: nothing else goes into an ad's base rates, so the pre-test panel's scores can't shape its results.",
+      },
+      { kind: "ci", file: SIM_DB, test: "#1 the stored rows are the simulator's, the same for the same seed whatever the order of Next day, Next week and Run to the end" },
+    ],
+  },
+  {
+    id: "P9-2.2",
+    sprint: 9,
+    story: "P9-2",
+    words: "Each day's total spend is within 1p of the daily budget, split evenly across live ads; impressions, clicks and conversions are whole numbers, with conversions at most clicks and clicks at most impressions.",
+    checks: [
+      {
+        kind: "ci",
+        file: SIM_LIB,
+        test: "#2 each day's spend is within 1p of the daily budget, split evenly across the ads, in whole numbers with conversions at most clicks and clicks at most impressions",
+      },
+    ],
+  },
+  {
+    id: "P9-2.3",
+    sprint: 9,
+    story: "P9-2",
+    words: "Fatigue: over 30 days, at least one ad's click-through rate in its last seven days is at least 30% below its first seven; an ad with a slow fatigue speed falls by less than 15%.",
+    checks: [
+      {
+        kind: "ci",
+        file: SIM_LIB,
+        test: "#3 fatigue: over 30 days at least one ad's click-through rate in its last seven days is at least 30% below its first seven; an ad with a slow fatigue speed falls by less than 15%",
+        note: "Checked at £50 a day (the default and the demo's) with 2 to 8 ads over 50 seeded launches; other budgets aren't pinned.",
+      },
+    ],
+  },
+  {
+    id: "P9-2.4",
+    sprint: 9,
+    story: "P9-2",
+    words: "A bank holiday (25 December 2026) and Black Friday (27 November 2026) change that day's figures in the direction the config says, and the row's events name them.",
+    checks: [
+      { kind: "ci", file: SIM_LIB, test: "#4 a bank holiday, 25 December 2026, moves that day's cost and conversion the way the config says, and the row's events name it" },
+      { kind: "ci", file: SIM_LIB, test: "#4 Black Friday, 27 November 2026, moves that day's cost and conversion the way the config says; the row's events name it, and Cyber Monday's" },
+      {
+        kind: "ci",
+        file: SIM_LIB,
+        test: "#4 the config: Studio's assumptions, the gov.uk bank holidays for England and Wales in 2026 and 2027, Black Friday and Cyber Monday",
+        note: "The dates are facts with gov.uk as their source; the rates and multipliers are Studio's assumptions (rule 1). Whether the effects look plausible on the chart is judged at the demo.",
+      },
+    ],
+  },
+  {
+    id: "P9-2.5",
+    sprint: 9,
+    story: "P9-2",
+    words: "Double click: two Next day requests at once write one day, not two. Run to the end on a 30-day launch writes exactly the remaining days and then disables the controls.",
+    checks: [
+      {
+        kind: "browser",
+        spec: SIM_SPEC,
+        title: SIM_RUN,
+        note: "The browser shows Run to the end and the disabled controls. Two requests at once, and the exact number of rows written, are the database tests.",
+      },
+      {
+        kind: "ci",
+        file: SIM_DB,
+        test: "#5 two Next day requests at once write one day, not two: the second finds the clock moved on and writes nothing",
+        note: "Each request carries the day the page showed. The row lock queues the second, which finds the clock already moved on from that day and writes nothing, so a double click moves the clock once (through the server action too, and for Run to the end).",
+      },
+      { kind: "ci", file: SIM_DB, test: "#5 two Next day requests one after the other, each from the day the page then showed, write days 1 and 2" },
+      { kind: "ci", file: SIM_DB, test: "#5 Run to the end on a 30-day launch writes exactly the remaining days, then the clock can't move" },
+      { kind: "ci", file: SIM_DB, test: "#5 a day is never written twice or rewritten: the unique key, the insert checks and the append-only trigger" },
+    ],
+  },
+  {
+    id: "P9-2.6",
+    sprint: 9,
+    story: "P9-2",
+    words: "An ended launch writes no more days.",
+    checks: [{ kind: "ci", file: SIM_DB, test: "#6 an ended launch writes no more days, and keeps the day it ended on" }],
+  },
+  {
+    id: "P9-2.7",
+    sprint: 9,
+    story: "P9-2",
+    words: "Another workspace can't read a launch's results or advance its clock.",
+    checks: [
+      { kind: "ci", file: SIM_DB, test: "#7 another workspace can't read a launch's results or advance its clock: the same refusal as a missing launch, and RLS in the database" },
+    ],
+  },
+  {
+    id: "P9-2.8",
+    sprint: 9,
+    story: "P9-2",
+    words: "No model call: advancing a 60-day launch with eight ads adds nothing to usage_ledger.",
+    checks: [{ kind: "ci", file: SIM_DB, test: "#8 no model call: advancing a 60-day launch with eight ads adds nothing to usage_ledger" }],
   },
 ];
 

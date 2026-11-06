@@ -82,6 +82,8 @@ export type LaunchView = {
   kpiMeasure: string;
   kpiValue: number;
   seed: string;
+  /** The last simulated day written (P9-2): 0 before the first. */
+  simDay: number;
   approvalId: string;
   createdBy: string;
   createdAt: Date;
@@ -321,7 +323,7 @@ export async function launchesFor(userId: string, campaignId: string): Promise<L
     if (!c) return null;
     const rows = await tx`
       select l.id, l.campaign_id, l.status, l.ads, l.daily_budget_pence, l.days, to_char(l.starts_on, 'YYYY-MM-DD') as starts_on,
-        l.kpi_measure, l.kpi_value::text as kpi_value, l.seed::text as seed, l.approval_id, l.created_by, l.created_at, l.approved_at,
+        l.kpi_measure, l.kpi_value::text as kpi_value, l.seed::text as seed, l.sim_day, l.approval_id, l.created_by, l.created_at, l.approved_at,
         l.decided_by_name, l.ended_by, l.ended_by_name, l.ended_at,
         a.status as decision_status, a.reason, a.decided_by, a.decided_at, a.expires_at
       from public.launches l join public.approvals a on a.id = l.approval_id
@@ -340,6 +342,7 @@ export async function launchesFor(userId: string, campaignId: string): Promise<L
         kpiMeasure: r.kpi_measure,
         kpiValue: Number(r.kpi_value),
         seed: r.seed,
+        simDay: r.sim_day,
         approvalId: r.approval_id,
         createdBy: r.created_by,
         createdAt: r.created_at,
