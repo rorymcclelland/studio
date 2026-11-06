@@ -204,21 +204,21 @@ Every ad in the pack checked against the brand's and the channel's rules in ever
 
 No new findings came from the demo or the hand checks. The two items raised during the sprint, F-34 (Neon storage) and F-29 (the narrow key), are in the Sprint 6 table above, both done on 5 November.
 
-## Sprint 9: Performance I, the simulator and monitor (refined 6 November 2026, awaiting Rory's answers)
+## Sprint 9: Performance I, the simulator and monitor (refined and confirmed 6 November 2026)
 
 Picked, compliant ads launch into a simulation after an approval. The simulation gives deterministic daily results, with fatigue and events. A Performance dashboard is headed by healthy spend share. A monitor raises alerts and answers questions from the stored results. Every figure is simulated and labelled. Detail: `docs/refinement/sprint-9.md`.
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| F-23 | Production deploys wait for the checks: Vercel's Deployment Checks, or a deploy hook from CI's last job | S | Proposed, Sprint 9 (Q6) |
-| P9-1 | Launch a simulated campaign: budget, length, start date and KPI threshold; the pack's eligibility rule; approval in the inbox | M | Proposed, Sprint 9 |
-| P9-2 | The simulator: daily results per ad from a seed, fatigue, weekends, UK bank holidays, Black Friday; a clock a person moves | L | Proposed, Sprint 9 |
-| P9-3 | Performance dashboard and healthy spend share; one line on Studio's home | M | Proposed, Sprint 9 |
-| P9-4 | Monitor agent: alerts in code (below threshold, tiring, not compliant) and ask-your-data (a typed query plan, figures checked in the answer) | M | Proposed, Sprint 9 (ask-your-data first to move if over) |
-| F-16a | First real-model eval run and report, with the production regression cases | S | Proposed, Sprint 9 (Q5: the key in GitHub) |
+| F-23 | Production deploys wait for the checks: Vercel's Deployment Checks, or a deploy hook from CI's last job | S | Ready, Sprint 9 |
+| P9-1 | Launch a simulated campaign: budget, length, start date and KPI threshold; the pack's eligibility rule; approval in the inbox | M | Ready, Sprint 9 |
+| P9-2 | The simulator: daily results per ad from a seed, fatigue, weekends, UK bank holidays, Black Friday; a clock a person moves | L | Ready, Sprint 9 |
+| P9-3 | Performance dashboard and healthy spend share; one line on Studio's home | M | Ready, Sprint 9 |
+| P9-4 | Monitor agent: alerts in code (below threshold, tiring, not compliant) and ask-your-data (a typed query plan, figures checked in the answer) | M | Ready, Sprint 9 (ask-your-data first to move if over) |
+| F-16a | First real-model eval run and report, with the production regression cases | S | Ready, Sprint 9 (Rory adds or checks the key in GitHub) |
 | F-28a | Watch production's logs until 9 November | S | Carried from Sprint 8 |
 | N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Carried from Sprint 8 |
-| N-9a | Sprint 9 test pack, hand checks of real AI output only (the monitor's answers) | S | Proposed, Sprint 9 |
+| N-9a | Sprint 9 test pack, hand checks of real AI output only (the monitor's answers) | S | Ready, Sprint 9 |
 
 ## Not yet in a sprint (ranked)
 
@@ -259,3 +259,4 @@ Re-ranked at the Sprint 8 close; Sprint 9 is above.
 | 3 Nov 2026 | Sprint 8 signed off from the demo page (CI run 41717589833) and deployed with Rory's approval: five migrations applied to preview, then production (both match a fresh build in all 11 fingerprint parts), merged to `main` as `3be96cf`; CI and After production deploy passed, health OK. Hand checks (N-8d, N-8e) follow on production |
 | 5 Nov 2026 | CI moves to its own Neon project, `campaign-studio-ci`, after Neon's storage alert; its key is scoped to that project (F-34, F-29; decision 0015 update) |
 | 6 Nov 2026 | Sprint 8 closed: C8-1 to C8-4, N-8d and N-8e done (Rory reported the hand checks passed); F-28a and N-7a carried into Sprint 9 (dated); no new findings. Sprint 9 (Performance I: simulator and monitor) refined, with F-23 and F-16a proposed to join |
+| 6 Nov 2026 | Sprint 9 confirmed (all seven as recommended): launches approved in the inbox; a clock a person moves; base rates from the seed, not the panel; learning spend outside the share; Deployment Checks or a deploy hook (F-23); Rory checks the eval key (F-16a); four KPI measures |

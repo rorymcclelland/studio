@@ -338,3 +338,19 @@ Sprint 10 builds on this: fatigue forecasts, swaps and budget moves.
 | Q5 | F-16a's real-model run needs `ANTHROPIC_API_KEY` in GitHub's repository secrets, with its own spending limit. Is it there? | (a) Add it, or confirm it's there, before the build ends: a run is capped at £1 |
 | Q6 | How should production wait for the checks (F-23)? | (a) Vercel's Deployment Checks if the Hobby plan has them; otherwise the deploy-hook fallback, with Rory adding the hook's URL to GitHub's secrets |
 | Q7 | The KPI threshold's measures: click-through rate, conversion rate, cost per acquisition and return on ad spend, with the default picked from the brief's KPI | (a) Yes, these four; one threshold per launch, applied to every ad |
+
+## Answers (Rory, 6 November 2026)
+
+All seven as recommended.
+
+| # | Answer | Effect on the stories |
+| --- | --- | --- |
+| Q1 | (a) A simulated launch waits for an approval in the inbox | As written (P9-1) |
+| Q2 | (a) A person moves simulated time: Next day, Next week, Run to the end | As written (P9-2) |
+| Q3 | (a) Base rates come from the seed alone, not the pre-test scores | As written (P9-2) |
+| Q4 | (a) Learning spend is shown separately and left out of both sides of the share | As written (P9-3) |
+| Q5 | (a) Rory adds or checks `ANTHROPIC_API_KEY` in GitHub's repository secrets, with its own spending limit, before the build ends | As written (F-16a) |
+| Q6 | (a) Vercel's Deployment Checks if the Hobby plan has them; otherwise the deploy-hook fallback, with Rory adding the hook's URL to GitHub | As written (F-23) |
+| Q7 | (a) Four measures, the default from the brief's KPI, one threshold per launch | As written (P9-1) |
+
+No acceptance criteria changed. F-23, P9-1 to P9-4, F-16a and N-9a are Ready, Sprint 9. Building starts when Rory says go.
