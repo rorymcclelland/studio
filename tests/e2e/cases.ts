@@ -83,6 +83,7 @@ export const STORIES: Story[] = [
   { sprint: 8, id: "C8-4", title: "Pre-test panel" },
   { sprint: 9, id: "P9-1", title: "Launch a simulated campaign" },
   { sprint: 9, id: "P9-2", title: "The simulator: daily results with fatigue and events" },
+  { sprint: 9, id: "P9-3", title: "The Performance dashboard and healthy spend share" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -148,6 +149,15 @@ const SIM_RUN =
   "P9-2 #5: a live 30-day Fernhollow launch moves on by Next day and Next week, then Run to the end shows simulated day 30 of 30 with the controls disabled";
 const SIM_LIB = "tests/lib/simulate.test.ts";
 const SIM_DB = "tests/db/simulation.test.ts";
+
+// P9-3 The Performance dashboard and healthy spend share
+const PERF_SPEC = "performance.spec.ts";
+const PERF_MAIN =
+  "P9-3 #1, #2, #4, #6, #7: a launched Fernhollow campaign's Performance view reads Not enough data yet on day 1, then shows the stored day-10 figures as health.ts works them out, with one ad below its threshold, labelled simulated";
+const PERF_KIT =
+  "P9-3 #3, #5: a banned term added to the kit after launch turns that ad Not compliant and removing it restores it; the home line counts live campaigns only, and shows nothing when none are live";
+const PERF_LIB = "tests/lib/health.test.ts";
+const PERF_DB = "tests/db/performance.test.ts";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -1195,6 +1205,155 @@ export const CASES: Case[] = [
     story: "P9-2",
     words: "No model call: advancing a 60-day launch with eight ads adds nothing to usage_ledger.",
     checks: [{ kind: "ci", file: SIM_DB, test: "#8 no model call: advancing a 60-day launch with eight ads adds nothing to usage_ledger" }],
+  },
+
+  // P9-3 The Performance dashboard and healthy spend share
+  {
+    id: "P9-3.1",
+    sprint: 9,
+    story: "P9-3",
+    words: "On a seeded demo launch, the headline, the table's statuses and the chart match health.ts, and health.ts matches figures worked out by hand for three chosen days.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PERF_SPEC,
+        title: PERF_MAIN,
+        note: "The browser reads the launch's stored rows and checks the day-10 headline, each ad's row, the chart's table, the trend and the event marks against health.ts. That health.ts matches the hand-worked figures is the unit test.",
+      },
+      {
+        kind: "ci",
+        file: PERF_LIB,
+        test: "P9-3 the healthy spend share, worked out by hand",
+        note: "Days 2, 3 and 4 of three ads' fixed rows, written out in the test, with every figure worked out by hand: spend, learning, the three-day KPI as a ratio of sums, each status and the share.",
+      },
+      { kind: "ci", file: PERF_LIB, test: "#1 health.ts reads no database, model or clock: the page, the home line and the monitor all get the same answer from the same facts" },
+      {
+        kind: "ci",
+        file: PERF_DB,
+        test: "#1 performanceFor gives the launch's latest simulated day and every day before it, exactly as health.ts works them out from the stored rows and today's compliance",
+      },
+      { kind: "ci", file: PERF_DB, test: "#1 a campaign with no live or ended launch has no performance to show, and an ended launch still shows its last simulated day" },
+    ],
+  },
+  {
+    id: "P9-3.2",
+    sprint: 9,
+    story: "P9-3",
+    words: "One ad below its threshold: its status is Below threshold, and the share drops by exactly that ad's share of the day's spend.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PERF_SPEC,
+        title: PERF_MAIN,
+        note: "So that exactly one ad misses it, the threshold is set through the database while the launch waits for approval (the only time it can change), between the two lowest click-through rates the simulator gives for days 8 to 10.",
+      },
+      { kind: "ci", file: PERF_LIB, test: "#2 one ad below its threshold: its status is Below threshold, and the share drops by exactly that ad's share of the day's spend" },
+      {
+        kind: "ci",
+        file: PERF_DB,
+        test: "#2 one ad below its threshold on the stored day-10 figures: its status is Below threshold, and the share is exactly the other ads' spend over the day's",
+      },
+    ],
+  },
+  {
+    id: "P9-3.3",
+    sprint: 9,
+    story: "P9-3",
+    words: "A banned term added to the kit after launch: that ad shows Not compliant, its spend leaves the healthy share, and removing the term restores it.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PERF_SPEC,
+        title: PERF_KIT,
+        note: "Tagged @brand-kit: it changes Fernhollow's banned terms on the brand kit editor, so it runs after every other spec, one at a time, and puts the terms back.",
+      },
+      {
+        kind: "ci",
+        file: PERF_DB,
+        test: "#3 compliance is worked out again today: a banned term added to the kit after launch turns that ad Not compliant with the pack's reason, its spend leaves the healthy share, and removing the term restores it",
+      },
+      {
+        kind: "ci",
+        file: PERF_DB,
+        test: "#3 compliance today covers every launched size and language: a German banned term fails a launched German file, an English-only ad is untouched, and a discarded ad is Not compliant",
+      },
+      {
+        kind: "ci",
+        file: PERF_LIB,
+        test: "#3 an ad that no longer passes compliance is Not compliant, its spend leaves the healthy share but stays in the day's spend, and the reason is kept",
+      },
+      { kind: "ci", file: PERF_LIB, test: "#3 Not compliant comes before Learning: a learning ad that isn't compliant counts as unhealthy spend, not learning" },
+    ],
+  },
+  {
+    id: "P9-3.4",
+    sprint: 9,
+    story: "P9-3",
+    words: "Day 1: the headline reads \"Not enough data yet\", with the learning spend shown.",
+    checks: [
+      { kind: "browser", spec: PERF_SPEC, title: PERF_MAIN },
+      { kind: "ci", file: PERF_LIB, test: "#4 when all spend is learning, the share is null and reads Not enough data yet, with the learning spend still counted" },
+      { kind: "ci", file: PERF_LIB, test: "#1 #4 day 2: every ad is in its first two days, so all £30.00 is learning and the share reads Not enough data yet" },
+    ],
+  },
+  {
+    id: "P9-3.5",
+    sprint: 9,
+    story: "P9-3",
+    words: "The home line counts live campaigns only, and shows nothing when none are live.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PERF_SPEC,
+        title: PERF_KIT,
+        note: "Other specs leave launches live in the same workspace, so this test ends every live launch first, through the database; it runs in the brand-kit project, after every other spec, so the count it sees is its own.",
+      },
+      { kind: "ci", file: PERF_DB, test: "#5 homeHealth counts live campaigns only, pooling each one's latest simulated day, and gives nothing when none are live" },
+    ],
+  },
+  {
+    id: "P9-3.6",
+    sprint: 9,
+    story: "P9-3",
+    words: "\"Simulated\" appears in the page header, the chart, the home line and the CSV export, if one is added.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PERF_SPEC,
+        title: PERF_MAIN,
+        note: "No CSV export is added this sprint (exports beyond the test are out of scope), so the case checks the page header, the chart and its table, and the home line.",
+      },
+      { kind: "ci", file: PERF_LIB, test: "#6 the home line counts live campaigns and says simulated" },
+    ],
+  },
+  {
+    id: "P9-3.7",
+    sprint: 9,
+    story: "P9-3",
+    words: "375 px and 1440 px screenshots with AA contrast. The chart has a text alternative.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PERF_SPEC,
+        title: PERF_MAIN,
+        note: "The axe contrast check runs inside this browser test in CI's e2e job, at both widths on day 1 and day 10; the screenshots are saved with SHOTS_DIR for the demo.",
+      },
+      { kind: "ci", file: PERF_LIB, test: "#7 the chart is an SVG labelled Simulated, with the events marked and a table version of every day for screen readers" },
+    ],
+  },
+  {
+    id: "P9-3.8",
+    sprint: 9,
+    story: "P9-3",
+    words: "Another workspace's campaign Performance tab is a 404.",
+    checks: [
+      {
+        kind: "ci",
+        file: PERF_DB,
+        test: "#8 another workspace's campaign has no Performance view: performanceFor is null, the same as a missing or malformed id",
+        note: "The page calls notFound() when performanceFor is null. The browser's Not found for a campaign outside the workspace, and the 404 for a malformed id, are the failure-path step of the main browser test, not tagged for this case.",
+      },
+    ],
   },
 ];
 

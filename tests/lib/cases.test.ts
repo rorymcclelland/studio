@@ -84,6 +84,46 @@ describe("the case list", () => {
     expect(STORIES.find((s) => s.id === "P9-2")).toEqual({ sprint: 9, id: "P9-2", title: "The simulator: daily results with fatigue and events" });
   });
 
+  it("has every agreed P9-3 case, once each, in order, after P9-2's, checked as the refinement says", () => {
+    const p93 = CASES.filter((c) => c.story === "P9-3");
+    expect(p93.map((c) => c.id)).toEqual(Array.from({ length: 8 }, (_, i) => `P9-3.${i + 1}`));
+    const LIB = "tests/lib/health.test.ts";
+    const DB = "tests/db/performance.test.ts";
+    for (const c of p93) {
+      expect(c.sprint, c.id).toBe(9);
+      // Every case has a CI check in health.ts's or the data layer's tests, the browser cases too; nothing is by hand.
+      expect(c.checks.some((x) => x.kind === "ci" && "file" in x && [LIB, DB].includes(x.file)), c.id).toBe(true);
+      expect(c.checks.every((x) => x.kind === "ci" || x.kind === "browser"), c.id).toBe(true);
+    }
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    // Case 1: the hand-worked figures are the unit test, and the page's stored figures the browser test.
+    expect(ciIn("P9-3.1", LIB)).toBe(true);
+    expect(ciIn("P9-3.1", DB)).toBe(true);
+    // Case 2 is CI and browser; case 8 (another workspace) is CI only.
+    expect(ciIn("P9-3.2", LIB)).toBe(true);
+    expect(ciIn("P9-3.8", DB)).toBe(true);
+    // The browser tests the refinement names: cases 1 to 7; case 8 is CI.
+    expect(p93.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["P9-3.1", "P9-3.2", "P9-3.3", "P9-3.4", "P9-3.5", "P9-3.6", "P9-3.7"]);
+    expect(caseKind(CASES.find((c) => c.id === "P9-3.8")!)).toBe("ci");
+    for (const c of p93.filter((x) => caseKind(x) === "browser")) expect(c.checks[0], c.id).toMatchObject({ kind: "browser", spec: "performance.spec.ts" });
+    // Case 3 changes the brand kit, so its browser test is tagged @brand-kit (it runs after every other spec, one at a time);
+    // case 5's count needs that project too. The others run in the main project.
+    const spec = readFileSync(join(root, "tests/e2e/performance.spec.ts"), "utf8");
+    const titleOf = (id: string) => (CASES.find((c) => c.id === id)!.checks[0] as { title: string }).title;
+    const detailsOf = (title: string) => {
+      const at = declaredAt(spec, title);
+      expect(at, title).toBeGreaterThan(-1);
+      return spec.slice(at, spec.indexOf("async (", at));
+    };
+    for (const id of ["P9-3.3", "P9-3.5"]) expect(detailsOf(titleOf(id)), id).toContain('tag: "@brand-kit"');
+    for (const id of ["P9-3.1", "P9-3.2", "P9-3.4", "P9-3.6", "P9-3.7"]) expect(detailsOf(titleOf(id)), id).not.toContain("@brand-kit");
+    // Case 6: no CSV export is added this sprint, and the case says so.
+    expect(CASES.find((c) => c.id === "P9-3.6")!.checks.find((x) => x.kind === "browser")).toMatchObject({ note: expect.stringMatching(/No CSV export is added this sprint/) });
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("P9-2")).toBeLessThan(order.indexOf("P9-3"));
+    expect(STORIES.find((s) => s.id === "P9-3")).toEqual({ sprint: 9, id: "P9-3", title: "The Performance dashboard and healthy spend share" });
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);

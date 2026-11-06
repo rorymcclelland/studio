@@ -1,5 +1,6 @@
 // P9-1 in the Creative section, after the launch pack: Launch (simulated).
-// P9-2 adds the simulated clock to a live launch.
+// P9-2 adds the simulated clock to a live launch, and P9-3 the link to the
+// campaign's Performance view while a launch is live or ended.
 // The ads that would launch (the pack's rule), the ones left out with the
 // pack's reason, the settings and Ask to launch; then the launch itself:
 // waiting for approval in the inbox (rule 3), Live (simulated), Ended or
@@ -159,9 +160,16 @@ export async function LaunchPanel({ data, view }: { data: Promise<LaunchPanelDat
   if (!d) return null;
   const [latest, ...earlier] = d.launches;
   const open = latest && (latest.status === "awaiting_approval" || latest.status === "live");
+  // The Performance view shows the live launch, else the newest ended one.
+  const results = d.launches.some((l) => l.status === "live" || l.status === "ended");
   return (
     <Shell>
       {latest && <CurrentLaunch launch={latest} view={view} />}
+      {results && (
+        <p data-launch-performance="">
+          <TextLink href={`/campaigns/${view.campaignId}/performance`}>See performance (simulated)</TextLink>
+        </p>
+      )}
       {!open && <AskToLaunch eligibility={d.eligibility} hasHistory={!!latest} />}
       {earlier.length > 0 && (
         <details className="group text-sm" data-launch-history="">
