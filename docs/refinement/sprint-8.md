@@ -150,7 +150,7 @@ The pack then holds only ads that pass, and its manifest says why each other ad 
 
 ### C8-3 Check an uploaded ad (M)
 
-**The job.** A marketer uploads an ad made outside Studio, such as an agency's PNG, and checks it against the brand kit. This is the roadmap's "Brand Guardian equivalent". We will know it works when an uploaded ad gets the same pass, review or fail list, with each finding saying how it was found.
+**The job.** A marketer uploads an ad made outside Studio, such as an agency's PNG, and checks it against the brand kit. We will know it works when an uploaded ad gets the same pass, review or fail list, with each finding saying how it was found.
 
 **Before and after.**
 - **Before:** only logos can be uploaded.
