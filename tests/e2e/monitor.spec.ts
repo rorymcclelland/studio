@@ -2,12 +2,16 @@
 // the Performance view and Ask about this campaign. The flow follows
 // tests/e2e/performance.spec.ts on a new signed-off Fernhollow campaign with
 // ads (simulated pictures), launched with the defaults and approved in the
-// inbox. The database is read (and written only while the launch waits for
-// approval, to set its seed and threshold, which can change only then)
-// through DATABASE_URL, so the page can be checked against the stored rows.
+// inbox. The database is read through DATABASE_URL, so the page can be
+// checked against the stored rows. It is written once: a launch's terms never
+// change once it is asked for (launches_terms, the rule P9-1.6 checks in
+// tests/db/launch.test.ts #6, with the fixture's own test there), so the
+// browser-test fixture (tests/e2e/launch-fixture.ts) sets the waiting
+// launch's seed and threshold as the table's owner, switching launches_terms
+// off for that one update.
 //
 // Main path (cases 1 and 4). Three paid-social ads are picked and launched.
-// While the launch waits for approval, its seed is set to one whose month,
+// While the launch waits for approval, the fixture sets its seed to one whose month,
 // worked out first with the pure simulator, has an ad tiring between days 9
 // and 14 and none before, and its threshold to a click-through rate every ad
 // meets (so the only alerts are Tiring). Day 7: no alert yet. Day 14: the
@@ -15,8 +19,10 @@
 // best three-day rates; the home page counts unseen alerts; Mark as seen
 // records who. Then "Which ad had the lowest cost per acquisition last week?"
 // is asked, with the cost shown: the answer comes with "Simulated data.
-// Answer written by AI", the table it used sits underneath, and every figure
-// in the answer is in that table. 375 px and 1440 px with AA contrast.
+// Answer written by AI", the table it used sits underneath, lowest cost per
+// acquisition first, and the answer names its first ad with that ad's figure;
+// every figure in the answer is in that table. 375 px and 1440 px with AA
+// contrast.
 // Failure path: "What did our rivals spend?" gets "I can only answer from this
 // campaign's simulated results", with no table.
 //
@@ -255,7 +261,12 @@ test(
           order by created_at desc limit 1`;
         const result = q.result as QueryResult;
         expect(answer).toBe(q.answer);
-        expect(result).toMatchObject({ from: 8, to: 14, groupBy: "ad" });
+        expect(result).toMatchObject({ from: 8, to: 14, groupBy: "ad", sort: { by: "cpa", direction: "asc" } });
+        // Lowest cost per acquisition first (an ad with no conversions has none, and comes last).
+        expect(result.rows.length).toBeGreaterThan(0);
+        const cpas = result.rows.map((r) => r.values.cpa ?? null);
+        const ascending = [...cpas].sort((a, b) => (a === null ? (b === null ? 0 : 1) : b === null ? -1 : a - b));
+        expect(cpas).toEqual(ascending);
         const table = item.locator("[data-ask-result]");
         await expect(table.locator("caption")).toHaveText("Simulated days 8 to 14 (simulated)");
         await expect(table.locator("tbody tr")).toHaveCount(result.rows.length);
@@ -266,8 +277,14 @@ test(
         }
         // Every figure in the answer is in the result (the check in code), and on the page in the table under it.
         expect(checkAnswer(answer, result)).toEqual([]);
+        // The answer names the ad with the lowest cost per acquisition, the result's first row, with its figure as the
+        // table shows it, so the figure check below can't pass on an answer with no figures in it.
+        expect(answer).toMatch(new RegExp(`\\bAd ${result.rows[0].adNumber}\\b`));
+        expect(answer).toContain(result.rows[0].shown.cpa!);
+        const figures = answer.match(/£?\d[\d,]*(?:\.\d+)?%?/g) ?? [];
+        expect(figures.length, answer).toBeGreaterThan(0);
         const tableText = (await table.textContent()) ?? "";
-        for (const figure of answer.match(/£?\d[\d,]*(?:\.\d+)?%?/g) ?? []) expect(tableText, figure).toContain(figure);
+        for (const figure of figures) expect(tableText, figure).toContain(figure);
         await checkWidths(page, "performance, alerts and an answer");
       });
 

@@ -1,13 +1,17 @@
 // P9-3 The Performance dashboard and healthy spend share through the UI, with
 // the mock models. Each test follows tests/e2e/simulation.spec.ts's flow on a
 // new signed-off Fernhollow campaign with ads (simulated pictures), launched
-// with the defaults and approved in the inbox; the database is read (never
-// written, but for the threshold of a launch still waiting for approval, and
-// in test 2 the setup and clean-up below) through DATABASE_URL, so the page's
-// figures can be checked against health.ts over the stored rows.
+// with the defaults and approved in the inbox; the database is read through
+// DATABASE_URL, so the page's figures can be checked against health.ts over
+// the stored rows. It is written only for a waiting launch's threshold, and in
+// test 2 the setup and clean-up below. A launch's terms never change once it
+// is asked for (launches_terms, the rule P9-1.6 checks in
+// tests/db/launch.test.ts #6, with the fixture's own test there), so the
+// browser-test fixture (tests/e2e/launch-fixture.ts) sets the threshold as the
+// table's owner, switching launches_terms off for that one update.
 //
 // 1. Cases 1, 2, 4, 6 and 7 (main project). Three paid-social ads are picked
-//    and launched. While the launch waits for approval its threshold is set to
+//    and launched. While the launch waits for approval the fixture sets its threshold to
 //    a click-through rate between the lowest and the next ad's over days 8 to
 //    10, worked out first with the pure simulator, so exactly one ad is below
 //    it on day 10 (case 2). Day 1: the headline reads "Not enough data yet",

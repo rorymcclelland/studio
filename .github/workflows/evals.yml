@@ -110,6 +110,13 @@ jobs:
     needs: evals
     # Whether the evals passed or failed: a failed run's reports are what need reading.
     if: ${{ !cancelled() }}
+    # One push at a time per branch: two runs' publish jobs each keep the reports already on the
+    # branch, so they wait for each other rather than force-push at once and lose a run's reports.
+    # GitHub keeps one waiting job per group and cancels an older waiting one, so a cancelled publish
+    # leaves that run's reports in its artefact only: re-run the job to add them to the branch.
+    concurrency:
+      group: eval-reports-${{ github.ref }}
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     # Only to push the reports branch below; this job has no key and runs no repository code.
     permissions:

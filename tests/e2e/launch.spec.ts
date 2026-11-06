@@ -14,7 +14,9 @@
 //    budget, length, threshold and "Simulated: no real money is spent"; Approve
 //    makes the campaign Live (simulated) with four ads, £50 a day for 30 days.
 // 3. Case 7: End the launch asks to confirm (Keep it live leaves it running),
-//    then the campaign shows Ended, with who ended it and on which simulated day.
+//    then the campaign shows Ended, with who ended it, before its first
+//    simulated day (the clock never moves here; tests/e2e/simulation.spec.ts
+//    ends a launch on its last simulated day).
 //
 // Each page at 375 px and 1440 px: nothing scrolls sideways, AA contrast.
 // SHOTS_DIR=<folder> saves screenshots. The brand's kit is not changed, so this
@@ -192,10 +194,9 @@ test(
       await page.reload();
       await settle(page);
       await expect(launchStatus(page)).toHaveText("Ended");
-      // P9-1 has no simulated clock yet (P9-2), so it ends before its first simulated day; with the clock, on its last one.
-      await expect(panel(page).locator("[data-launch-ended]")).toHaveText(
-        new RegExp(`^Ended by ${escape(DEV_EMAIL)} (before its first simulated day|on simulated day \\d+ of 30)\\.$`),
-      );
+      // This launch's clock never moves, so it ends before its first simulated day. Ending on the last simulated day
+      // is shown by tests/e2e/simulation.spec.ts, which runs the clock to the end first (also tagged P9-1.7).
+      await expect(panel(page).locator("[data-launch-ended]")).toHaveText(new RegExp(`^Ended by ${escape(DEV_EMAIL)} before its first simulated day\\.$`));
       await expect(panel(page).getByRole("button", { name: "End the launch" })).toHaveCount(0);
       await checkWidths(page, "launch panel, ended");
     });

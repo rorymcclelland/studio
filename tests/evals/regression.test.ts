@@ -190,6 +190,52 @@ describe("F-16a market: the possessive names (26 Oct, second and third runs)", (
   const input = f.input as MarketInput;
   const sources = (f.pages as { url: string; title: string }[]).map((p) => ({ url: p.url, title: p.title, citedText: [] as string[] }));
 
+  it("the name check before ce2ceef flagged the possessive names in the reply, as it did in production", () => {
+    // undeclaredNames as it was before the fix (ce2ceef's parent), with its list of common words.
+    const COMMON = new Set(
+      (
+        "january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday " +
+        "spring summer autumn winter christmas easter boxing day new year year's eve black friday cyber monday bank holiday valentine's halloween bonfire night " +
+        "uk u.k gb britain british great england english scotland scottish wales welsh ireland irish northern london europe european eu " +
+        "north south east west midlands yorkshire humber highlands lake district peak dales cornwall devon cumbria snowdonia " +
+        "vat gdp ons ai app apps i a an the this that these those it its our we they"
+      ).split(" "),
+    );
+    const before = (text: string, declared: string[], i: MarketInput) => {
+      const own = new Set([i.brandName, i.category, ...i.products, ...i.places].join(" ").toLowerCase().match(/[a-z0-9']+/g) ?? []);
+      const declaredWords = new Set(declared.join(" ").toLowerCase().match(/[a-z0-9'.&-]+/g) ?? []);
+      const out = new Set<string>();
+      const capital = (w: string) => /^[A-Z][A-Za-z0-9'.&-]*[A-Za-z0-9]$|^[A-Z]{2,}$/.test(w);
+      for (const sentence of text.split(/(?<=[.!?:;])\s+|\n+/)) {
+        const words = sentence.split(/\s+/).filter(Boolean).map((raw) => raw.replace(/^[("'‘“]+|[)"'’”.,!?;:]+$/g, ""));
+        let k = 0;
+        while (k < words.length) {
+          if (!capital(words[k])) {
+            k++;
+            continue;
+          }
+          let j = k;
+          while (j + 1 < words.length && capital(words[j + 1])) j++;
+          const run = words.slice(k, j + 1);
+          const candidate = k === 0 && run.length === 1 ? [] : run;
+          const unexplained = candidate.filter((w) => !COMMON.has(w.toLowerCase()) && !own.has(w.toLowerCase()));
+          const covered = candidate.some((w) => declaredWords.has(w.toLowerCase()));
+          if (unexplained.length > 0 && !covered) out.add(candidate.join(" "));
+          k = j + 1;
+        }
+      }
+      return [...out];
+    };
+    const notes = f.reply.notes as { title: string; text: string; names: string[] }[];
+    const flagged = notes.map((n) => before(`${n.title}. ${n.text}`, n.names, input));
+    // Every note was refused: YouGov's (declared as YouGov), UK's, UK-focused, AER and More UK among the flags.
+    for (const [i, x] of flagged.entries()) expect(x.length, notes[i].text).toBeGreaterThan(0);
+    const all = flagged.flat();
+    for (const w of ["YouGov's UK", "UK's", "UK-focused", "AER", "More UK"]) expect(all, w).toContain(w);
+    // Today's check passes the same reply.
+    for (const n of notes) expect(undeclaredNames(`${n.title}. ${n.text}`, n.names, input), n.text).toEqual([]);
+  });
+
   it("the words the name check flagged in production (YouGov's, UK's, UK-focused, AER, More UK) are no longer names", () => {
     const all = (f.reply.notes as { text: string }[]).map((n) => n.text).join(" ");
     for (const w of ["YouGov's", "UK's", "UK-focused", "AER", "More UK"]) expect(all, w).toContain(w);

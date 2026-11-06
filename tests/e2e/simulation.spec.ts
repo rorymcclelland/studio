@@ -10,8 +10,8 @@
 // 3. The main path of case 5: Run to the end shows "Simulated day 30 of 30",
 //    and the controls are disabled with the reason, "The simulation has reached
 //    its last day" (the failure path: the clock can't move past the end).
-// 4. End the launch: the panel says it ended on simulated day 30 of 30, and
-//    the clock's controls are gone.
+// 4. P9-1 case 7: End the launch: the panel says who ended it, on its last
+//    simulated day, 30 of 30, and the clock's controls are gone.
 //
 // Every figure on the panel is labelled simulated. Each state at 375 px and
 // 1440 px: nothing scrolls sideways, AA contrast. SHOTS_DIR=<folder> saves
@@ -81,7 +81,7 @@ test.beforeEach(async ({ page }) => {
 
 test(
   "P9-2 #5: a live 30-day Fernhollow launch moves on by Next day and Next week, then Run to the end shows simulated day 30 of 30 with the controls disabled",
-  { annotation: [{ type: "case", description: "P9-2.5" }] },
+  { annotation: [{ type: "case", description: "P9-2.5" }, { type: "case", description: "P9-1.7" }] },
   async ({ page }) => {
     test.setTimeout(900_000);
     let path = "";
@@ -154,7 +154,7 @@ test(
       await checkWidths(page, "simulation, last day");
     });
 
-    await step(page, "End the launch: it ended on simulated day 30 of 30, and the clock's controls are gone", async () => {
+    await step(page, "P9-1.7: End the launch: it ended on its last simulated day, 30 of 30, with who ended it, and the clock's controls are gone", async () => {
       await panel(page).getByRole("button", { name: "End the launch" }).click();
       await panel(page).getByRole("button", { name: "Yes, end the launch" }).click();
       await expect(launchStatus(page)).toHaveText("Ended", { timeout: 30_000 });

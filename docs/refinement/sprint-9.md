@@ -354,3 +354,9 @@ All seven as recommended.
 | Q7 | (a) Four measures, the default from the brief's KPI, one threshold per launch | As written (P9-1) |
 
 No acceptance criteria changed. F-23, P9-1 to P9-4, F-16a and N-9a are Ready, Sprint 9. Building starts when Rory says go.
+
+### Answer during the build (6 November)
+
+| # | Question | Answer | Effect |
+| --- | --- | --- | --- |
+| B1 | Every agent's real-model evals cost up to about 386p (imagery about 200p with its pictures), against a £1 cap per run. How should F-16a run? | Everything, up to about £3.86, in runs of at most 100p each; Rory adds `GOOGLE_GENERATIVE_AI_API_KEY` to GitHub for imagery's pictures | F-16a #1 changes: each run's total is at most £1 (the workflow's own check), and the runs together cover every agent and case. Five runs: brief and market; copy, localise and the nine small agents; imagery in three parts (`--part=k/n`) |

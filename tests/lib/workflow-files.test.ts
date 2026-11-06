@@ -101,6 +101,9 @@ describe("F-16a the real-model eval workflow", () => {
     expect(push).toContain('git fetch --depth=1 origin "refs/heads/e2e-results/evals/$SOURCE_BRANCH"');
     expect(push).toContain('cp -rn "$earlier/." "$RUNNER_TEMP/eval-results/"');
     expect(push.indexOf("cp -rn")).toBeLessThan(push.indexOf("git add --all"));
+    // Two runs' publish jobs never push at once, so neither force-pushes over the other's reports: they queue, never cancel.
+    expect(publish).toMatch(/\n {4}concurrency:\n {6}group: eval-reports-\$\{\{ github\.ref \}\}\n {6}cancel-in-progress: false\n/);
+    expect(evalsJob).not.toContain("concurrency:");
     const ci = readFileSync(join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
     expect(ci).toContain('branches-ignore: ["e2e-results/**"]');
   });

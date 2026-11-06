@@ -86,6 +86,7 @@ export const STORIES: Story[] = [
   { sprint: 9, id: "P9-3", title: "The Performance dashboard and healthy spend share" },
   { sprint: 9, id: "P9-4", title: "The Monitor agent: alerts and ask-your-data" },
   { sprint: 9, id: "F-16a", title: "The first real-model eval run, with regression cases" },
+  { sprint: 9, id: "F-23", title: "Production deploys wait for the checks" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -1090,9 +1091,15 @@ export const CASES: Case[] = [
     checks: [
       {
         kind: "browser",
+        spec: SIM_SPEC,
+        title: SIM_RUN,
+        note: "The launch runs to its last simulated day, then End the launch shows \"Ended by <who> on simulated day 30 of 30.\" after a reload.",
+      },
+      {
+        kind: "browser",
         spec: LAUNCH_SPEC,
         title: LAUNCH,
-        note: "P9-1 has no simulated clock (that is P9-2), so the launch ends before its first simulated day; the day it ends on is shown once the clock runs.",
+        note: "This launch is ended before its clock moves, so the panel says it ended before its first simulated day, with who ended it; the simulation test above shows the last simulated day.",
       },
       { kind: "ci", file: LAUNCH_FLOWS, test: "#7 End the launch records who ended it and when; only a live launch can end, and the campaign can launch again" },
     ],
@@ -1273,7 +1280,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: PERF_SPEC,
         title: PERF_MAIN,
-        note: "So that exactly one ad misses it, the threshold is set through the database while the launch waits for approval (the only time it can change), between the two lowest click-through rates the simulator gives for days 8 to 10.",
+        note: "So that exactly one ad misses it, the threshold is set between the two lowest click-through rates the simulator gives for days 8 to 10, while the launch waits for approval. A launch's terms never change once asked for (the rule is P9-1.6, tests/db/launch.test.ts #6 and the fixture's own test there), so the browser-test fixture (tests/e2e/launch-fixture.ts) sets it as the table's owner, switching launches_terms off for that one update.",
       },
       { kind: "ci", file: PERF_LIB, test: "#2 one ad below its threshold: its status is Below threshold, and the share drops by exactly that ad's share of the day's spend" },
       {
@@ -1364,7 +1371,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: PERF_SPEC,
         title: PERF_MAIN,
-        note: "The axe contrast check runs inside this browser test in CI's e2e job, at both widths on day 1 and day 10; the screenshots are saved with SHOTS_DIR for the demo.",
+        note: "The axe contrast check and the no-sideways-scroll check run inside this browser test in CI's e2e job, at 375 px and 1440 px on day 1 and day 10. CI saves no screenshots (SHOTS_DIR isn't set there): the demo page's recording of this test shows the page at each width, scaled into the recording's 1280 by 720 frame. SHOTS_DIR=<folder> saves full-page screenshots on a local run.",
       },
       { kind: "ci", file: PERF_LIB, test: "#7 the chart is an SVG labelled Simulated, with the events marked and a table version of every day for screen readers" },
     ],
@@ -1394,7 +1401,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: MONITOR_SPEC,
         title: MONITOR,
-        note: "The launch's seed is set while it waits for approval (the only time it can change) to one whose month, worked out first with the pure simulator, has an ad tiring between days 9 and 14 and none before, so day 7 shows no alert and day 14 shows it on the day the reading says.",
+        note: "While the launch waits for approval, its seed is set to one whose month, worked out first with the pure simulator, has an ad tiring between days 9 and 14 and none before, so day 7 shows no alert and day 14 shows it on the day the reading says. A launch's terms never change once asked for (the rule is P9-1.6, tests/db/launch.test.ts #6 and the fixture's own test there), so the browser-test fixture (tests/e2e/launch-fixture.ts) sets the seed as the table's owner, switching launches_terms off for that one update.",
       },
       {
         kind: "ci",
@@ -1458,7 +1465,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: MONITOR_SPEC,
         title: MONITOR,
-        note: "With the mock model: the plan and the answer are the mock's offline ones. The browser checks the answer's label, the table under it against the stored result, and that every figure in the answer is in that table.",
+        note: "With the mock model: the plan and the answer are the mock's offline ones. The browser checks the answer's label, the table under it against the stored result (lowest cost per acquisition first), that the answer names the first row's ad with its figure, and that every figure in the answer is in that table.",
       },
       {
         kind: "ci",
@@ -1557,7 +1564,13 @@ export const CASES: Case[] = [
     story: "P9-4",
     words: "Cost and cap: a question's charge is within the estimate shown. At the cap, the box says so and runs nothing.",
     checks: [
-      { kind: "ci", file: MONITOR_FLOWS, test: "#8 cost: about 0.1p a question on Haiku, shown in the box; the charge recorded in the ledger is within it" },
+      {
+        kind: "ci",
+        file: MONITOR_FLOWS,
+        test: "#8 cost: about 0.1p a question on Haiku, shown in the box; the charge recorded in the ledger is within it",
+        note: "The box shows the typical cost, about 0.1p. A question whose answer needs its one repair can cost up to the worst case, a second answer call; the test checks a plain question and an unanswerable one within the typical estimate, and a repaired one within the worst case.",
+      },
+      { kind: "ci", file: MONITOR_FLOWS, test: "#8 review fix: the cap is checked against the worst case: room for the typical cost but not the worst is at the cap" },
       { kind: "ci", file: MONITOR_FLOWS, test: "#8 at the cap the box says so and nothing runs: no question, no run, no call, no charge" },
       { kind: "ci", file: MONITOR_FLOWS, test: "#8 a question asked just before the cap is reached stops at the cap, says so, and charges nothing more" },
       { kind: "ci", file: MONITOR_AGENTS, test: "the cap reached: no call is made and nothing is charged, for either step" },
@@ -1580,7 +1593,7 @@ export const CASES: Case[] = [
     id: "F-16a.1",
     sprint: 9,
     story: "F-16a",
-    words: "The real-model report exists for every agent, with model, cases, pass rate and cost; its total is at most £1.",
+    words: "Each real-model run's total is at most £1 (the workflow's own check), and the runs together report on every agent with model, cases, pass rate and cost.",
     checks: [
       {
         kind: "ci",
@@ -1592,7 +1605,7 @@ export const CASES: Case[] = [
       { kind: "ci", file: EVAL_RUNNER, test: "F-16a the estimate needs no key, and --real estimates every agent with each agent's share" },
       {
         kind: "hand",
-        why: "The real run needs the real key, which only the Actions run has: Claude starts .github/workflows/evals.yml with Rory's approval, and Rory reads the reports (model, cases, pass rate and cost for every agent, and the total) at the demo, on the branch e2e-results/evals/sprint-9 and in the run's job summary.",
+        why: "The real runs need the real keys, which only the Actions runs have. Per answer B1, every agent's evals cost up to about £3.86, so Claude starts .github/workflows/evals.yml with Rory's approval five times, each capped at £1: brief and market; copy, localise and the nine small agents; and imagery in three parts (--part=1/3, 2/3 and 3/3). Rory reads the reports (model, cases, pass rate and cost for every agent, and each run's total) at the demo, on the branch e2e-results/evals/sprint-9, where each run's reports are kept beside the earlier ones, and in each run's job summary.",
       },
     ],
   },
@@ -1614,6 +1627,31 @@ export const CASES: Case[] = [
         kind: "ci",
         job: "Typecheck, lint, unit and database tests, build",
         note: "Its step \"Agent evals against the mock model\" runs the regression eval cases (brief, imagery, and the market case that stands for the 26 Oct runs) with the mock model; F-16a's real-model run runs them against the real models. The fixtures are reconstructions, labelled with their sources: the production replies were never copied into the repository.",
+      },
+    ],
+  },
+  // F-23 Production deploys wait for the checks
+  {
+    id: "F-23.1",
+    sprint: 9,
+    story: "F-23",
+    words: "A commit that fails a check (a deliberately failing test on a throwaway branch, deployed as a preview, or checked on a copy of the setup) is not promoted.",
+    checks: [
+      {
+        kind: "hand",
+        why: "It can't be a browser test, and it must not touch production: Claude checks it once, by hand. The evidence, a failing commit held back from promotion, is recorded in docs/decisions/0026-production-waits-for-ci.md once Vercel's Deployment Checks are on.",
+      },
+    ],
+  },
+  {
+    id: "F-23.2",
+    sprint: 9,
+    story: "F-23",
+    words: "The next merge to main deploys only after CI passes; the time from merge to live is recorded.",
+    checks: [
+      {
+        kind: "hand",
+        why: "Only a real merge to main shows it: Claude records the time from merge to live at the Sprint 9 deploy, after sign-off. Decision 0026 expects about 40 minutes, once CI has run.",
       },
     ],
   },

@@ -67,6 +67,10 @@ describe("the case list", () => {
     expect(dbChecked).toEqual(["P9-1.4", "P9-1.5", "P9-1.6", "P9-1.8"]);
     // The browser tests the refinement names: cases 1, 2 and 7; the rest are CI.
     expect(p91.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["P9-1.1", "P9-1.2", "P9-1.7"]);
+    // Case 7's last simulated day needs the clock: the simulation test runs to the end and ends the launch, so it is
+    // case 7's first browser check; the launch test ends a launch before its clock moves.
+    const seven = CASES.find((c) => c.id === "P9-1.7")!.checks.filter((x) => x.kind === "browser");
+    expect(seven.map((x) => (x as { spec: string }).spec)).toEqual(["simulation.spec.ts", "launch.spec.ts"]);
   });
 
   it("has every agreed P9-2 case, once each, in order, after P9-1's, checked as the refinement says", () => {
@@ -187,6 +191,11 @@ describe("the case list", () => {
     expect(one.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/lib/eval-check.test.ts")).toBe(true);
     expect(one.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/lib/workflow-files.test.ts")).toBe(true);
     expect(one.find((x) => x.kind === "hand")).toMatchObject({ why: expect.stringMatching(/Rory reads the reports.*e2e-results\/evals\/sprint-9/) });
+    // Answer B1: each run is capped at £1, and five runs together cover every agent (imagery in three parts).
+    expect(f16a[0].words).toBe("Each real-model run's total is at most £1 (the workflow's own check), and the runs together report on every agent with model, cases, pass rate and cost.");
+    expect(one.find((x) => x.kind === "hand")).toMatchObject({
+      why: expect.stringMatching(/five times, each capped at £1: brief and market; copy, localise and the nine small agents; and imagery in three parts \(--part=1\/3, 2\/3 and 3\/3\)/),
+    });
     // Case 2: every regression group in tests/evals/regression.test.ts, and the mock eval run in CI's first job.
     const two = f16a[1].checks;
     expect(two.filter((x) => x.kind === "ci" && "file" in x && x.file === "tests/evals/regression.test.ts")).toHaveLength(8);
@@ -195,6 +204,21 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("P9-4")).toBeLessThan(order.indexOf("F-16a"));
     expect(STORIES.find((s) => s.id === "F-16a")).toEqual({ sprint: 9, id: "F-16a", title: "The first real-model eval run, with regression cases" });
+  });
+
+  it("has every agreed F-23 case, once each, in order, after F-16a's, both by hand: neither can be a browser test or touch production", () => {
+    const f23 = CASES.filter((c) => c.story === "F-23");
+    expect(f23.map((c) => c.id)).toEqual(["F-23.1", "F-23.2"]);
+    for (const c of f23) expect(c.sprint, c.id).toBe(9);
+    expect(f23.map(caseKind)).toEqual(["hand", "hand"]);
+    // Case 1's evidence goes in decision 0026 once Deployment Checks are on; case 2 is timed at the Sprint 9 deploy.
+    expect(existsSync(join(root, "docs/decisions/0026-production-waits-for-ci.md"))).toBe(true);
+    expect(f23[0].checks).toEqual([{ kind: "hand", why: expect.stringMatching(/can't be a browser test.*must not touch production.*docs\/decisions\/0026-production-waits-for-ci\.md.*Deployment Checks/) }]);
+    expect(f23[1].checks).toEqual([{ kind: "hand", why: expect.stringMatching(/time from merge to live.*Sprint 9 deploy.*about 40 minutes/) }]);
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("F-16a")).toBeLessThan(order.indexOf("F-23"));
+    expect(STORIES.find((s) => s.id === "F-23")).toEqual({ sprint: 9, id: "F-23", title: "Production deploys wait for the checks" });
+    expect(STORIES.filter((s) => s.sprint === 9).map((s) => s.id)).toEqual(["P9-1", "P9-2", "P9-3", "P9-4", "F-16a", "F-23"]);
   });
 
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
@@ -313,6 +337,31 @@ describe("the case list", () => {
     // Every Sprint 8 hand check names its check in the pack.
     for (const c of CASES.filter((x) => x.sprint === 8)) {
       for (const x of c.checks) if (x.kind === "hand") expect(x.why, c.id).toMatch(/HC-\d in docs\/testing\/sprint-8-test-pack\.md/);
+    }
+  });
+
+  it("the Sprint 9 test pack (N-9a) has the hand check P9-4.9 names, with what it checks, user, flow, expected outcome and a result, and no secrets", () => {
+    const pack = read("docs/testing/sprint-9-test-pack.md");
+    expect(pack).toContain("### HC-1 Ten typical questions on a real launch");
+    expect(pack.match(/^### HC-\d+ /gm)).toHaveLength(1);
+    for (const part of ["**What it checks:**", "**User:**", "**Flow:**", "**Expected outcome", "**Result:** ☐ Pass ☐ Fail"]) expect(pack.split(part).length - 1, part).toBe(1);
+    expect(pack).toContain("**AI cost:**");
+    // The only real-model check of Sprint 9 that needs the pack names HC-1 in it.
+    expect(CASES.find((c) => c.id === "P9-4.9")!.checks.find((x) => x.kind === "hand")).toMatchObject({ why: expect.stringContaining("HC-1 in docs/testing/sprint-9-test-pack.md") });
+    // Rule 6: nothing key-shaped, no connection string with a password, and no address or password to sign in with.
+    for (const re of [
+      /sk-ant-[A-Za-z0-9_-]{8,}/,
+      /\bsk-(?:proj-)?[A-Za-z0-9]{20,}/,
+      /AIza[0-9A-Za-z_-]{20,}/,
+      /signkey-(?:prod|test)-[A-Za-z0-9]{16,}/,
+      /\bnapi_[A-Za-z0-9]{32,}/,
+      /\bre_[A-Za-z0-9]{6,}_[A-Za-z0-9]{16,}/,
+      /eyJ[A-Za-z0-9_-]{10,}\.eyJ/,
+      /postgres(?:ql)?:\/\/[^:\s/]+:[^@\s]+@/,
+      /[A-Z_]*(?:KEY|SECRET|TOKEN|PASSWORD)\s*[=:]\s*\S/,
+      /[\w.+-]+@[\w-]+\.[\w.]+/,
+    ]) {
+      expect(pack, String(re)).not.toMatch(re);
     }
   });
 

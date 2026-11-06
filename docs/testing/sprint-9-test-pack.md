@@ -20,9 +20,9 @@ Everything else in Sprint 9 (the launch request, the simulator and clock, the Pe
 - **Flow:**
   1. Open the campaign. In the launch panel, keep the defaults and click **Ask to launch**.
   2. **Approvals** → the launch request → **Approve**.
-  3. Back on the campaign, open its **Performance** view. Click **Next week** twice, so the clock reads **Simulated day 14 of 30**.
+  3. Back on the campaign page, in the launch panel, click **Next week** twice, so the clock reads **Simulated day 14 of 30**. Then click **See performance (simulated)**.
   4. Under **Ask about this campaign**, note the cost shown, then ask each question below, one at a time. Wait for each answer before asking the next.
-  5. For each answer, compare it with the table under it and, where useful, with **Show the chart as a table** and the **Ads** table above.
+  5. For each answer, compare it with the table under it and, where useful, with **Show the chart as a table** and the **Ads** table above. Note **AI today** at the top right before the first question.
 
   | # | Question to type | What a right answer looks like |
   |---|---|---|
@@ -42,7 +42,7 @@ Everything else in Sprint 9 (the launch request, the simulator and clock, the Pe
   - Every figure in an answer appears in its table (allowing for rounding). None is invented, and none is a forecast.
   - The day range and the ads in each table match what the question asked for (for example "last week" is the last seven simulated days, not every day).
   - Questions 9 and 10 are refused without a table.
-  - Today's cost rose by about the total the box showed for ten questions (about 1p).
+  - **AI today**, at the top right of every page, rose by about the total the box showed for ten questions (about 1p). A question the answer step had to repair costs a little more than the figure shown.
   - Afterwards, you may **End the launch**, or leave it running; it spends nothing real.
 - **Result:** ☐ Pass ☐ Fail. Cost shown per question: ______. Cost charged in all: ______.
 - **Notes (the number of any question whose plan or answer was wrong, and what was wrong):** ________________________________________________
