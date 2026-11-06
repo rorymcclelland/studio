@@ -184,37 +184,55 @@ Evidence: 718 unit, database and agent tests and 33 browser tests (22 Sprint 7 c
 | F-33 | Merge the sign-off pipeline, QA test fixes and the `data-words` attribute to `main` (a production deploy, with nothing visible to users), once Rory approves the deploy | Sprint 7 close | Done, Sprint 8 (deployed with Sprint 8 at `3be96cf`, 3 November) |
 | QA-7 | Folded: the independent QA review's 12 findings on the Sprint 7 tests | Sprint 7 QA review | Fixed in Sprint 7 (`68999d5`), before the demo |
 
-## Sprint 8: Compliance and pre-testing (confirmed and refined 3 November 2026)
+## Sprint 8: Compliance and pre-testing (closed 6 November 2026)
 
 Every ad in the pack checked against the brand's and the channel's rules in every size and language, as pass, review or fail with the reason and a fix; a synthetic panel scores picked ads before spend. Demo gate 2. Detail: `docs/refinement/sprint-8.md`.
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| C8-1 | Compliance checks in code: contrast margin, legal lines, banned terms, logo safe zone, text density, 9:16 platform zones, don't rules for a person; decisions recorded; the pack holds only ads that pass or are accepted | L | Ready, Sprint 8 |
-| C8-2 | Vision checks for judgement calls (faces for finance brands, the kit's don't rules), with F-24 folded in; Check pictures for older campaigns | M | Ready, Sprint 8 |
-| C8-3 | Check an uploaded ad: words read by AI, checked in code; estimates labelled | M | Ready, Sprint 8 |
-| C8-4 | Pre-test panel: the brief's personas score picked ads, labelled synthetic | M | Ready, Sprint 8 (first to move if over) |
+| C8-1 | Compliance checks in code: contrast margin, legal lines, banned terms, logo safe zone, text density, 9:16 platform zones, don't rules for a person; decisions recorded; the pack holds only ads that pass or are accepted | L | Done, Sprint 8 (signed off 3 Nov, CI run 41717589833; deployed as `3be96cf`) |
+| C8-2 | Vision checks for judgement calls (faces for finance brands, the kit's don't rules), with F-24 folded in; Check pictures for older campaigns | M | Done, Sprint 8. Residual: real-model judgement is a hand check (N-8e, passed) |
+| C8-3 | Check an uploaded ad: words read by AI, checked in code; estimates labelled | M | Done, Sprint 8 (upload limit 4 MB, decision 0025) |
+| C8-4 | Pre-test panel: the brief's personas score picked ads, labelled synthetic | M | Done, Sprint 8 |
 | F-33 | Merge Sprint 7's tests and pipeline to `main` | S | Done, Sprint 8 (merged with Sprint 8 at `3be96cf`) |
-| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 8 |
-| F-28a | Watch production's logs until 9 November | S | Ready, Sprint 8 |
-| N-8d | Rory's Sprint 7 hand checks | S | Ready, Sprint 8 |
-| N-8e | Sprint 8 test pack, hand checks of real AI output only | S | Ready, Sprint 8 |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Returned from Sprint 8 (waits for 12 Nov); carried into Sprint 9 |
+| F-28a | Watch production's logs until 9 November | S | Returned from Sprint 8 (runs to 9 Nov); carried into Sprint 9 |
+| N-8d | Rory's Sprint 7 hand checks | S | Done, Sprint 8 (Rory reported them passed, 6 Nov) |
+| N-8e | Sprint 8 test pack, hand checks of real AI output only | S | Done, Sprint 8 (`docs/testing/sprint-8-test-pack.md`; Rory reported HC-1 to HC-4 passed, 6 Nov) |
+
+## Where the Sprint 8 review items now live
+
+No new findings came from the demo or the hand checks. The two items raised during the sprint, F-34 (Neon storage) and F-29 (the narrow key), are in the Sprint 6 table above, both done on 5 November.
+
+## Sprint 9: Performance I, the simulator and monitor (refined 6 November 2026, awaiting Rory's answers)
+
+Picked, compliant ads launch into a simulation after an approval. The simulation gives deterministic daily results, with fatigue and events. A Performance dashboard is headed by healthy spend share. A monitor raises alerts and answers questions from the stored results. Every figure is simulated and labelled. Detail: `docs/refinement/sprint-9.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-23 | Production deploys wait for the checks: Vercel's Deployment Checks, or a deploy hook from CI's last job | S | Proposed, Sprint 9 (Q6) |
+| P9-1 | Launch a simulated campaign: budget, length, start date and KPI threshold; the pack's eligibility rule; approval in the inbox | M | Proposed, Sprint 9 |
+| P9-2 | The simulator: daily results per ad from a seed, fatigue, weekends, UK bank holidays, Black Friday; a clock a person moves | L | Proposed, Sprint 9 |
+| P9-3 | Performance dashboard and healthy spend share; one line on Studio's home | M | Proposed, Sprint 9 |
+| P9-4 | Monitor agent: alerts in code (below threshold, tiring, not compliant) and ask-your-data (a typed query plan, figures checked in the answer) | M | Proposed, Sprint 9 (ask-your-data first to move if over) |
+| F-16a | First real-model eval run and report, with the production regression cases | S | Proposed, Sprint 9 (Q5: the key in GitHub) |
+| F-28a | Watch production's logs until 9 November | S | Carried from Sprint 8 |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Carried from Sprint 8 |
+| N-9a | Sprint 9 test pack, hand checks of real AI output only (the monitor's answers) | S | Proposed, Sprint 9 |
 
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 7 close; Sprint 8 is above.
+Re-ranked at the Sprint 8 close; Sprint 9 is above.
 
-1. F-16a: the first real-model eval report and regression cases (S). Every production fix would have been caught by one. It would join Sprint 8 if room allows.
-2. F-30: don't swallow database errors inside transactions (S), with F-31.
-3. F-31: try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S).
-4. F-23: gate production deploys on the checks, before real users arrive (S).
-5. F-29: narrow the Neon API key (S).
-6. F-32: keep the results branch small (S).
-7. F-20: the persona facts check compares age and region (S).
-8. F-19: withdrawn sign-offs get their own state (S).
-9. F-25: a cheaper worst case for Make creative (S).
-10. F-9: the dark theme, once the light design system has settled.
-11. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
+1. F-30: don't swallow database errors inside transactions (S), with F-31.
+2. F-31: try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S).
+3. F-32: keep the results branch small (S). Sprint 9 adds recordings, so it moves up.
+4. F-20: the persona facts check compares age and region (S).
+5. F-19: withdrawn sign-offs get their own state (S).
+6. F-25: a cheaper worst case for Make creative (S).
+7. F-9: the dark theme, once the light design system has settled.
+8. Sprint 10 (Performance II: fatigue forecasts, swaps, diagnostics, budget, and the test plan's sample sizes) and Sprint 11 (the flywheel, demo mode and launch), from the roadmap.
+9. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
 
 ## Decisions
 
@@ -240,3 +258,4 @@ Re-ranked at the Sprint 7 close; Sprint 8 is above.
 | 3 Nov 2026 | Sprint 8 (Compliance and pre-testing) refined; Rory took all seven answers as recommended: Studio's own thresholds in one config file, density not on banners, review items accepted inline, only the finance face rule fails on the model's word, unaccepted reviews left out of the pack, pre-test on a click, the 9:16 zone rule in Sprint 8 |
 | 3 Nov 2026 | Sprint 8 signed off from the demo page (CI run 41717589833) and deployed with Rory's approval: five migrations applied to preview, then production (both match a fresh build in all 11 fingerprint parts), merged to `main` as `3be96cf`; CI and After production deploy passed, health OK. Hand checks (N-8d, N-8e) follow on production |
 | 5 Nov 2026 | CI moves to its own Neon project, `campaign-studio-ci`, after Neon's storage alert; its key is scoped to that project (F-34, F-29; decision 0015 update) |
+| 6 Nov 2026 | Sprint 8 closed: C8-1 to C8-4, N-8d and N-8e done (Rory reported the hand checks passed); F-28a and N-7a carried into Sprint 9 (dated); no new findings. Sprint 9 (Performance I: simulator and monitor) refined, with F-23 and F-16a proposed to join |

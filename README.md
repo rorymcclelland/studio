@@ -2,7 +2,18 @@
 
 A multi-agent campaign studio for marketing teams. Three squads of AI agents (Strategy, Creative and Performance) share one Business Context store and take a campaign from a one-line objective to on-brand creative that stays above its performance threshold. A person approves every consequential move.
 
-**Status: Sprint 6 of 11 (hosting moved to Neon).** What works today: sign-in by emailed link or invite, each person in their own workspace; brands and their Business Context; the Strategy squad (market notes, audiences, a brief with sign-off, personas and a test plan); the first Creative agents (copy, imagery and ads composed in code, in a variant gallery); a full decision trail for every agent run; and a daily spending cap on every model call. The Performance squad and the rest of Creative arrive in later sprints. All brands and figures in the app are fictional or simulated.
+**Status: Sprint 8 of 11 closed (Creative and compliance complete); Sprint 9, the Performance squad, is next.** What works today:
+
+- sign-in by emailed link or invite, with each person in their own workspace;
+- brands and their Business Context;
+- the Strategy squad: market notes, audiences, a brief with sign-off, personas and a test plan;
+- the Creative squad: copy, imagery and ads composed in code, in four social sizes, three banners and several languages;
+- compliance checks on every ad, including ads uploaded from outside Studio, with a person deciding anything that needs judgement;
+- a synthetic pre-test panel;
+- a launch pack of the ads that pass;
+- a full decision trail for every agent run, and a daily spending cap on every model call.
+
+The Performance squad (a simulator, monitoring, swaps and budget) arrives in Sprints 9 and 10. All brands and figures in the app are fictional or simulated.
 
 ## Stack
 
