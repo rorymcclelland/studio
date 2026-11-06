@@ -103,19 +103,21 @@ export function builder(m: Member, brandId: string, campaignId: string) {
 }
 
 /**
- * A launch written straight to the database as a member, with its approval
- * decided as the status needs (P9-1's rawLaunch): by default live, £50 a day
- * for 30 days from 6 November 2026, cost per acquisition at or below £20, seed 42,
- * with the given ads in the four social sizes, in English.
+ * A launch written straight to the database as a member, as the app makes one:
+ * asked for (waiting, with its pending launch approval), then decided as the
+ * status needs: approved and live, approved then ended, or refused. By
+ * default live, £50 a day for 30 days from 6 November 2026, cost per
+ * acquisition at or below £20, seed 42, with the given ads in the four social
+ * sizes, in English. `over` sets the launch's own columns at insert; a status
+ * outside the lifecycle is inserted as it is, for the database to refuse.
  */
 export async function rawLaunch(m: Member, campaignId: string, variantIds: string[], over: Record<string, unknown> = {}) {
-  const status = (over.status as string | undefined) ?? "live";
+  const { status = "live", approved_at, ended_by, ended_at, ...terms } = over as Record<string, unknown> & { status?: string };
+  const lifecycle = ["awaiting_approval", "live", "ended", "refused"].includes(status);
   return asUser(m.userId, async (tx) => {
-    const decided = status === "awaiting_approval" ? null : status === "refused" ? "rejected" : "approved";
     const [ap] = await tx`
-      insert into public.approvals (workspace_id, kind, campaign_id, question, options, expires_at, status, decided_by, decided_at)
-      values (${m.workspaceId}, 'launch', ${campaignId}, 'Launch (simulated)', '[]'::jsonb, now() + interval '14 days',
-              ${decided ?? "pending"}, ${decided ? m.userId : null}, ${decided ? new Date() : null})
+      insert into public.approvals (workspace_id, kind, campaign_id, question, options, expires_at)
+      values (${m.workspaceId}, 'launch', ${campaignId}, 'Launch (simulated)', '[]'::jsonb, now() + interval '14 days')
       returning id`;
     const row: Record<string, unknown> = {
       workspace_id: m.workspaceId,
@@ -127,15 +129,23 @@ export async function rawLaunch(m: Member, campaignId: string, variantIds: strin
       kpi_measure: "cpa",
       kpi_value: 20,
       seed: "42",
-      status,
       approval_id: ap.id,
       created_by: m.userId,
-      approved_at: status === "awaiting_approval" || status === "refused" ? null : new Date(),
-      ended_by: status === "ended" ? m.userId : null,
-      ended_at: status === "ended" ? new Date() : null,
-      ...over,
+      ...terms,
+      status: lifecycle ? "awaiting_approval" : status,
     };
     const [l] = await tx`insert into public.launches ${tx(row as never)} returning id`;
+    if (status === "live" || status === "ended") {
+      await tx`update public.approvals set status = 'approved', decided_by = ${m.userId}, decided_at = now() where id = ${ap.id}`;
+      await tx`update public.launches set status = 'live', approved_at = ${(approved_at as Date | undefined) ?? new Date()} where id = ${l.id}`;
+    }
+    if (status === "ended") {
+      await tx`update public.launches set status = 'ended', ended_by = ${(ended_by as string | undefined) ?? m.userId}, ended_at = ${(ended_at as Date | undefined) ?? new Date()} where id = ${l.id}`;
+    }
+    if (status === "refused") {
+      await tx`update public.approvals set status = 'rejected', reason = 'Refused for the test', decided_by = ${m.userId}, decided_at = now() where id = ${ap.id}`;
+      await tx`update public.launches set status = 'refused' where id = ${l.id}`;
+    }
     return { launchId: l.id as string, approvalId: ap.id as string };
   });
 }

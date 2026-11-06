@@ -1,7 +1,7 @@
 import { asUser } from "@/lib/db/scoped";
 import { CapExceededError } from "@/lib/models/generate";
 import { runPlan } from "@/lib/performance/ask";
-import { CANNOT_ANSWER, type AnswerablePlan, type QueryResult } from "@/lib/performance/ask-rules";
+import { AI_UNREACHED, ANSWER_NOT_CHECKED, CANNOT_ANSWER, PLAN_NOT_CHECKED, type AnswerablePlan, type QueryResult } from "@/lib/performance/ask-rules";
 import { launchAdsFor, type LaunchAd } from "@/lib/performance/launch";
 import { AgentOutputError, runModelStep, type StepContext } from "./model-step";
 import { describePlan, monitorAnswerAgent, monitorPlanAgent, monitorStart, type MonitorPlanInput, type MonitorPlanOutput } from "./monitor";
@@ -26,18 +26,27 @@ type Prepared =
   | { ok: true; questionId: string; question: string; launchId: string; campaignId: string; input: MonitorPlanInput }
   | { ok: false; message: string };
 
-type ModelOutcome<T> = { ok: true; output: T } | { ok: false; cap: boolean; message: string };
+/**
+ * Why a run stopped: `message` for the run's trail (its error, with the
+ * checks' problems or the provider's error), and `shown` for the page and the
+ * question's row, a fixed sentence with nothing a model or a provider wrote.
+ */
+type Stopped = { cap: boolean; message: string; shown: string };
+type ModelOutcome<T> = { ok: true; output: T } | ({ ok: false } & Stopped);
 
 const cut = (s: string) => (s.length > REFUSED_MAX ? `${s.slice(0, REFUSED_MAX - 1)}…` : s);
 
-function failure(err: unknown, what: "plan" | "answer"): { ok: false; cap: boolean; message: string } {
+function failure(err: unknown, what: "plan" | "answer"): { ok: false } & Stopped {
   const message = err instanceof Error ? err.message : String(err);
-  if (err instanceof CapExceededError) return { ok: false, cap: true, message: `${PREFIX}the daily AI cap was reached.` };
+  if (err instanceof CapExceededError) {
+    const capped = `${PREFIX}the daily AI cap was reached.`;
+    return { ok: false, cap: true, message: capped, shown: capped };
+  }
   if (err instanceof AgentOutputError) {
     const problems = message.replace(/^The agent's reply (failed its checks|did not match the expected format): /, "");
-    return { ok: false, cap: false, message: cut(`${PREFIX}the AI's ${what} still broke a rule after one repair (${problems}).`) };
+    return { ok: false, cap: false, message: cut(`${PREFIX}the AI's ${what} still broke a rule after one repair (${problems}).`), shown: what === "answer" ? ANSWER_NOT_CHECKED : PLAN_NOT_CHECKED };
   }
-  return { ok: false, cap: false, message: cut(`${PREFIX}the model call failed (${message}).`) };
+  return { ok: false, cap: false, message: cut(`${PREFIX}the model call failed (${message}).`), shown: AI_UNREACHED };
 }
 
 async function prepare(ctx: StepContext): Promise<Prepared> {
@@ -115,10 +124,11 @@ export async function executeMonitorRun(ctx: StepContext, step: StepTools): Prom
     return "failed";
   }
   const href = `/campaigns/${prepared.campaignId}/performance`;
-  const stop = async (outcome: { cap: boolean; message: string }) => {
+  // The page and the run's summary get the fixed sentence; the details stay in the trail (the run's error).
+  const stop = async (outcome: Stopped) => {
     await step.run("refuse", async () => {
-      await fill(ctx, prepared.questionId, { refused: outcome.message });
-      await setRun(ctx, outcome.cap ? "stopped_cap" : "failed", { output: { summary: outcome.message, href, hrefLabel: "See the answer" }, error: outcome.message });
+      await fill(ctx, prepared.questionId, { refused: outcome.shown });
+      await setRun(ctx, outcome.cap ? "stopped_cap" : "failed", { output: { summary: outcome.shown, href, hrefLabel: "See the answer" }, error: outcome.message });
     });
     return outcome.cap ? "stopped_cap" : "failed";
   };
@@ -156,7 +166,7 @@ export async function executeMonitorRun(ctx: StepContext, step: StepTools): Prom
     await fill(ctx, prepared.questionId, { result });
     return { ok: true, result };
   });
-  if (!queried.ok) return stop({ cap: false, message: queried.message });
+  if (!queried.ok) return stop({ cap: false, message: queried.message, shown: queried.message });
 
   const answered = await step.run("answer", async (): Promise<ModelOutcome<{ answer: string }>> => {
     try {

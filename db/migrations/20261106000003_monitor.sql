@@ -108,22 +108,30 @@ create table public.performance_questions (
   answer text check (char_length(answer) between 1 and 600),
   result jsonb,
   refused text check (char_length(refused) between 1 and 500),
-  run_id uuid references public.agent_runs (id) on delete set null,
+  run_id uuid,
   created_by uuid not null references auth.users (id),
   created_at timestamptz not null default now(),
-  foreign key (launch_id, workspace_id) references public.launches (id, workspace_id) on delete cascade
+  foreign key (launch_id, workspace_id) references public.launches (id, workspace_id) on delete cascade,
+  foreign key (run_id, workspace_id) references public.agent_runs (id, workspace_id) on delete set null (run_id)
 );
 
 create index performance_questions_workspace_idx on public.performance_questions (workspace_id);
 create index performance_questions_launch_idx on public.performance_questions (launch_id, workspace_id, created_at);
-create index performance_questions_run_idx on public.performance_questions (run_id);
+create index performance_questions_run_idx on public.performance_questions (run_id, workspace_id);
 create index performance_questions_created_by_idx on public.performance_questions (created_by);
 
 -- For every role, the owner too: who asked what, about which launch and when,
--- never changes; once it is answered or refused, nothing does.
+-- never changes; once it is answered or refused, nothing does, except that the
+-- run's foreign key may clear run_id when the run itself is deleted (with its
+-- workspace, say), which happens inside the foreign key's own trigger.
 create function public.performance_questions_guard() returns trigger
 language plpgsql set search_path = '' as $$
 begin
+  if pg_trigger_depth() > 1 and old.run_id is not null and new.run_id is null
+     and (new.id, new.workspace_id, new.launch_id, new.question, new.plan, new.answer, new.result, new.refused, new.created_by, new.created_at)
+       is not distinct from (old.id, old.workspace_id, old.launch_id, old.question, old.plan, old.answer, old.result, old.refused, old.created_by, old.created_at) then
+    return new;
+  end if;
   if (new.id, new.workspace_id, new.launch_id, new.question, new.created_by, new.created_at)
        is distinct from (old.id, old.workspace_id, old.launch_id, old.question, old.created_by, old.created_at) then
     raise exception 'A question''s words, campaign and asker cannot be changed' using errcode = '42501';

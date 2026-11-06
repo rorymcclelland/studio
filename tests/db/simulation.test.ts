@@ -454,12 +454,12 @@ describe("P9-2 the simulated clock", () => {
     expect(await countRows(launchId)).toBe(15);
     expect(await simDayOf(launchId)).toBe(5);
 
-    // A launch waiting for approval, or refused, has no clock to move either, and stays at day 0.
+    // A launch refused, or waiting for approval, has no clock to move either, and stays at day 0 (refused first: one open request at a time).
+    const refused = await rawLaunch(a, ids.main, ids.ads.slice(0, 2), { status: "refused" });
+    expect(await refusal(advance(a, refused.launchId, "end", 0))).toEqual({ clockError: true, message: SIM_NOT_LIVE });
     const waiting = await rawLaunch(a, ids.main, ids.ads.slice(0, 2), { status: "awaiting_approval" });
     expect(await refusal(advance(a, waiting.launchId, 1, 0))).toEqual({ clockError: true, message: SIM_NOT_LIVE });
     await expect(getSql()`update public.launches set sim_day = 1 where id = ${waiting.launchId}`).rejects.toMatchObject({ code: "42501" });
-    const refused = await rawLaunch(a, ids.main, ids.ads.slice(0, 2), { status: "refused" });
-    expect(await refusal(advance(a, refused.launchId, "end", 0))).toEqual({ clockError: true, message: SIM_NOT_LIVE });
     expect(await countRows(waiting.launchId)).toBe(0);
     expect(await countRows(refused.launchId)).toBe(0);
   });

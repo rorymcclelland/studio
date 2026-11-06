@@ -5,9 +5,12 @@
 -- it in the inbox (rule 3, Q1): an approval of the new kind 'launch', about
 -- the campaign. The link is approvals.campaign_id plus launches.approval_id.
 --
--- Once approved (or refused), a launch's ads, budget, length, start, threshold
--- and seed never change, for any role (the guard trigger, like
--- approvals_guard). Only its status moves on: live to ended.
+-- A launch is always asked for first: it is inserted waiting for approval, and
+-- goes live only once its own launch approval is approved (launches_live_check).
+-- Its ads, budget, length, start, threshold and seed never change once it is
+-- asked for, for any role (launches_terms, like approvals_guard). Only its
+-- status moves on: waiting to live or refused, live to ended. A launched ad
+-- can't be deleted on its own while the launch stands (ad_variants_launched).
 --
 -- Rule 7: workspace_id with row-level security, every parent referenced by
 -- (id, workspace_id). Everything here runs as the tables' owner, so it needs
@@ -69,12 +72,16 @@ create index launches_ended_by_idx on public.launches (ended_by);
 create unique index launches_one_open on public.launches (campaign_id) where status = 'awaiting_approval';
 create unique index launches_one_live on public.launches (campaign_id) where status = 'live';
 
--- A launch's approval must be a launch approval about the same campaign. An
--- approval the inserter can't see is left to the foreign key to refuse.
+-- A launch is inserted waiting for its approval, never already decided, and its
+-- approval must be a launch approval about the same campaign. An approval the
+-- inserter can't see is left to the foreign key to refuse.
 create function public.launches_approval() returns trigger
 language plpgsql set search_path = '' as $$
 declare a record;
 begin
+  if new.status is distinct from 'awaiting_approval' then
+    raise exception 'A launch is asked for first: it starts waiting for approval' using errcode = '23514';
+  end if;
   select kind, campaign_id into a from public.approvals where id = new.approval_id;
   if a is not null and (a.kind <> 'launch' or a.campaign_id <> new.campaign_id) then
     raise exception 'A launch''s approval must be a launch approval about the same campaign' using errcode = '23514';
@@ -86,8 +93,25 @@ $$;
 create trigger launches_approval before insert on public.launches
 for each row execute function public.launches_approval();
 
--- Once decided, a launch's terms are fixed, for every role, the owner too; only
--- its status moves on (waiting to live or refused, live to ended).
+-- A launch's terms are the ones it was asked for with, for every role, the
+-- owner too: what the approver approved is what runs. Its own trigger, so the
+-- guard below stays about who and when.
+create function public.launches_terms() returns trigger
+language plpgsql set search_path = '' as $$
+begin
+  if (new.ads, new.daily_budget_pence, new.days, new.starts_on, new.kpi_measure, new.kpi_value, new.seed)
+       is distinct from (old.ads, old.daily_budget_pence, old.days, old.starts_on, old.kpi_measure, old.kpi_value, old.seed) then
+    raise exception 'A launch''s ads, budget, length, start and threshold can''t change once it is asked for' using errcode = '42501';
+  end if;
+  return new;
+end
+$$;
+
+create trigger launches_terms before update on public.launches
+for each row execute function public.launches_terms();
+
+-- A launch's campaign, approval and asker are fixed, for every role, the owner
+-- too; only its status moves on (waiting to live or refused, live to ended).
 create function public.launches_guard() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -95,10 +119,6 @@ begin
      or new.approval_id is distinct from old.approval_id or new.created_by is distinct from old.created_by
      or new.created_at is distinct from old.created_at then
     raise exception 'A launch''s campaign and approval cannot be changed' using errcode = '42501';
-  end if;
-  if old.status <> 'awaiting_approval' and (new.ads, new.daily_budget_pence, new.days, new.starts_on, new.kpi_measure, new.kpi_value, new.seed)
-       is distinct from (old.ads, old.daily_budget_pence, old.days, old.starts_on, old.kpi_measure, old.kpi_value, old.seed) then
-    raise exception 'A launch''s ads, budget, length, start and threshold can''t change once it is approved' using errcode = '42501';
   end if;
   if new.status is distinct from old.status
      and not ((old.status = 'awaiting_approval' and new.status in ('live', 'refused')) or (old.status = 'live' and new.status = 'ended')) then
@@ -115,6 +135,30 @@ $$;
 
 create trigger launches_guard before update on public.launches
 for each row execute function public.launches_guard();
+
+-- A launch goes live only once its own approval, a launch approval, is
+-- approved (rule 3), whoever updates it: decideLaunch approves the approval
+-- first, then the launch, in one transaction. Security definer, so the
+-- approval is read whatever the updater may see; nobody needs to execute it
+-- directly (a trigger function's privilege is checked when the trigger is made).
+create function public.launches_live_check() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if old.status = 'awaiting_approval' and new.status = 'live' and not exists (
+    select 1 from public.approvals a
+    where a.id = new.approval_id and a.workspace_id = new.workspace_id and a.campaign_id = new.campaign_id
+      and a.kind = 'launch' and a.status = 'approved'
+  ) then
+    raise exception 'A launch goes live only once its launch approval is approved' using errcode = '42501';
+  end if;
+  return new;
+end
+$$;
+
+revoke all on function public.launches_live_check() from public;
+
+create trigger launches_live_check before update on public.launches
+for each row execute function public.launches_live_check();
 
 -- Who decided and who ended a launch come from the session, whatever the
 -- statement says, with the person's email for the page. Runs after the guard
@@ -165,3 +209,31 @@ create policy launches_update on public.launches for update to authenticated
 revoke all on public.launches from anon;
 -- Nobody deletes a launch through the app: an ended or refused one stays in the history.
 revoke delete, truncate, references, trigger on public.launches from authenticated;
+
+-- A launched ad (in a launch waiting, live or ended) can't be deleted on its
+-- own, by any role: its simulated days and alerts reference it, and the clock
+-- would stop at the missing ad. It still goes with its campaign, brand or
+-- workspace, which take the launch with them. Checked at the end of the
+-- transaction (deferred, like a deferred foreign key with NO ACTION), so
+-- whichever order a cascade deletes the ad and the launch in, only an ad whose
+-- launch is still there is refused. A refused launch never ran, so it doesn't
+-- hold its ads.
+create function public.ad_variants_launched() returns trigger
+language plpgsql security definer set search_path = '' as $$
+begin
+  if exists (
+    select 1 from public.launches l
+    where l.workspace_id = old.workspace_id and l.campaign_id = old.campaign_id and l.status <> 'refused'
+      and l.ads @> jsonb_build_array(jsonb_build_object('variantId', old.id::text))
+  ) then
+    raise exception 'A launched ad can''t be deleted on its own; it goes only with its campaign' using errcode = '23503';
+  end if;
+  return null;
+end
+$$;
+
+revoke all on function public.ad_variants_launched() from public;
+
+create constraint trigger ad_variants_launched after delete on public.ad_variants
+deferrable initially deferred
+for each row execute function public.ad_variants_launched();

@@ -217,3 +217,77 @@ describe("P9-4 performance_questions in the database", () => {
     expect(answer).toBeNull();
   });
 });
+
+describe("Sprint 9 review fixes in the database", () => {
+  /** A run in the member's workspace, written as the member. */
+  const runFor = (m: Member) =>
+    asUser(m.userId, async (tx) => {
+      const [r] = await tx`insert into public.agent_runs (workspace_id, agent, agent_version, input, created_by) values (${m.workspaceId}, 'monitorPlan', 1, '{}', ${m.userId}) returning id`;
+      return r.id as string;
+    });
+
+  it("a question's run is referenced by (id, workspace_id): another workspace's run is refused; deleting the run clears it, even once answered", async () => {
+    const runA = await runFor(a);
+    // B can't point its own question at A's run (the composite foreign key), nor A's at B's.
+    await expect(insertQuestion(b, questionRow(b, { run_id: runA }))).rejects.toMatchObject({ code: "23503" });
+    const runB = await runFor(b);
+    await expect(insertQuestion(a, questionRow(a, { run_id: runB }))).rejects.toMatchObject({ code: "23503" });
+    const id = await insertQuestion(a, questionRow(a, { run_id: runA }));
+    await expect(asUser(a.userId, (tx) => tx`update public.performance_questions set run_id = ${runB} where id = ${id}`)).rejects.toMatchObject({ code: "23503" });
+    await asUser(a.userId, (tx) => tx`update public.performance_questions set answer = 'Ad 1 was cheapest.' where id = ${id}`);
+    // The run deleted (as its workspace would delete it): run_id clears, and nothing else about the answered question changes.
+    await getSql()`delete from public.agent_runs where id = ${runA}`;
+    const [q] = await getSql()`select run_id, answer, question from public.performance_questions where id = ${id}`;
+    expect(q).toEqual({ run_id: null, answer: "Ad 1 was cheapest.", question: questionRow(a).question });
+    // Clearing it by hand is still refused once answered.
+    const runA2 = await runFor(a);
+    const other = await insertQuestion(a, questionRow(a, { run_id: runA2, refused: "The daily AI cap was reached." }));
+    await expect(getSql()`update public.performance_questions set run_id = null where id = ${other}`).rejects.toMatchObject({ code: "42501" });
+  });
+
+  it("simulated results naming another workspace's launch are refused as the foreign key would, before anything about the launch is told", async () => {
+    const waiting = await rawLaunch(a, ids.campaign, [ids.ad], { status: "awaiting_approval" });
+    for (const launchId of [launchA, waiting.launchId]) {
+      const row = {
+        workspace_id: b.workspaceId,
+        launch_id: launchId,
+        variant_id: ids.theirAd,
+        day: 1,
+        date: "2026-11-06",
+        impressions: 100,
+        clicks: 1,
+        conversions: 0,
+        spend_pence: 100,
+        revenue_pence: 0,
+      };
+      await expect(asUser(b.userId, (tx) => tx`insert into public.sim_daily ${tx(row as never)}`)).rejects.toMatchObject({
+        code: "23503",
+        message: "The simulated results' launch isn't in their workspace",
+      });
+    }
+    expect(await getSql()`select id from public.sim_daily where workspace_id = ${b.workspaceId}`).toHaveLength(0);
+  });
+
+  it("member_email: a fellow member's email, and null for anyone else: a stranger, or a member who has left; the anonymous role can't run it", async () => {
+    const [{ email: aEmail }] = await getSql()`select email::text from auth.users where id = ${a.userId}`;
+    const [{ email: bEmail }] = await getSql()`select email::text from auth.users where id = ${b.userId}`;
+    const emailOf = (as: Member, of: string) => asUser(as.userId, async (tx) => (await tx`select public.member_email(${of}) as email`)[0].email as string | null);
+    expect(await emailOf(a, a.userId)).toBe(aEmail);
+    // Not a member of any workspace A is in: null, both ways, and for nobody at all.
+    expect(await emailOf(a, b.userId)).toBeNull();
+    expect(await emailOf(b, a.userId)).toBeNull();
+    expect(await emailOf(a, randomUUID())).toBeNull();
+    // The anonymous role can't run it.
+    await expect(asAnon((tx) => tx`select public.member_email(${a.userId}) as email`)).rejects.toMatchObject({ code: "42501" });
+    // B joins A's workspace: each sees the other's email; once B has left, neither does.
+    await getSql()`insert into public.workspace_members (workspace_id, user_id) values (${a.workspaceId}, ${b.userId})`;
+    try {
+      expect(await emailOf(a, b.userId)).toBe(bEmail);
+      expect(await emailOf(b, a.userId)).toBe(aEmail);
+    } finally {
+      await getSql()`delete from public.workspace_members where workspace_id = ${a.workspaceId} and user_id = ${b.userId}`;
+    }
+    expect(await emailOf(a, b.userId)).toBeNull();
+    expect(await emailOf(b, a.userId)).toBeNull();
+  });
+});

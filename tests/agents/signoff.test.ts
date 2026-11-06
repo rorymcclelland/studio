@@ -1,12 +1,12 @@
 // S4-1 test cases 1 to 7: the approvals inbox and brief sign-off.
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { decideSignoff, getSignoffState, inboxCount, listInbox, requestSignoff, SignoffError, withdrawSignoff } from "@/lib/approvals/repo";
-import { createRun, decideApproval, getRun } from "@/lib/agents/runs";
+import { ApprovalError, createRun, decideApproval, getRun } from "@/lib/agents/runs";
 import { executeRun } from "@/lib/agents/workflows";
 import type { StepTools } from "@/lib/agents/workflow";
 import { getBrand, listBrands, updateBrand } from "@/lib/brands/repo";
 import { createCampaign, getCampaign, saveBriefEdit } from "@/lib/brief/repo";
-import { closeSql } from "@/lib/db/client";
+import { closeSql, getSql } from "@/lib/db/client";
 import { asUser } from "@/lib/db/scoped";
 import { loadDemoBrands } from "@/lib/demo/load";
 import { mockBehaviour } from "@/lib/models/mock";
@@ -155,6 +155,21 @@ describe("S4-1 approvals and brief sign-off", () => {
     expect((await getRun(a.userId, runId))!.status).toBe("completed");
     // A run choice whose run has ended is not offered.
     expect((await listInbox(a.userId)).some((i) => i.kind === "run_choice" && i.runId === runId)).toBe(false);
+  });
+
+  it("review fix: the tagline's approve and reject can't decide a brief sign-off; it stays open for the sign-off's own decision", async () => {
+    const id = await newBrief();
+    const approvalId = await requestSignoff(a, id, 1, noSend);
+    let sent = 0;
+    const send = async () => {
+      sent++;
+    };
+    await expect(decideApproval(a.userId, approvalId, { decision: "rejected", reason: "Wrong door" }, send)).rejects.toBeInstanceOf(ApprovalError);
+    await expect(decideApproval(a.userId, approvalId, { decision: "approved", choice: 0 }, send)).rejects.toBeInstanceOf(ApprovalError);
+    expect(sent).toBe(0);
+    const [row] = await getSql()`select status, choice, reason, decided_by from public.approvals where id = ${approvalId}`;
+    expect(row).toEqual({ status: "pending", choice: null, reason: null, decided_by: null });
+    expect((await getSignoffState(a.userId, id))!.status).toBe("awaiting_signoff");
   });
 
   it("expiry: a sign-off left past its date expires and the campaign goes back to draft with a note", async () => {

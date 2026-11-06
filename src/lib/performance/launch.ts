@@ -8,7 +8,7 @@
 // Every read and write goes through asUser() (rule 7): another workspace's
 // campaign, launch or request is the same refusal as one that isn't there.
 import { randomInt } from "node:crypto";
-import { asUser, type Tx } from "@/lib/db/scoped";
+import { asUser, asUserIn, type Tx } from "@/lib/db/scoped";
 import type { Member } from "@/lib/agents/runs";
 import { KPI_METRICS } from "@/lib/brief/schema";
 import { getCreative, type CreativeView } from "@/lib/creative/gallery";
@@ -121,18 +121,19 @@ export async function expireStaleLaunches(tx: Tx): Promise<void> {
 /**
  * Which of a campaign's ads can launch, built on the launch pack's plan: null
  * when the campaign isn't the user's (a 404), a refusal when the brief isn't
- * signed off, or the eligibility. Pass the pack's plan when it is already made.
+ * signed off, or the eligibility. Pass the pack's plan when it is already made,
+ * and `tx` to work it out inside a transaction the caller holds as the user.
  */
 export async function launchEligibility(
   userId: string,
   campaignId: string,
-  opts: { plan?: PackPlan | PackRefusal | null } = {},
+  opts: { plan?: PackPlan | PackRefusal | null; tx?: Tx } = {},
 ): Promise<LaunchEligibility | { refused: string } | null> {
   if (!UUID.test(campaignId)) return null;
-  const plan = opts.plan !== undefined ? opts.plan : await planPack(userId, campaignId);
+  const plan = opts.plan !== undefined ? opts.plan : await planPack(userId, campaignId, undefined, opts.tx);
   if (!plan) return null;
   if ("refused" in plan && plan.refused === NOT_SIGNED_OFF_PACK) return { refused: NOT_SIGNED_OFF_LAUNCH };
-  const state = await asUser(userId, async (tx) => {
+  const state = await asUserIn(opts.tx, userId, async (tx) => {
     await expireStaleLaunches(tx);
     const [c] = await tx`
       select bv.brief -> 'kpi' ->> 'metric' as kpi
@@ -253,7 +254,10 @@ export async function requestLaunch(member: Member, campaignId: string, request:
 /**
  * Approves or refuses a launch request. Approving re-checks the campaign: the
  * brief must still be signed off and the ads that can launch still exactly the
- * launch's, or the request stays open with the reason. Refusing needs a reason
+ * launch's, or the request stays open with the reason. The request, its launch
+ * and the campaign are locked first and the check is worked out inside the
+ * same transaction as the approval, so a sign-off withdrawn or a second
+ * decision made meanwhile waits for it, then sees it. Refusing needs a reason
  * (trimmed, at most 500 characters, kept as plain text).
  */
 export async function decideLaunch(
@@ -266,34 +270,26 @@ export async function decideLaunch(
   if (decision === "refused" && !note) throw new LaunchError(REFUSAL_NEEDS_REASON);
   if ((decision !== "approved" && decision !== "refused") || !UUID.test(approvalId)) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
 
-  const [found] = await asUser(member.userId, async (tx) => {
-    await expireStaleLaunches(tx);
-    return tx`
-      select a.campaign_id, l.id as launch_id, l.ads from public.approvals a
-      join public.launches l on l.approval_id = a.id
-      where a.id = ${approvalId} and a.kind = 'launch' and a.status = 'pending' and a.expires_at > now() and l.status = 'awaiting_approval'`;
-  });
-  if (!found) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
-  const campaignId = found.campaign_id as string;
-
-  if (decision === "approved") {
-    const e = await launchEligibility(member.userId, campaignId);
-    if (!e) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
-    if ("refused" in e) throw new LaunchError(LAUNCH_BRIEF_NOT_SIGNED_OFF);
-    if (!sameAds(e.ads.map(asLaunchAd), found.ads as LaunchAd[])) throw new LaunchError(LAUNCH_ADS_CHANGED_SINCE_ASKED);
-  }
-
   return asUser(member.userId, async (tx) => {
-    const [still] = await tx`
-      select l.id as launch_id from public.approvals a
+    await expireStaleLaunches(tx);
+    const [found] = await tx`
+      select a.campaign_id, l.id as launch_id, l.ads from public.approvals a
       join public.launches l on l.approval_id = a.id
       where a.id = ${approvalId} and a.kind = 'launch' and a.status = 'pending' and a.expires_at > now() and l.status = 'awaiting_approval'
       for update of a, l`;
-    if (!still) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
-    const launchId = still.launch_id as string;
+    if (!found) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
+    const campaignId = found.campaign_id as string;
+    const launchId = found.launch_id as string;
     if (decision === "approved") {
-      const [c] = await tx`select status from public.campaigns where id = ${campaignId}`;
-      if (!c || c.status !== "approved") throw new LaunchError(LAUNCH_BRIEF_NOT_SIGNED_OFF);
+      // The campaign row too, as requestLaunch and the sign-off lock it, before the ads are worked out.
+      const [c] = await tx`select status from public.campaigns where id = ${campaignId} for update`;
+      if (!c) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
+      if (c.status !== "approved") throw new LaunchError(LAUNCH_BRIEF_NOT_SIGNED_OFF);
+      const e = await launchEligibility(member.userId, campaignId, { tx });
+      if (!e) throw new LaunchError(LAUNCH_REQUEST_NOT_OPEN);
+      if ("refused" in e) throw new LaunchError(LAUNCH_BRIEF_NOT_SIGNED_OFF);
+      if (!sameAds(e.ads.map(asLaunchAd), found.ads as LaunchAd[])) throw new LaunchError(LAUNCH_ADS_CHANGED_SINCE_ASKED);
+      // The approval first: the database lets a launch go live only once its launch approval is approved.
       await tx`update public.approvals set status = 'approved', decided_by = ${member.userId}, decided_at = now() where id = ${approvalId}`;
       await tx`update public.launches set status = 'live', approved_at = now() where id = ${launchId}`;
       return { campaignId, launchId, status: "live" as const };
@@ -304,12 +300,16 @@ export async function decideLaunch(
   });
 }
 
-/** Ends a live launch early, recording who and when. Anything else, or another workspace's, has no live launch to end. */
-export async function endLaunch(member: Member, launchId: string): Promise<void> {
-  if (!UUID.test(launchId)) throw new LaunchError(LAUNCH_NOT_LIVE);
+/**
+ * Ends a live launch early, recording who and when. Anything else, another
+ * workspace's, or (given `campaignId`, as the campaign page's action gives it)
+ * another campaign's, has no live launch to end.
+ */
+export async function endLaunch(member: Member, launchId: string, opts: { campaignId?: string } = {}): Promise<void> {
+  if (!UUID.test(launchId) || (opts.campaignId !== undefined && !UUID.test(opts.campaignId))) throw new LaunchError(LAUNCH_NOT_LIVE);
   const rows = await asUser(member.userId, (tx) => tx`
     update public.launches set status = 'ended', ended_by = ${member.userId}, ended_at = now()
-    where id = ${launchId} and status = 'live'
+    where id = ${launchId} and status = 'live' ${opts.campaignId !== undefined ? tx`and campaign_id = ${opts.campaignId}` : tx``}
     returning id`);
   if (rows.length === 0) throw new LaunchError(LAUNCH_NOT_LIVE);
 }

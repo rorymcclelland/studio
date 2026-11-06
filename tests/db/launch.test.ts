@@ -17,8 +17,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { closeSql, getSql } from "@/lib/db/client";
-import { asAnon, asUser } from "@/lib/db/scoped";
+import { asAnon, asUser, type Tx } from "@/lib/db/scoped";
 import { createMember, truncateAll } from "../helpers/db";
+import { setWaitingLaunchTerms } from "../e2e/launch-fixture";
 import { brandFor, campaignFor, rawLaunch, SOCIAL, type Member } from "../helpers/launch";
 
 let a: Member;
@@ -82,26 +83,24 @@ describe("P9-1 the launches table", () => {
     // The database holds the line even without the app: one open and one live launch per campaign.
     await raw(a, ids.main, { status: "live" });
     await expect(raw(a, ids.main, { status: "live" })).rejects.toMatchObject({ code: "23505" });
-    await raw(a, ids.other);
+    const open = await raw(a, ids.other);
     await expect(raw(a, ids.other)).rejects.toMatchObject({ code: "23505" });
-    // Ended or refused launches don't count.
+    // Ended or refused launches don't count (each is asked for, then decided, so the open one is refused first).
+    await asUser(a.userId, async (tx) => {
+      await tx`update public.approvals set status = 'rejected', reason = 'Not now', decided_by = ${a.userId}, decided_at = now() where id = ${open.approvalId}`;
+      await tx`update public.launches set status = 'refused' where id = ${open.launchId}`;
+    });
     await raw(a, ids.other, { status: "ended" });
     await raw(a, ids.other, { status: "ended" });
     await raw(a, ids.other, { status: "refused" });
+    await raw(a, ids.other);
   });
 
   it("#6 an approved launch's budget, ads and threshold can't be changed, even by an update straight to the database", async () => {
+    // Review fix 4: nor, since then, while it waits for approval: a launch's terms are fixed once it is asked for.
     const { launchId, approvalId } = await raw(a, ids.main);
-    // Before approval the row isn't guarded (the app never changes it, but the trigger allows it).
-    await getSql()`update public.launches set daily_budget_pence = 6000 where id = ${launchId}`;
-    await getSql()`update public.launches set daily_budget_pence = 5000 where id = ${launchId}`;
-    // Approved as decideLaunch approves it, as the member.
-    await asUser(a.userId, async (tx) => {
-      await tx`update public.approvals set status = 'approved', decided_by = ${a.userId}, decided_at = now() where id = ${approvalId}`;
-      await tx`update public.launches set status = 'live', approved_at = now() where id = ${launchId}`;
-    });
     const before = await terms(launchId);
-    expect(before.status).toBe("live");
+    expect(before.status).toBe("awaiting_approval");
 
     const changes: [string, string][] = [
       ["ads", `'[]'::jsonb`],
@@ -113,9 +112,16 @@ describe("P9-1 the launches table", () => {
       ["kpi_value", "1"],
       ["seed", "seed + 1"],
     ];
-    const guarded = /can't change once it is approved/;
+    const guarded = /can't change once it is asked for/;
     const attempt = (run: (q: string) => Promise<unknown>, column: string, value: string) => run(`update public.launches set ${column} = ${value} where id = '${launchId}'`);
-    for (const status of ["live", "ended"] as const) {
+    for (const status of ["awaiting_approval", "live", "ended"] as const) {
+      // Approved as decideLaunch approves it (the approval first), as the member.
+      if (status === "live") {
+        await asUser(a.userId, async (tx) => {
+          await tx`update public.approvals set status = 'approved', decided_by = ${a.userId}, decided_at = now() where id = ${approvalId}`;
+          await tx`update public.launches set status = 'live', approved_at = now() where id = ${launchId}`;
+        });
+      }
       // Ended as endLaunch ends it, as the member.
       if (status === "ended") await asUser(a.userId, (tx) => tx`update public.launches set status = 'ended', ended_by = ${a.userId}, ended_at = now() where id = ${launchId} and status = 'live'`);
       for (const [column, value] of changes) {
@@ -144,6 +150,72 @@ describe("P9-1 the launches table", () => {
     await expect(approval("launch", null, null)).rejects.toMatchObject({ code: "23514" });
     await expect(approval("launch", ids.other, 1)).rejects.toMatchObject({ code: "23514" });
     await expect(approval("rocket", ids.other, null)).rejects.toMatchObject({ code: "23514" });
+  });
+
+  it("review fix: a launch is inserted waiting for approval, never already live, ended or refused, for any role", async () => {
+    for (const status of ["live", "ended", "refused"]) {
+      for (const as of ["member", "owner"] as const) {
+        const insert = async () => {
+          const { approvalId } = await raw(a, ids.main);
+          // Only the decided row is offered: the waiting one made with the approval goes, so nothing else stands in the way.
+          await getSql()`delete from public.launches where approval_id = ${approvalId}`;
+          const values = (tx: Tx) => tx`
+            insert into public.launches (workspace_id, campaign_id, ads, daily_budget_pence, days, starts_on, kpi_measure, kpi_value, seed, status, approval_id, created_by, approved_at, ended_at)
+            values (${a.workspaceId}, ${ids.main}, ${tx.json([{ variantId: AD, sizes: SOCIAL, langs: ["en-GB"] }])}, 5000, 30, '2026-11-06', 'cpa', 20, 7, ${status}, ${approvalId}, ${a.userId},
+                    ${status === "refused" ? null : new Date()}, ${status === "ended" ? new Date() : null})`;
+          return as === "owner" ? values(getSql() as unknown as Tx) : asUser(a.userId, values);
+        };
+        await expect(insert(), `${status} as the ${as}`).rejects.toMatchObject({ code: "23514", message: "A launch is asked for first: it starts waiting for approval" });
+        await getSql()`delete from public.approvals where kind = 'launch'`;
+      }
+    }
+    expect(await getSql()`select id from public.launches`).toHaveLength(0);
+  });
+
+  it("review fix: a launch goes live only once its own launch approval is approved, for any role; refusing and ending need no more", async () => {
+    const { launchId, approvalId } = await raw(a, ids.main);
+    const goLive = (as: "member" | "owner") =>
+      as === "owner"
+        ? getSql()`update public.launches set status = 'live', approved_at = now() where id = ${launchId}`
+        : asUser(a.userId, (tx) => tx`update public.launches set status = 'live', approved_at = now() where id = ${launchId}`);
+    const refusedLive = { code: "42501", message: "A launch goes live only once its launch approval is approved" };
+    // Pending: refused as the member and as the owner.
+    await expect(goLive("member")).rejects.toMatchObject(refusedLive);
+    await expect(goLive("owner")).rejects.toMatchObject(refusedLive);
+    // Rejected or expired: still refused.
+    for (const decided of ["rejected", "expired"]) {
+      const other = await raw(a, ids.other);
+      await getSql()`update public.approvals set status = ${decided}, decided_at = now() where id = ${other.approvalId}`;
+      await expect(getSql()`update public.launches set status = 'live', approved_at = now() where id = ${other.launchId}`, decided).rejects.toMatchObject(refusedLive);
+      await getSql()`update public.launches set status = 'refused' where id = ${other.launchId}`;
+    }
+    expect((await terms(launchId)).status).toBe("awaiting_approval");
+    // Approved: it goes live, and ends.
+    await asUser(a.userId, (tx) => tx`update public.approvals set status = 'approved', decided_by = ${a.userId}, decided_at = now() where id = ${approvalId}`);
+    await goLive("member");
+    expect((await terms(launchId)).status).toBe("live");
+    await asUser(a.userId, (tx) => tx`update public.launches set status = 'ended', ended_by = ${a.userId}, ended_at = now() where id = ${launchId}`);
+    expect((await terms(launchId)).status).toBe("ended");
+  });
+
+  it("review fix: the browser tests' fixture sets a waiting launch's seed and threshold only as the tables' owner, and the rule is back straight after", async () => {
+    const { launchId, approvalId } = await raw(a, ids.main);
+    await setWaitingLaunchTerms(getSql(), launchId, { seed: "8675309", kpi_measure: "ctr", kpi_value: 0.01 });
+    expect(await terms(launchId)).toMatchObject({ status: "awaiting_approval", seed: "8675309", kpi_measure: "ctr", kpi_value: "0.01" });
+    const [{ enabled }] = await getSql()`select tgenabled as enabled from pg_trigger where tgrelid = 'public.launches'::regclass and tgname = 'launches_terms'`;
+    expect(enabled).toBe("O");
+    await expect(getSql()`update public.launches set seed = 1 where id = ${launchId}`).rejects.toMatchObject({ code: "42501" });
+    // The app's role can't switch the trigger off.
+    await expect(asUser(a.userId, (tx) => tx`alter table public.launches disable trigger launches_terms`)).rejects.toMatchObject({ code: "42501" });
+    // Not waiting: refused, nothing changed, and the trigger still on.
+    await asUser(a.userId, async (tx) => {
+      await tx`update public.approvals set status = 'approved', decided_by = ${a.userId}, decided_at = now() where id = ${approvalId}`;
+      await tx`update public.launches set status = 'live', approved_at = now() where id = ${launchId}`;
+    });
+    await expect(setWaitingLaunchTerms(getSql(), launchId, { seed: 5 })).rejects.toThrow(/waiting for approval/);
+    expect((await terms(launchId)).seed).toBe("8675309");
+    const [{ enabled: after }] = await getSql()`select tgenabled as enabled from pg_trigger where tgrelid = 'public.launches'::regclass and tgname = 'launches_terms'`;
+    expect(after).toBe("O");
   });
 
   it("#8 another workspace can't read, change or write a launch in the database: row-level security, the grants and the composite foreign key", async () => {

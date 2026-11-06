@@ -55,6 +55,7 @@ import {
   signOffVersion,
   step,
 } from "./helpers";
+import { setWaitingLaunchTerms } from "./launch-fixture";
 
 type Sql = postgres.Sql;
 
@@ -221,8 +222,8 @@ test(
         const ranked = [...probe.ads].sort((x, y) => x.kpi.value - y.kpi.value);
         expect(ranked[1].kpi.value).toBeGreaterThan(ranked[0].kpi.value);
         belowAd = ranked[0].variantId;
-        // A launch's threshold can change only while it waits for approval (launches_guard).
-        await sql`update public.launches set kpi_measure = 'ctr', kpi_value = ${(ranked[0].kpi.value + ranked[1].kpi.value) / 2} where id = ${launchId}`;
+        // A launch's terms never change once asked for (launches_terms): the fixture sets them as the tables' owner.
+        await setWaitingLaunchTerms(sql, launchId, { kpi_measure: "ctr", kpi_value: (ranked[0].kpi.value + ranked[1].kpi.value) / 2 });
         await approveInInbox(page, path);
       });
 
@@ -386,7 +387,7 @@ test(
         await acceptDontRulesForPicked(page);
         await askToLaunch(page, pathA, 2);
         const l = await launchOf(sql, campaignIdOf(pathA), "awaiting_approval");
-        await sql`update public.launches set kpi_measure = 'ctr', kpi_value = 0.01 where id = ${l.id}`;
+        await setWaitingLaunchTerms(sql, l.id as string, { kpi_measure: "ctr", kpi_value: 0.01 });
         await approveInInbox(page, pathA);
         await moveOn(page, pathA, "Next week", 7);
       });

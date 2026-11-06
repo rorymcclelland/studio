@@ -1,7 +1,7 @@
 import { strToU8, Zip, ZipDeflate, ZipPassThrough } from "fflate";
-import { complianceFor, fileCompliance } from "@/lib/compliance/compute";
+import { complianceFor, complianceForTx, fileCompliance } from "@/lib/compliance/compute";
 import { noIssuesFoundByAi, type Judged } from "@/lib/compliance/rules";
-import { asUser } from "@/lib/db/scoped";
+import { asUser, asUserIn, type Tx } from "@/lib/db/scoped";
 import { drawInSize, sentence, translationBadge, upscaleNote } from "./ad-sizes";
 import { clearFitCache, fitBase, fitsFor, logoFor } from "./fit-cache";
 import { getCreative, type CreativeView, type VariantView } from "./gallery";
@@ -200,8 +200,8 @@ function altText(idea: string | null, w: PackWords): string {
  * the brief isn't signed off or nothing is picked, or the plan. Pass the
  * gallery's view when it is already loaded.
  */
-export async function planPack(userId: string, campaignId: string, given?: CreativeView | null): Promise<PackPlan | PackRefusal | null> {
-  const view = given ?? (await getCreative(userId, campaignId));
+export async function planPack(userId: string, campaignId: string, given?: CreativeView | null, inTx?: Tx): Promise<PackPlan | PackRefusal | null> {
+  const view = given ?? (await getCreative(userId, campaignId, inTx));
   if (!view) return null;
   if (!view.signedOff || view.version === null) return { refused: NOT_SIGNED_OFF_PACK };
   const numbers = new Map(view.variants.map((v, i) => [v.id, i + 1]));
@@ -209,9 +209,9 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
   if (picked.length === 0) return { refused: NOTHING_PICKED_PACK };
   const ids = picked.map((v) => v.id);
   // C8-1: the same findings the Compliance view shows (the fits are shared through the fit cache).
-  const compliance = await complianceFor(userId, ids);
+  const compliance = inTx ? await complianceForTx(inTx, ids) : await complianceFor(userId, ids);
 
-  return asUser(userId, async (tx) => {
+  return asUserIn(inTx, userId, async (tx) => {
     const [c] = await tx`
       select c.objective, c.approved_at, c.brand_id, b.name as brand_name, b.slug as brand_slug, b.is_simulated as brand_simulated,
         bv.brief ->> 'title' as brief_title

@@ -29,6 +29,7 @@ import { alertLine, ALERT_NAMES, NO_ALERTS, type Alert } from "@/lib/performance
 import type { LaunchAd } from "@/lib/performance/launch";
 import type { SimRow } from "@/lib/performance/simulate";
 import { MOCK_CPA_QUESTION, percentShown, referenceTiring, seedWithTiring } from "../helpers/monitor";
+import { setWaitingLaunchTerms } from "./launch-fixture";
 import {
   acceptDontRulesForPicked,
   contrastViolations,
@@ -175,8 +176,8 @@ test(
           14,
         );
         tiring = { variantId: found.variantId, day: found.day };
-        // A launch's seed and threshold can change only while it waits for approval (launches_guard).
-        await sql`update public.launches set seed = ${found.seed}, kpi_measure = 'ctr', kpi_value = 0.01 where id = ${launchId}`;
+        // A launch's terms never change once asked for (launches_terms): the fixture sets them as the tables' owner.
+        await setWaitingLaunchTerms(sql, launchId, { seed: found.seed, kpi_measure: "ctr", kpi_value: 0.01 });
         await approveInInbox(page, path);
       });
 

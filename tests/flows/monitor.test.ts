@@ -218,13 +218,16 @@
 // - unanswerable plan: answer = CANNOT_ANSWER exactly, refused = the plan's reason (kept for the trail,
 //   never shown), result null, NO query step and NO answer step; run completed.
 // - answered: answer, result; run completed, its output { summary, href: the Performance page }.
-// - refused: answer null, refused = run.error, one of (exactly):
+// - refused: answer null, run.error one of (exactly):
 //   "The question wasn't answered: the AI's plan still broke a rule after one repair (<problems>)."
 //   "The question wasn't answered: the AI's answer still broke a rule after one repair (<problems>)."
 //   "The question wasn't answered: the model call failed (<message>)."
 //   "The question wasn't answered: the daily AI cap was reached."   (run status stopped_cap)
 //   <problems> is the step's error without "The agent's reply failed its checks: " or "...did not match
 //   the expected format: ". A failed answer keeps the result (the table still shows).
+//   refused (what the page shows, and the run's summary) is a fixed sentence with nothing a model or a
+//   provider wrote (Sprint 9 review fix 6): PLAN_NOT_CHECKED, ANSWER_NOT_CHECKED, AI_UNREACHED, or the
+//   cap's sentence above. The details stay in the run's error (its trail).
 //
 // src/lib/performance/ask.ts (every read through asUser(), rule 7; rule 5 through runModelStep and generate()):
 // - class AskError extends Error. ASK_EMPTY = "Type a question about this campaign.";
@@ -234,7 +237,8 @@
 // - type AskPanel = { estimate: Estimate /* askEstimate() */; atCap: boolean; reason: string | null
 //   /* ASK_AT_CAP or ASK_NO_RESULTS */; maxLength: 300 }.
 //   askPanel(member, campaignId): Promise<AskPanel | null> (null: a 404). atCap when the member's
-//   spendPosition can't cover estimate.pence.
+//   spendPosition can't cover estimate.worstPence (Sprint 9 review fix 7: the worst case, as costs.ts
+//   keeps it for any check against the cap).
 // - askQuestion(member, campaignId, question, send): Promise<{ questionId, runId }>. Refusals in this
 //   order: malformed, missing or another workspace's campaign (ASK_NOT_FOUND); empty after trimming
 //   (ASK_EMPTY); over 300 characters after trimming (ASK_TOO_LONG); no live or ended launch, or its
@@ -304,13 +308,14 @@ import type { StepTools } from "@/lib/agents/workflow";
 import { executeRun } from "@/lib/agents/workflows";
 import { adCompliance, decideFinding } from "@/lib/compliance/compute";
 import { askEstimate } from "@/lib/creative/costs";
+import { spendPosition } from "@/lib/models/generate";
 import { closeSql, getSql } from "@/lib/db/client";
 import { FERNHOLLOW } from "@/lib/demo/briefs";
 import { mockBehaviour } from "@/lib/models/mock";
 import { alertLine, type Alert } from "@/lib/performance/alerts";
 import { ALERT_NOT_FOUND, AlertError, listAlerts, markAlertSeen, unseenAlertCount } from "@/lib/performance/alerts-store";
 import { ASK_AT_CAP, ASK_EMPTY, ASK_NO_RESULTS, ASK_NOT_FOUND, ASK_TOO_LONG, AskError, askPanel, askQuestion, questionsFor, runPlan } from "@/lib/performance/ask";
-import { ANSWER_LABEL, CANNOT_ANSWER, checkAnswer, MEASURES, type AnswerablePlan } from "@/lib/performance/ask-rules";
+import { AI_UNREACHED, ANSWER_LABEL, ANSWER_NOT_CHECKED, CANNOT_ANSWER, checkAnswer, MEASURES, PLAN_NOT_CHECKED, type AnswerablePlan } from "@/lib/performance/ask-rules";
 import { advance } from "@/lib/performance/clock";
 import { complianceToday } from "@/lib/performance/dashboard";
 import { endLaunch, launchAdsFor, type LaunchAd, type LaunchAdView } from "@/lib/performance/launch";
@@ -732,9 +737,23 @@ describe("P9-4 ask about this campaign", () => {
     const answerStep = run.steps.find((s) => s.name === "Write the answer")!;
     expect(answerStep).toMatchObject({ status: "failed", attempts: 2 });
     expect(answerStep.raw_output).toContain("40% better");
-    expect(q).toMatchObject({ status: "refused", answer: null, refused: run.error });
+    // The page shows a fixed sentence: the refused figure stays in the run's trail.
+    expect(q).toMatchObject({ status: "refused", answer: null, refused: ANSWER_NOT_CHECKED });
+    expect(q.refused).not.toContain("40%");
+    expect(run.output).toMatchObject({ summary: ANSWER_NOT_CHECKED });
     // The query ran, so its table is kept with the refusal.
     expect(q.result).toEqual(await runPlan(a.userId, launchId, CPA_PLAN));
+  }, 60_000);
+
+  it("review fix: a provider's failure is shown as a fixed sentence; its error text stays in the run's trail", async () => {
+    mockBehaviour.next({ text: JSON.stringify(CPA_PLAN), inputTokens: 900, outputTokens: 80 });
+    mockBehaviour.fail("Provider exploded at https://internal.example.test/v1 with key-ish text", 2); // generate() retries once
+    const { run, q } = await ask(MOCK_CPA_QUESTION);
+    expect(run.status).toBe("failed");
+    expect(run.error).toMatch(/^The question wasn't answered: the model call failed \(.*Provider exploded/);
+    expect(q).toMatchObject({ status: "refused", answer: null, refused: AI_UNREACHED });
+    expect(run.output).toMatchObject({ summary: AI_UNREACHED });
+    expect(JSON.stringify(q)).not.toContain("Provider exploded");
   }, 60_000);
 
   it("#5 a forecast in the answer (\"will\") is repaired once, then refused the same way", async () => {
@@ -746,7 +765,7 @@ describe("P9-4 ask about this campaign", () => {
     const { run, q } = await ask(MOCK_CPA_QUESTION);
     expect(run.status).toBe("failed");
     expect(run.error).toBe('The question wasn\'t answered: the AI\'s answer still broke a rule after one repair (the answer forecasts ("will"); say only what the result shows).');
-    expect(q).toMatchObject({ status: "refused", answer: null, refused: run.error });
+    expect(q).toMatchObject({ status: "refused", answer: null, refused: ANSWER_NOT_CHECKED });
   }, 60_000);
 
   it("#5 a repaired answer whose figures are all in the result is kept", async () => {
@@ -809,7 +828,7 @@ describe("P9-4 ask about this campaign", () => {
     expect(first.run.status).toBe("failed");
     expect(first.run.error).toMatch(/^The question wasn't answered: the AI's plan still broke a rule after one repair \(/);
     expect(stepsOf(first.run)).toEqual([["Plan the query", "model", "failed"]]);
-    expect(first.q).toMatchObject({ status: "refused", result: null, answer: null, refused: first.run.error });
+    expect(first.q).toMatchObject({ status: "refused", result: null, answer: null, refused: PLAN_NOT_CHECKED });
 
     const foreign = JSON.stringify({ ...CPA_PLAN, ads: [9] });
     mockBehaviour.next({ text: foreign, inputTokens: 900, outputTokens: 80 });
@@ -895,6 +914,28 @@ describe("P9-4 ask about this campaign", () => {
       expect(mockBehaviour.calls).toBe(0);
     } finally {
       process.env.DAILY_CAP_PENCE = before;
+    }
+  }, 60_000);
+
+  it("#8 review fix: the cap is checked against the worst case: room for the typical cost but not the worst is at the cap", async () => {
+    const saved = { cap: process.env.DAILY_CAP_PENCE, ws: process.env.WORKSPACE_DAILY_CAP_PENCE, reserve: process.env.OWNER_RESERVE_PENCE };
+    const shown = askEstimate();
+    expect(shown.worstPence).toBeGreaterThan(shown.pence);
+    // The app's cap is the limit (no owner's reserve, a workspace limit far above it).
+    process.env.WORKSPACE_DAILY_CAP_PENCE = "100000";
+    process.env.OWNER_RESERVE_PENCE = "0";
+    try {
+      const { total } = await spendPosition(a.userId, a.workspaceId);
+      process.env.DAILY_CAP_PENCE = String(total + (shown.pence + shown.worstPence) / 2);
+      expect(await askPanel(a, ids.main)).toMatchObject({ atCap: true, reason: ASK_AT_CAP });
+      await expect(askQuestion(a, ids.main, MOCK_CPA_QUESTION, send)).rejects.toThrow(new AskError(ASK_AT_CAP));
+      process.env.DAILY_CAP_PENCE = String(total + shown.worstPence + 0.01);
+      expect(await askPanel(a, ids.main)).toMatchObject({ atCap: false, reason: null });
+    } finally {
+      for (const [key, value] of [["DAILY_CAP_PENCE", saved.cap], ["WORKSPACE_DAILY_CAP_PENCE", saved.ws], ["OWNER_RESERVE_PENCE", saved.reserve]] as const) {
+        if (value === undefined) delete process.env[key];
+        else process.env[key] = value;
+      }
     }
   }, 60_000);
 

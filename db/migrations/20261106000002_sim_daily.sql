@@ -35,7 +35,8 @@ create trigger launches_sim_start before insert on public.launches
 for each row execute function public.launches_sim_start();
 
 -- P9-1's guard, with the clock: sim_day moves only forward, and only while the
--- launch is live, for every role, the owner too. The rest is as P9-1 wrote it.
+-- launch is live, for every role, the owner too. The rest is as P9-1 wrote it
+-- (the terms are launches_terms, the approval launches_live_check).
 create or replace function public.launches_guard() returns trigger
 language plpgsql set search_path = '' as $$
 begin
@@ -43,10 +44,6 @@ begin
      or new.approval_id is distinct from old.approval_id or new.created_by is distinct from old.created_by
      or new.created_at is distinct from old.created_at then
     raise exception 'A launch''s campaign and approval cannot be changed' using errcode = '42501';
-  end if;
-  if old.status <> 'awaiting_approval' and (new.ads, new.daily_budget_pence, new.days, new.starts_on, new.kpi_measure, new.kpi_value, new.seed)
-       is distinct from (old.ads, old.daily_budget_pence, old.days, old.starts_on, old.kpi_measure, old.kpi_value, old.seed) then
-    raise exception 'A launch''s ads, budget, length, start and threshold can''t change once it is approved' using errcode = '42501';
   end if;
   if new.status is distinct from old.status
      and not ((old.status = 'awaiting_approval' and new.status in ('live', 'refused')) or (old.status = 'live' and new.status = 'ended')) then
@@ -98,7 +95,11 @@ create function public.sim_daily_check() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare l record;
 begin
-  select status, days, starts_on, ads into l from public.launches where id = new.launch_id;
+  select status, days, starts_on, ads, workspace_id into l from public.launches where id = new.launch_id;
+  -- Another workspace's launch is refused as the foreign key would refuse it, before anything about it is told.
+  if l is not null and l.workspace_id <> new.workspace_id then
+    raise exception 'The simulated results'' launch isn''t in their workspace' using errcode = '23503';
+  end if;
   if l is null or l.status <> 'live' then
     raise exception 'Simulated results are written only for a live launch' using errcode = '23514';
   end if;

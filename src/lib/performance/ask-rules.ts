@@ -28,6 +28,15 @@ export const MEASURE_LABELS: Record<Measure, string> = {
 export const CANNOT_ANSWER = "I can only answer from this campaign's simulated results";
 export const ANSWER_LABEL = "Simulated data. Answer written by AI";
 export const QUESTION_MAX = 300;
+/**
+ * What the page shows when a question's run stops on the AI: fixed sentences,
+ * so nothing a model wrote (an invented figure the checks refused) and no
+ * provider's error text reaches the page. The details are the run's error, in
+ * its trail.
+ */
+export const ANSWER_NOT_CHECKED = "The answer couldn't be checked against the results, so it isn't shown.";
+export const PLAN_NOT_CHECKED = "The question couldn't be turned into a check of the results, so it isn't answered.";
+export const AI_UNREACHED = "The AI couldn't be reached, so the question isn't answered. Try asking again.";
 
 export type DayRange = { kind: "all" } | { kind: "last"; days: number } | { kind: "between"; from: number; to: number };
 
@@ -204,6 +213,32 @@ type Unit = "£" | "%" | "×" | "";
 /** A figure as written: an optional £, digits with thousands commas, decimals, then %, × or x. */
 const FIGURE = /(?<![\p{L}\p{N}_.,])(£)?(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?(%|×|x(?![\p{L}\p{N}]))?/gu;
 
+/**
+ * An ad or a simulated day named by number: "Ad 2", "Ads 1, 2 and 3", "day 9",
+ * "days 8 to 14", "day 8-14". Each number in the run is checked as an ad
+ * number or a day number of the result, never as a measured figure. Only
+ * "Ads" takes a list (so "Ad 2, 14 conversions" checks the 14 as a figure);
+ * a day takes a range or a pair, never a comma ("On day 3, 12 clicks"). A
+ * number followed by a decimal point or a thousands comma is not one ("Ad 2.5").
+ */
+const N = String.raw`\d+(?![.,]?\d)`;
+const NAMED = new RegExp(
+  String.raw`\b(?:(ad)\s+(${N})|(ads)\s+(${N}(?:\s*(?:,|and|or|to|-|–)\s*${N})*)|(days?)\s+(${N}(?:\s*(?:to|and|-|–)\s*${N})*))`,
+  "giu",
+);
+/** The number of days in the range, written straight before "days" or "simulated days": "the last 7 simulated days". */
+const DAY_COUNT = /(?<![\p{L}\p{N}_.,£])(\d+)(?=\s+(?:simulated\s+)?days\b)/giu;
+
+/**
+ * Numbers and multipliers written in words: the result writes every figure in
+ * digits, so a number in words is a figure the checker can't hold to it
+ * ("twelve conversions", "twice as many", "half the spend"). "Once" and
+ * ordinals ("first", "second") are not refused: they are ordinary words more
+ * often than figures, and an ordinal ranks the result's own rows.
+ */
+const NUMBER_WORDS =
+  /\b(?:(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety|hundred|thousand|million|billion|dozen)(?:fold|s)?|zero|half|halves|halved|halving|quarter|quarters|double|doubled|doubling|twice|triple|tripled|treble|trebled|thrice|quadruple|quadrupled)\b/giu;
+
 const FORECAST = /\b(will|won't|going to|next (week|month|year)|expects?|expected|forecasts?|predicts?|predicted)\b/i;
 
 /**
@@ -217,7 +252,12 @@ function matches(figure: number, decimals: number, value: number, unit: Unit): b
   return Math.abs(Math.round(value * f) / f - figure) < 1e-9;
 }
 
-/** The figures a result allows, with the units each may be written in. */
+/**
+ * The measured figures a result allows, with the units each may be written in.
+ * Ad numbers, day numbers and the length of the range are not among them: they
+ * are allowed only where the answer names an ad or a day (NAMED, DAY_COUNT), so
+ * a bare "14 conversions" can't pass because day 14 is in the range.
+ */
 function allowed(result: QueryResult): { value: number; units: Set<Unit> }[] {
   const out: { value: number; units: Set<Unit> }[] = [];
   for (const r of result.rows) {
@@ -229,12 +269,11 @@ function allowed(result: QueryResult): { value: number; units: Set<Unit> }[] {
       if (RATIO.has(m)) units.add("×");
       out.push({ value: v, units });
     }
-    if (r.adNumber !== null) out.push({ value: r.adNumber, units: new Set([""]) });
-    if (r.day !== null) out.push({ value: r.day, units: new Set([""]) });
   }
-  for (const n of [...result.ads, result.from, result.to, result.to - result.from + 1]) out.push({ value: n, units: new Set([""]) });
   return out;
 }
+
+const notInResult = (written: string) => `the answer states ${written}, which is not in the result; use only figures from the result, as they are shown`;
 
 /** Splits into sentences on . ! or ? followed by a space or the end (a decimal point is not an end). */
 function sentences(text: string): number {
@@ -244,23 +283,58 @@ function sentences(text: string): number {
     .filter((s) => s.length > 0).length;
 }
 
-/** Every problem with an answer against its result, in the answer's order; empty when it passes. */
+/**
+ * Every problem with an answer against its result, in the answer's order;
+ * empty when it passes. The check is total: ads and days named by number are
+ * checked against the result's own, every other figure against its measured
+ * values, numbers in words are refused, and any digit left over after that
+ * (".5%", "ROAS3.5×", "clicks,42") is refused too.
+ */
 export function checkAnswer(answer: string, result: QueryResult): string[] {
   const found: { at: number; problem: string }[] = [];
+  // What has been checked is blanked out of `rest`, keeping every position.
+  let rest = answer;
+  const blank = (at: number, length: number) => {
+    rest = rest.slice(0, at) + " ".repeat(length) + rest.slice(at + length);
+  };
+
+  const adNumbers = new Set(result.ads);
+  const dayNumbers = new Set([result.from, result.to, ...result.rows.flatMap((r) => (r.day === null ? [] : [r.day]))]);
+  for (const m of answer.matchAll(NAMED)) {
+    const isAd = m[1] !== undefined || m[3] !== undefined;
+    const numbers = m[2] ?? m[4] ?? m[6];
+    const numbersAt = m.index + m[0].length - numbers.length;
+    for (const n of numbers.matchAll(/\d+/g)) {
+      const value = Number(n[0]);
+      if (!(isAd ? adNumbers : dayNumbers).has(value)) found.push({ at: numbersAt + n.index, problem: notInResult(n[0]) });
+    }
+    blank(numbersAt, numbers.length);
+  }
+  for (const m of rest.matchAll(DAY_COUNT)) {
+    if (Number(m[1]) === result.to - result.from + 1) blank(m.index, m[0].length);
+  }
+
   const ok = allowed(result);
-  for (const m of answer.matchAll(FIGURE)) {
+  for (const m of rest.matchAll(FIGURE)) {
     const written = m[0];
     const value = Number(`${m[2].replace(/,/g, "")}${m[3] ?? ""}`);
     const decimals = m[3] ? m[3].length - 1 : 0;
     const unit: Unit = m[1] ? "£" : m[4] === "%" ? "%" : m[4] ? "×" : "";
-    if (m[1] && m[4]) {
-      found.push({ at: m.index, problem: `the answer states ${written}, which is not in the result; use only figures from the result, as they are shown` });
-      continue;
+    if ((m[1] && m[4]) || !ok.some((a) => a.units.has(unit) && matches(value, decimals, a.value, unit))) {
+      found.push({ at: m.index, problem: notInResult(written) });
     }
-    if (!ok.some((a) => a.units.has(unit) && matches(value, decimals, a.value, unit))) {
-      found.push({ at: m.index, problem: `the answer states ${written}, which is not in the result; use only figures from the result, as they are shown` });
-    }
+    blank(m.index, written.length);
   }
+
+  for (const m of rest.matchAll(NUMBER_WORDS)) {
+    found.push({ at: m.index, problem: `the answer writes a number in words ("${m[0]}"); use only figures from the result, as they are shown` });
+  }
+  // Anything with a digit still in it was never checked: refused as it is written.
+  for (const m of rest.matchAll(/\S*\p{N}\S*/gu)) {
+    const written = m[0].replace(/^[("'“‘]+|[)"'”’.,;:!?]+$/gu, "") || m[0];
+    found.push({ at: m.index, problem: notInResult(written) });
+  }
+
   const forecast = FORECAST.exec(answer);
   if (forecast) found.push({ at: forecast.index, problem: `the answer forecasts ("${forecast[0]}"); say only what the result shows` });
   found.sort((x, y) => x.at - y.at);

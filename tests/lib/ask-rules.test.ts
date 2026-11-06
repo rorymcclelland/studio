@@ -237,3 +237,62 @@ describe("P9-4 every figure in an answer is in the result", () => {
     expect(checkAnswer(`Ad ${best.adNumber} cost ${best.shown.cpa} a conversion. ${s} ${s}`, result)).toEqual([]);
   });
 });
+
+describe("P9-4 the answer check is total: no figure gets past unchecked (review fixes)", () => {
+  // A one-row result: Ad 2's cost per acquisition, spend and conversions over simulated days 1 to 14, of Ads 1 to 3.
+  const one: QueryResult = {
+    from: 1,
+    to: 14,
+    fromDate: "2026-11-06",
+    toDate: "2026-11-19",
+    groupBy: "ad",
+    measures: ["cpa", "spend", "conversions"],
+    sort: { by: "cpa", direction: "asc" },
+    ads: [1, 2, 3],
+    rows: [{ adNumber: 2, headline: "Mended, not replaced", day: null, date: null, values: { cpa: 8.86, spend: 175, conversions: 20 }, shown: { cpa: "£8.86", spend: "£175.00", conversions: "20" } }],
+  };
+  const states = (x: string) => `the answer states ${x}, which is not in the result; use only figures from the result, as they are shown`;
+  const inWords = (x: string) => `the answer writes a number in words ("${x}"); use only figures from the result, as they are shown`;
+
+  it("a figure from the result, ads and days named by number, and the range's length before \"days\" pass", () => {
+    expect(checkAnswer("Ad 2 had the lowest cost per acquisition over simulated days 1 to 14: £8.86, from £175.00 and 20 conversions.", one)).toEqual([]);
+    expect(checkAnswer("Of Ads 1, 2 and 3, Ad 2 was cheapest over days 1-14, the last 14 simulated days: £8.86.", one)).toEqual([]);
+    expect(checkAnswer("Between day 1 and day 14, Ad 2 had 20 conversions.", one)).toEqual([]);
+  });
+
+  it("a bare number is a figure unless it names an ad or a day: day 14 and Ad 3 don't let \"14 conversions\" or \"had 3\" through", () => {
+    expect(checkAnswer("Ad 2 had 14 conversions and Ad 1 had 3 over simulated days 1 to 14.", one)).toEqual([states("14"), states("3")]);
+    // An ad or a day the result doesn't hold is refused where it is named.
+    expect(checkAnswer("Ad 4 had 20 conversions on day 15.", one)).toEqual([states("4"), states("15")]);
+    // The range's length counts only straight before "days", and only when it is the length.
+    expect(checkAnswer("Ad 2 had 20 conversions in 14 clicks.", one)).toEqual([states("14")]);
+    expect(checkAnswer("Over the last 7 days Ad 2 had 20 conversions.", one)).toEqual([states("7")]);
+    // A day takes no comma list, so the figure after it is still checked; nor does a single ad.
+    expect(checkAnswer("On day 1, 14 clicks.", one)).toEqual([states("14")]);
+    expect(checkAnswer("Ad 2, 3 conversions.", one)).toEqual([states("3")]);
+  });
+
+  it("numbers and multipliers in words are refused: twelve, twice, half, double, a dozen", () => {
+    expect(checkAnswer("Ad 2 had twelve conversions.", one)).toEqual([inWords("twelve")]);
+    expect(checkAnswer("Ad 2 had twice as many conversions as Ad 1.", one)).toEqual([inWords("twice")]);
+    expect(checkAnswer("Ad 2 cost half as much, about a dozen pounds less; Ad 3 had Three hundred clicks, double Ad 1, threefold.", one)).toEqual([
+      inWords("half"),
+      inWords("dozen"),
+      inWords("Three"),
+      inWords("hundred"),
+      inWords("double"),
+      inWords("threefold"),
+    ]);
+    // Ordinary words that aren't numbers pass: once, someone, often, tension, weight, first.
+    expect(checkAnswer("Once again Ad 2 came first, as someone often noted: no tension, no weight.", one)).toEqual([]);
+  });
+
+  it("a digit hidden after a decimal point, a letter or a comma is refused, not skipped", () => {
+    expect(checkAnswer("Ad 2's conversion rate was .5% higher.", one)).toEqual([states(".5%")]);
+    expect(checkAnswer("Ad 2 had ROAS3.5× overall.", one)).toEqual([states("ROAS3.5×")]);
+    expect(checkAnswer("Ad 2 had 20 conversions from clicks,42 of them.", one)).toEqual([states("clicks,42")]);
+    // Any digit at all: a date, a fraction, another script's numerals.
+    expect(checkAnswer("Ad 2 led on 2026-11-19.", one)).toEqual([states("2026"), states("11"), states("19")]);
+    expect(checkAnswer("Ad 2 had ½ the spend.", one)).toEqual([states("½")]);
+  });
+});

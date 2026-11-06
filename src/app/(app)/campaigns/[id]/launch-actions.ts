@@ -35,7 +35,7 @@ export async function askToLaunch(campaignId: string, request: LaunchRequest): P
 export async function endTheLaunch(campaignId: string, launchId: string): Promise<BriefActionState> {
   const member = await requireMember();
   try {
-    await endLaunch(member, launchId);
+    await endLaunch(member, launchId, { campaignId });
     revalidatePath(`/campaigns/${campaignId}`);
     return { done: "The launch has ended." };
   } catch (err) {

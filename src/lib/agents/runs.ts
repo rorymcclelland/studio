@@ -229,7 +229,7 @@ export async function decideApproval(
   await asUser(userId, async (tx) => {
     const [a] = await tx`
       select id, run_id, options from public.approvals
-      where id = ${approvalId} and status = 'pending' and expires_at > now()
+      where id = ${approvalId} and kind = 'run_choice' and status = 'pending' and expires_at > now()
       for update`;
     if (!a) throw new ApprovalError("This approval is no longer open.");
     let choice: number | null = null;

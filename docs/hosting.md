@@ -66,7 +66,7 @@ Only production sends email. Local work, CI and previews use the console mailer:
    - `End-to-end (app, Inngest dev server, mock model)`
    - `Migrations and database tests on a Neon branch`
 
-   Vercel then builds each push to `main` straight away but only promotes it to the production address when all three pass, which takes about 40 minutes. If one fails, the previous deployment stays live and the new one shows **Checks failed** under **Deployments**. Previews are not held.
+   Vercel then builds each push to `main` straight away but only promotes it to the production address when all three pass, which takes about 40 minutes. If one fails, the previous deployment stays live and the new one shows **Checks failed** under **Deployments**. Previews are not held. Two merges to `main` close together cancel the first one's CI run (`cancel-in-progress`), so only the later commit is promoted; the earlier one's deployment stays held, which is expected.
 
    **In an emergency** (production is broken and the fix can't wait for CI), open the held deployment under **Deployments** and choose **⋯ → Promote**, or use **Instant Rollback** on an earlier one. Say so in the next commit, so the skipped checks are on record.
 

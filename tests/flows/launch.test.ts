@@ -163,9 +163,11 @@ vi.mock("@/lib/auth/session", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: () => {}, revalidateTag: () => {}, updateTag: () => {}, refresh: () => {} }));
 
+import { decide } from "@/app/(app)/actions";
 import { decideLaunchRequest } from "@/app/(app)/approvals/launch-actions";
 import { askToLaunch, endTheLaunch } from "@/app/(app)/campaigns/[id]/launch-actions";
 import { LaunchRefusal } from "@/app/(app)/campaigns/[id]/launch-view";
+import { ApprovalError, decideApproval } from "@/lib/agents/runs";
 import { inboxCount, listInbox } from "@/lib/approvals/repo";
 import { insertImage, toWebp } from "@/lib/assets/store";
 import { adCompliance, decideFinding } from "@/lib/compliance/compute";
@@ -189,6 +191,7 @@ import {
   LAUNCH_ADS_CHANGED,
   LAUNCH_ALREADY_ASKED,
   LAUNCH_ALREADY_LIVE,
+  LAUNCH_BRIEF_NOT_SIGNED_OFF,
   LAUNCH_CAMPAIGN_NOT_FOUND,
   LAUNCH_LIMITS,
   LAUNCH_NOT_LIVE,
@@ -712,6 +715,27 @@ describe("P9-1 Launch a simulated campaign", () => {
     expect((await launchesFor(a.userId, ids.main))![0]).toMatchObject({ status: "refused", decision: { reason: "Not this month" } });
   });
 
+  it("review fix: the tagline's approve and reject can't decide a launch request; it stays open and the campaign can still launch", async () => {
+    const { launchId, approvalId } = await requestLaunch(a, ids.main, await defaultRequest(a, ids.main));
+    const send = vi.fn(async () => {});
+    for (const d of [{ decision: "rejected" as const, reason: "Not through this door" }, { decision: "approved" as const, choice: 0 }]) {
+      await expect(decideApproval(a.userId, approvalId, d, send), d.decision).rejects.toThrow(ApprovalError);
+    }
+    // Through the generic decide action, as the person: the same refusal, and nothing sent.
+    signedInAs(a, aEmail);
+    for (const intent of ["reject", "approve"]) {
+      const form = new FormData();
+      form.set("approvalId", approvalId);
+      form.set("intent", intent);
+      form.set("choice", "0");
+      expect(await decide(null, form), intent).toEqual({ error: "This approval is no longer open." });
+    }
+    expect(send).not.toHaveBeenCalled();
+    expect((await launchesFor(a.userId, ids.main))![0]).toMatchObject({ id: launchId, status: "awaiting_approval", decision: { status: "pending", reason: null, decidedBy: null } });
+    // The launch's own decision still works, so the campaign isn't stuck waiting.
+    expect(await decideLaunch(a, approvalId, "approved")).toMatchObject({ launchId, status: "live" });
+  });
+
   it("#5 a second Ask to launch while one is open, or while one is live, is refused in the app", async () => {
     const request = await defaultRequest(a, ids.main);
     const first = await requestLaunch(a, ids.main, request);
@@ -755,6 +779,46 @@ describe("P9-1 Launch a simulated campaign", () => {
     expect((await launchesFor(a.userId, ids.main))![0].endedAt).toEqual(l.endedAt);
     // The campaign can ask again.
     expect(await eligible(a.userId, ids.main)).toMatchObject({ canAsk: true, reason: null });
+  });
+
+  it("review fix: End the launch from another campaign's page ends nothing; from its own it ends", async () => {
+    const { launchId, approvalId } = await requestLaunch(a, ids.main, await defaultRequest(a, ids.main));
+    await decideLaunch(a, approvalId, "approved");
+    signedInAs(a, aEmail);
+    expect(await endTheLaunch(ids.other, launchId)).toEqual({ error: LAUNCH_NOT_LIVE });
+    await expect(endLaunch(a, launchId, { campaignId: "not-an-id" })).rejects.toThrow(LAUNCH_NOT_LIVE);
+    expect((await launchesFor(a.userId, ids.main))![0]).toMatchObject({ id: launchId, status: "live", endedBy: null });
+    expect(await endTheLaunch(ids.main, launchId)).toMatchObject({ done: expect.any(String) });
+    expect((await launchesFor(a.userId, ids.main))![0]).toMatchObject({ id: launchId, status: "ended", endedBy: a.userId });
+  });
+
+  it("review fix: approving waits for a sign-off being withdrawn at the same moment, then refuses; the launch stays waiting", async () => {
+    const { launchId, approvalId } = await requestLaunch(a, ids.main, await defaultRequest(a, ids.main));
+    let approving: Promise<unknown> | null = null;
+    let settledEarly = false;
+    try {
+      // Another transaction holds the campaign row (as the sign-off's own changes do) and takes the brief back to draft.
+      await getSql().begin(async (tx) => {
+        await tx`select id from public.campaigns where id = ${ids.main} for update`;
+        await tx`update public.campaigns set status = 'draft' where id = ${ids.main}`;
+        approving = decideLaunch(a, approvalId, "approved").then(
+          (r) => r,
+          (err: unknown) => err,
+        );
+        void approving.then(() => {
+          settledEarly = true;
+        });
+        await new Promise((r) => setTimeout(r, 300));
+        // The approval is waiting for the campaign row, not working from what it read before.
+        expect(settledEarly).toBe(false);
+      });
+      const outcome = await approving!;
+      expect(outcome).toBeInstanceOf(LaunchError);
+      expect((outcome as Error).message).toBe(LAUNCH_BRIEF_NOT_SIGNED_OFF);
+      expect((await launchesFor(a.userId, ids.main))![0]).toMatchObject({ id: launchId, status: "awaiting_approval", decision: { status: "pending" } });
+    } finally {
+      await getSql()`update public.campaigns set status = 'approved' where id = ${ids.main}`;
+    }
   });
 
   it("#8 another workspace can't see, approve or end a launch: the same refusal as a missing one", async () => {

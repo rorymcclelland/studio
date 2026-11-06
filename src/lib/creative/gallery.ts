@@ -1,6 +1,6 @@
 import { CREATIVE_KEY, CREATIVE_VERSION, MAKE_BUSY, makeCreativeRefusal } from "@/lib/agents/creative-workflow";
 import { createWorkflowRun, type Member, type SendEvent } from "@/lib/agents/runs";
-import { asUser, type Tx } from "@/lib/db/scoped";
+import { asUser, asUserIn, type Tx } from "@/lib/db/scoped";
 import { loadCopyContext, rulesFor } from "./copy-context";
 import { CopyEditError, CopyError, listCopySets, saveCopyEditIn, startNewWords, type CopySetView } from "./copy";
 import { EDIT_COPY, setProblems, type AnyCopy } from "./copy-rules";
@@ -257,10 +257,10 @@ const kindOf = (agent: string, input: Record<string, unknown>): CreativeRunView[
             : "imagery";
 
 /** Everything the Creative section needs for a campaign, or null if it isn't in the user's workspace. */
-export async function getCreative(userId: string, campaignId: string): Promise<CreativeView | null> {
+export async function getCreative(userId: string, campaignId: string, inTx?: Tx): Promise<CreativeView | null> {
   if (!UUID.test(campaignId)) return null;
-  const copy = await listCopySets(userId, campaignId);
-  return asUser(userId, async (tx) => {
+  const copy = await listCopySets(userId, campaignId, inTx);
+  return asUserIn(inTx, userId, async (tx) => {
     const [c] = await tx`select id, brand_id, status, approved_version from public.campaigns where id = ${campaignId}`;
     if (!c) return null;
     const version = (c.approved_version as number | null) ?? null;

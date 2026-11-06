@@ -46,6 +46,11 @@ async function shownLaunch(tx: Tx, campaignId: string) {
 
 export type AskPanel = { estimate: Estimate; atCap: boolean; reason: string | null; maxLength: number };
 
+/**
+ * Whether a question could take the member past the cap: checked against its
+ * worst case (both calls repaired at full output), as costs.ts keeps it for
+ * any check against the cap, so a question that starts can always finish.
+ */
 async function atCapFor(member: Member, pence: number): Promise<boolean> {
   const p = await spendPosition(member.userId, member.workspaceId);
   const spent = p.scope === "workspace" ? p.workspace : p.total;
@@ -58,7 +63,7 @@ export async function askPanel(member: Member, campaignId: string): Promise<AskP
   const shown = await asUser(member.userId, (tx) => shownLaunch(tx, campaignId));
   if (!shown) return null;
   const estimate = askEstimate();
-  const atCap = await atCapFor(member, estimate.pence);
+  const atCap = await atCapFor(member, estimate.worstPence);
   const noResults = !shown.launch || shown.launch.simDay === 0;
   return { estimate, atCap, reason: noResults ? ASK_NO_RESULTS : atCap ? ASK_AT_CAP : null, maxLength: QUESTION_MAX };
 }
@@ -77,7 +82,7 @@ export async function askQuestion(member: Member, campaignId: string, question: 
   if (text.length > QUESTION_MAX) throw new AskError(ASK_TOO_LONG);
   const launch = shown.launch;
   if (!launch || launch.simDay === 0) throw new AskError(ASK_NO_RESULTS);
-  if (await atCapFor(member, askEstimate().pence)) throw new AskError(ASK_AT_CAP);
+  if (await atCapFor(member, askEstimate().worstPence)) throw new AskError(ASK_AT_CAP);
 
   const questionId = randomUUID();
   // The question is stored in the run's own transaction, so a run never names a question that isn't there, and a question is never left without its run.

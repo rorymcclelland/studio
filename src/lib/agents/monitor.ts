@@ -296,6 +296,7 @@ export const monitorAnswerAgent = defineAgent<MonitorAnswerInput, MonitorAnswerO
     "Answer in at most three sentences, in plain British English, from the result alone.",
     "Use only figures that are in the result, written exactly as the result's shown values write them (for example £8.86, 1.23%, 2.10× or 12,345). Do not work out new figures: no differences, percentages, averages or comparisons that aren't in the result.",
     "Name simulated days by their number (for example simulated days 8 to 14), never by date, and ads by their number (Ad 2).",
+    "Write every number in digits, never in words: no 'twelve', 'twice', 'half' or 'double'.",
     "Make no forecasts or predictions: say only what the result shows, not what will happen. If the question asks for more than the result holds, answer what the result shows and say that is all the results hold.",
     'Reply with JSON only, exactly in this shape: {"answer": "..."}.',
   ].join("\n"),

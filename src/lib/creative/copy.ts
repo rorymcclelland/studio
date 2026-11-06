@@ -1,5 +1,5 @@
 import { createRun, type Member, type SendEvent } from "@/lib/agents/runs";
-import { asUser, type Tx } from "@/lib/db/scoped";
+import { asUser, asUserIn, type Tx } from "@/lib/db/scoped";
 import { loadCopyContext, NOT_SIGNED_OFF, rulesFor } from "./copy-context";
 import { LANG_NAMES, type Lang } from "./languages";
 import { CHANNEL_LIMITS, EDIT_COPY, figuresAddedByPerson, setProblems, type AnyCopy, type CopyByChannel, type CopyChannel } from "./copy-rules";
@@ -69,9 +69,9 @@ export type CampaignCopy = {
 const empty = (campaignId: string): CampaignCopy => ({ campaignId, version: null, signedOff: false, sets: [], discarded: [], runs: [] });
 
 /** A campaign's copy for its signed-off brief version: current sets, discarded ones and recent runs. */
-export async function listCopySets(userId: string, campaignId: string): Promise<CampaignCopy> {
+export async function listCopySets(userId: string, campaignId: string, inTx?: Tx): Promise<CampaignCopy> {
   if (!UUID.test(campaignId)) return empty(campaignId);
-  return asUser(userId, async (tx) => {
+  return asUserIn(inTx, userId, async (tx) => {
     const ctx = await loadCopyContext(tx, campaignId);
     const runs = await tx`
       select id, status, error, input, created_at from public.agent_runs
