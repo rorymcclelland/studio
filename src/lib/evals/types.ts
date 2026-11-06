@@ -8,7 +8,12 @@ export type EvalEnv = {
   brands: Record<string, string>;
 };
 
-export type EvalCase<I> = { name: string; input: I };
+export type EvalCase<I> = {
+  name: string;
+  input: I;
+  /** This case's spend beyond the agent's text model, for the estimate, if not the module's extraPencePerCase (F-16a: prompt-only cases draw no pictures). */
+  extraPence?: number;
+};
 
 export type Grade = { pass: boolean; notes: string };
 

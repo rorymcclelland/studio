@@ -1,0 +1,25 @@
+{
+  "about": "The Imagery agent's input for the regression fixtures and the prompt-only eval cases: the Quillmoor demo brand (fictional, a finance brand, so faces are refused) with a signed-off win-back brief, its name taken out as code does. The palette words are colourWords() of the demo palette's hex values (tests/evals/regression.test.ts checks they still are). The brief's words are written for these cases; they are not a production brief.",
+  "input": {
+    "brief": {
+      "title": "Plus, picked up where you left it",
+      "story": "January is when people look at their money again. A saver walks home along a quiet path at dusk, seen from behind, ready to take one clear step back to their budget and savings pots.",
+      "audiences": ["Lapsed customers (no order in 12 months): they know the app already and need a calm reason to come back in January."],
+      "channels": ["paid social: one calm picture with plain space for a short line", "display: the same picture, cropped wide"]
+    },
+    "palette": [
+      { "name": "Ink", "hex": "#14213D", "words": "deep navy blue" },
+      { "name": "Quill blue", "hex": "#1F4E79", "words": "deep blue" },
+      { "name": "Gold leaf", "hex": "#F2C14E", "words": "bright golden yellow" },
+      { "name": "Paper", "hex": "#F7F5F0", "words": "warm off-white" },
+      { "name": "Sage", "hex": "#6B9080", "words": "sage green" }
+    ],
+    "toneWords": ["clear", "calm", "encouraging", "honest"],
+    "doRules": ["Keep the benefit and the risk in the same place"],
+    "dontRules": ["Use urgency or fear (\"don't miss out\", \"before it's too late\")", "Shame people about debt or spending"],
+    "finance": true,
+    "brandName": "Quillmoor Money",
+    "realNames": [],
+    "places": []
+  }
+}

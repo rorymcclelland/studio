@@ -22,7 +22,7 @@ const modules: EvalModule[] = await Promise.all(
 function estimatePence(mod: EvalModule): number {
   const cfg = AGENT_MODELS[mod.agent as AgentKey];
   const price = cfg && PRICES[`${cfg.provider}:${cfg.model}`];
-  const extra = (mod.extraPencePerCase ?? 0) * mod.cases.length;
+  const extra = mod.cases.reduce((s, c) => s + (c.extraPence ?? mod.extraPencePerCase ?? 0), 0);
   if (!price) return extra;
   const usd = (2 * (8000 * price.inputPerMTok + cfg.maxOutputTokens * price.outputPerMTok)) / 1e6;
   return usd * 100 * Number(process.env.USD_TO_GBP ?? 0.79) * mod.cases.length + extra;
@@ -53,6 +53,8 @@ describe("agent evals", () => {
     if (mode === "real") {
       const total = modules.reduce((s, m) => s + estimatePence(m), 0);
       console.log(`\nReal-model evals for ${modules.map((m) => m.agent).join(", ")}: up to about ${total.toFixed(1)}p.`);
+      // F-16a: each agent's share, so a run can be split to stay inside the cap.
+      for (const m of modules) console.log(`  Estimate for ${m.agent}: ${m.cases.length} cases, up to about ${estimatePence(m).toFixed(1)}p.`);
       if (!process.env.EVAL_CONFIRMED) {
         console.log("Nothing was run. Add --yes to run them.\n");
         expect.fail("Real-model evals need --yes.");

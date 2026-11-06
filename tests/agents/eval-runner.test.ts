@@ -77,6 +77,24 @@ describe("F-5 evals runner", () => {
     expect(r.stdout).toContain("Nothing was run. Add --yes");
   }, 120_000);
 
+  it("F-16a the estimate needs no key, and --real estimates every agent with each agent's share", () => {
+    const env: Record<string, string | undefined> = { ...process.env, MODEL_PROVIDER_OVERRIDE: "" };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const r = spawnSync("node", ["scripts/eval.mjs", "--real"], { encoding: "utf8", env: env as NodeJS.ProcessEnv, timeout: 120_000 });
+    expect(r.status).not.toBe(0);
+    expect(r.stderr).not.toContain("need a provider key");
+    expect(r.stdout).toMatch(/Real-model evals for audience, brief, .*testPlan: up to about [\d.]+p\./);
+    expect(r.stdout).toMatch(/Estimate for monitorPlan: 16 cases, up to about [\d.]+p\./);
+    expect(r.stdout).toContain("Nothing was run. Add --yes");
+  }, 120_000);
+
+  it("F-16a --max-pence needs a number", () => {
+    const r = spawnSync("node", ["scripts/eval.mjs", "tagline", "--yes", "--max-pence=lots"], { encoding: "utf8" });
+    expect(r.status).toBe(2);
+    expect(r.stderr).toContain("--max-pence needs a number of pence");
+  });
+
   it("#5 a real-model run without a provider key refuses to start", () => {
     const env: Record<string, string | undefined> = { ...process.env, MODEL_PROVIDER_OVERRIDE: "" };
     delete env.ANTHROPIC_API_KEY;

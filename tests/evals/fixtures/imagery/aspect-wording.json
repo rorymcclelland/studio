@@ -1,0 +1,16 @@
+{
+  "case": "Imagery: the aspect wording",
+  "source": "docs/refinement/sprint-5.md, Production check notes (27 October 2026), \"Second: failed, 0.16p\": the first attempt failed over the wording of the aspect field; fixed in code by commit b3a6b79 (src/lib/agents/imagery.ts, imageryOutput: code sets the aspect), whose comment records the value \"1:1 square\"",
+  "provenance": "reconstructed",
+  "provenanceNote": "The production reply is in production's agent_steps and was never copied into the repository, so this is a reconstruction. Quoted from b3a6b79's code comment: the aspect \"1:1 square\". The four prompts are this folder's ruled-out-face fixture with that face prompt replaced by one with no face, so only the aspect is in question.",
+  "fixedIn": "code",
+  "input": "quillmoor-input.json",
+  "reply": {
+    "prompts": [
+      { "idea": "Walking home at dusk", "prompt": "A figure seen from behind walking along a gravel path between low hedges in deep navy blue evening light, a calm open sky above, soft photographic style.", "aspect": "1:1 square" },
+      { "idea": "A tidy desk in the morning", "prompt": "A tidy wooden desk with a ceramic mug and a small plant by a window, warm off-white walls and deep blue shadows, plain space above, soft morning light, photographic.", "aspect": "1:1 square" },
+      { "idea": "Hands and a savings jar", "prompt": "Two hands placing a coin into a glass jar on a plain table, a sage green background, warm daylight, uncluttered, gentle photographic style.", "aspect": "1:1 square" },
+      { "idea": "Calm abstract shapes", "prompt": "An abstract composition of soft overlapping paper shapes in deep navy blue, bright golden yellow and warm off-white, smooth gradients, a calm and hopeful mood, studio lighting.", "aspect": "1:1 square" }
+    ]
+  }
+}

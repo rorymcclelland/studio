@@ -177,6 +177,26 @@ describe("the case list", () => {
     expect(STORIES.find((s) => s.id === "P9-4")).toEqual({ sprint: 9, id: "P9-4", title: "The Monitor agent: alerts and ask-your-data" });
   });
 
+  it("has every agreed F-16a case, once each, in order, after P9-4's: the run's own check in CI with Rory's reading by hand, and the regression cases in CI", () => {
+    const f16a = CASES.filter((c) => c.story === "F-16a");
+    expect(f16a.map((c) => c.id)).toEqual(["F-16a.1", "F-16a.2"]);
+    for (const c of f16a) expect(c.sprint, c.id).toBe(9);
+    expect(f16a.map(caseKind)).toEqual(["ci", "ci"]);
+    // Case 1: CI tests the workflow's own check; the real run and Rory's reading of the report are by hand.
+    const one = f16a[0].checks;
+    expect(one.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/lib/eval-check.test.ts")).toBe(true);
+    expect(one.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/lib/workflow-files.test.ts")).toBe(true);
+    expect(one.find((x) => x.kind === "hand")).toMatchObject({ why: expect.stringMatching(/Rory reads the reports.*e2e-results\/evals\/sprint-9/) });
+    // Case 2: every regression group in tests/evals/regression.test.ts, and the mock eval run in CI's first job.
+    const two = f16a[1].checks;
+    expect(two.filter((x) => x.kind === "ci" && "file" in x && x.file === "tests/evals/regression.test.ts")).toHaveLength(8);
+    expect(two.some((x) => x.kind === "ci" && "job" in x && x.job === "Typecheck, lint, unit and database tests, build")).toBe(true);
+    expect(two.every((x) => x.kind === "ci")).toBe(true);
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("P9-4")).toBeLessThan(order.indexOf("F-16a"));
+    expect(STORIES.find((s) => s.id === "F-16a")).toEqual({ sprint: 9, id: "F-16a", title: "The first real-model eval run, with regression cases" });
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);

@@ -1,0 +1,21 @@
+{
+  "case": "Imagery: the ruled-out face",
+  "source": "docs/refinement/sprint-5.md, Production check notes (27 October 2026), \"Second: failed, 0.16p\": one prompt described a walker \"with the face not shown\" and the finance face check refused it; fixed in code by commit b3a6b79 (src/lib/agents/imagery.ts, shownFace, and keepPassingPrompts)",
+  "provenance": "reconstructed",
+  "provenanceNote": "The production reply is in production's agent_steps and was never copied into the repository, so this is a reconstruction. Quoted from the production notes: \"with the face not shown\", on a walker. The walker's scene follows b3a6b79's own test (\"a person walking away along a gravel path between low hedges\"); the other three prompts are written for this fixture and pass every check, so only the face check is in question.",
+  "fixedIn": "code",
+  "input": "quillmoor-input.json",
+  "reply": {
+    "prompts": [
+      { "idea": "Walking home at dusk", "prompt": "A person walking away along a gravel path between low hedges in deep navy blue evening light, with the face not shown, a calm open sky above, soft photographic style.", "aspect": "1:1" },
+      { "idea": "A tidy desk in the morning", "prompt": "A tidy wooden desk with a ceramic mug and a small plant by a window, warm off-white walls and deep blue shadows, plain space above, soft morning light, photographic.", "aspect": "1:1" },
+      { "idea": "Hands and a savings jar", "prompt": "Two hands placing a coin into a glass jar on a plain table, a sage green background, warm daylight, uncluttered, gentle photographic style.", "aspect": "1:1" },
+      { "idea": "Calm abstract shapes", "prompt": "An abstract composition of soft overlapping paper shapes in deep navy blue, bright golden yellow and warm off-white, smooth gradients, a calm and hopeful mood, studio lighting.", "aspect": "1:1" }
+    ]
+  },
+  "faceWords": "with the face not shown",
+  "stillRefused": {
+    "why": "A face that is shown is still refused for a finance brand after the fix.",
+    "prompt": "A person walking along a gravel path between low hedges in deep navy blue evening light, a smiling face in the foreground, soft photographic style."
+  }
+}

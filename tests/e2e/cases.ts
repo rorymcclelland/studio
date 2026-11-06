@@ -85,6 +85,7 @@ export const STORIES: Story[] = [
   { sprint: 9, id: "P9-2", title: "The simulator: daily results with fatigue and events" },
   { sprint: 9, id: "P9-3", title: "The Performance dashboard and healthy spend share" },
   { sprint: 9, id: "P9-4", title: "The Monitor agent: alerts and ask-your-data" },
+  { sprint: 9, id: "F-16a", title: "The first real-model eval run, with regression cases" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -173,6 +174,12 @@ const MONITOR_DB = "tests/db/monitor.test.ts";
 const ALERTS_LIB = "tests/lib/alerts.test.ts";
 const ASK_LIB = "tests/lib/ask-rules.test.ts";
 const MONITOR_AGENTS = "tests/agents/monitor.test.ts";
+
+// F-16a The first real-model eval run, with regression cases
+const EVAL_CHECK = "tests/lib/eval-check.test.ts";
+const EVAL_WORKFLOW = "tests/lib/workflow-files.test.ts";
+const EVAL_RUNNER = "tests/agents/eval-runner.test.ts";
+const REGRESSION = "tests/evals/regression.test.ts";
 const HAND_PACK_9 = "docs/testing/sprint-9-test-pack.md";
 
 export const CASES: Case[] = [
@@ -1565,6 +1572,48 @@ export const CASES: Case[] = [
       {
         kind: "hand",
         why: `${REAL_AI}. Whether Haiku's plans and answers are right for ten typical questions on a real launch (hand check HC-1 in ${HAND_PACK_9}); the same ten are eval cases in tests/evals/monitorPlan.eval.ts and tests/evals/monitorAnswer.eval.ts, run against the real model in F-16a.`,
+      },
+    ],
+  },
+  // F-16a The first real-model eval run, with regression cases
+  {
+    id: "F-16a.1",
+    sprint: 9,
+    story: "F-16a",
+    words: "The real-model report exists for every agent, with model, cases, pass rate and cost; its total is at most £1.",
+    checks: [
+      {
+        kind: "ci",
+        file: EVAL_CHECK,
+        test: "F-16a #1 the real-model run's own check",
+        note: "The check itself, which scripts/eval.mjs runs after a real run in .github/workflows/evals.yml: a report for every agent with its model, cases, pass rate and cost, and the usage ledger's total at most 100p. CI tests the check; the real run is in the Actions run, which CI can't make (no real keys).",
+      },
+      { kind: "ci", file: EVAL_WORKFLOW, test: "F-16a the real-model eval workflow" },
+      { kind: "ci", file: EVAL_RUNNER, test: "F-16a the estimate needs no key, and --real estimates every agent with each agent's share" },
+      {
+        kind: "hand",
+        why: "The real run needs the real key, which only the Actions run has: Claude starts .github/workflows/evals.yml with Rory's approval, and Rory reads the reports (model, cases, pass rate and cost for every agent, and the total) at the demo, on the branch e2e-results/evals/sprint-9 and in the run's job summary.",
+      },
+    ],
+  },
+  {
+    id: "F-16a.2",
+    sprint: 9,
+    story: "F-16a",
+    words: "Each regression case fails against the reply that broke production, saved as a fixture, and passes against the fix.",
+    checks: [
+      { kind: "ci", file: REGRESSION, test: "F-16a the regression fixtures" },
+      { kind: "ci", file: REGRESSION, test: "F-16a brief: the brand name read as a figure (26 Oct)" },
+      { kind: "ci", file: REGRESSION, test: "F-16a market: the long note (26 Oct, first run)" },
+      { kind: "ci", file: REGRESSION, test: "F-16a market: the possessive names (26 Oct, second and third runs)" },
+      { kind: "ci", file: REGRESSION, test: "F-16a imagery: the cut-off reply (27 Oct, first Make creative)" },
+      { kind: "ci", file: REGRESSION, test: "F-16a imagery: the ruled-out face (27 Oct, second Make creative)" },
+      { kind: "ci", file: REGRESSION, test: "F-16a imagery: the aspect wording (27 Oct, second Make creative)" },
+      { kind: "ci", file: REGRESSION, test: "F-16a monitor (P9-4 cases 5 to 7, not yet in production)" },
+      {
+        kind: "ci",
+        job: "Typecheck, lint, unit and database tests, build",
+        note: "Its step \"Agent evals against the mock model\" runs the regression eval cases (brief, imagery, and the market case that stands for the 26 Oct runs) with the mock model; F-16a's real-model run runs them against the real models. The fixtures are reconstructions, labelled with their sources: the production replies were never copied into the repository.",
       },
     ],
   },
