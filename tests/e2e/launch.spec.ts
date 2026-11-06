@@ -19,7 +19,7 @@
 // Each page at 375 px and 1440 px: nothing scrolls sideways, AA contrast.
 // SHOTS_DIR=<folder> saves screenshots. The brand's kit is not changed, so this
 // runs in the main project. The interface it expects is written at the top of
-// tests/db/launch.test.ts.
+// tests/flows/launch.test.ts.
 import { expect, test, type Page } from "@playwright/test";
 import {
   acceptDontRulesForPicked,

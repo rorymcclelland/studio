@@ -1,4 +1,4 @@
-// P9-1's fixtures (tests/db/launch.test.ts), shared so later Performance
+// P9-1's fixtures (tests/flows/launch.test.ts and tests/db/launch.test.ts), shared so later Performance
 // stories (P9-2 onwards) build their brands, campaigns, ads and launches the
 // same way: a Fernhollow brand, a campaign signed off at version 1, ads as
 // Make creative records them (simulated pictures), and a launch written

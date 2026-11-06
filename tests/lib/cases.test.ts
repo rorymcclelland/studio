@@ -57,9 +57,14 @@ describe("the case list", () => {
     for (const c of p91) {
       expect(c.sprint, c.id).toBe(9);
       expect(["browser", "ci"], c.id).toContain(caseKind(c));
-      // Every case has a CI check in tests/db/launch.test.ts, browser cases too.
-      expect(c.checks.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/db/launch.test.ts"), c.id).toBe(true);
+      // Every case has a CI check in P9-1's own tests, browser cases too: the app's flows
+      // (tests/flows/launch.test.ts, plain Postgres) or the database's rules (tests/db/launch.test.ts, Neon too).
+      expect(c.checks.some((x) => x.kind === "ci" && "file" in x && ["tests/flows/launch.test.ts", "tests/db/launch.test.ts"].includes(x.file)), c.id).toBe(true);
     }
+    // The database's own rules are checked in tests/db, so they also run on Neon: the check
+    // constraints (4), the unique indexes (5), the guard trigger (6), and RLS, grants and the composite foreign key (8).
+    const dbChecked = p91.filter((c) => c.checks.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/db/launch.test.ts")).map((c) => c.id);
+    expect(dbChecked).toEqual(["P9-1.4", "P9-1.5", "P9-1.6", "P9-1.8"]);
     // The browser tests the refinement names: cases 1, 2 and 7; the rest are CI.
     expect(p91.filter((c) => caseKind(c) === "browser").map((c) => c.id)).toEqual(["P9-1.1", "P9-1.2", "P9-1.7"]);
   });

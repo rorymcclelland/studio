@@ -141,6 +141,8 @@ const PRETEST_CI = "tests/agents/pretest.test.ts";
 const LAUNCH_SPEC = "launch.spec.ts";
 const LAUNCH =
   "P9-1 #1, #2, #7: a signed-off Fernhollow campaign's four passing ads launch with the defaults once approved in the inbox, an ad still waiting is left out with the pack's reason, and End the launch ends it";
+// The app's flows on plain Postgres (CI's first job), and what the database itself enforces (also on Neon).
+const LAUNCH_FLOWS = "tests/flows/launch.test.ts";
 const LAUNCH_DB = "tests/db/launch.test.ts";
 
 // P9-2 The simulator
@@ -982,11 +984,11 @@ export const CASES: Case[] = [
     words: "A signed-off Fernhollow campaign with four picked ads that pass: Ask to launch with the defaults, approve in the inbox, and the campaign shows Live (simulated) with four ads, £50 a day for 30 days.",
     checks: [
       { kind: "browser", spec: LAUNCH_SPEC, title: LAUNCH },
-      { kind: "ci", file: LAUNCH_DB, test: "#1 Ask to launch with the defaults, then Approve in the inbox: the launch is live with exactly the eligible ads, £50 a day for 30 days" },
-      { kind: "ci", file: LAUNCH_DB, test: "#1 through the server actions: Ask to launch, then Approve, as the signed-in person" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#1 Ask to launch with the defaults, then Approve in the inbox: the launch is live with exactly the eligible ads, £50 a day for 30 days" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#1 through the server actions: Ask to launch, then Approve, as the signed-in person" },
       {
         kind: "ci",
-        file: LAUNCH_DB,
+        file: LAUNCH_FLOWS,
         test: "#1 the defaults: £50 a day for 30 days from today, and the threshold the brief's KPI suggests, labelled as Studio's own simulated default",
         note: "The refinement's table of default measures. The suggested values are Studio's own simulated defaults, not benchmarks (rule 1).",
       },
@@ -1004,8 +1006,8 @@ export const CASES: Case[] = [
         title: LAUNCH,
         note: "The browser shows an ad waiting on its don't rules left out, with the pack's reason read from the same page. An ad marked not acceptable (a fail) is the CI test.",
       },
-      { kind: "ci", file: LAUNCH_DB, test: "#2 the launch's ads are the pack's: an ad is in when the pack has a file for it, with those sizes and languages; a fail or an unaccepted review is left out with the pack's reason" },
-      { kind: "ci", file: LAUNCH_DB, test: "#2 with no eligible ads, Ask to launch is refused: No picked ads pass compliance yet" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#2 the launch's ads are the pack's: an ad is in when the pack has a file for it, with those sizes and languages; a fail or an unaccepted review is left out with the pack's reason" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#2 with no eligible ads, Ask to launch is refused: No picked ads pass compliance yet" },
       {
         kind: "ci",
         file: PACK_DB,
@@ -1022,7 +1024,7 @@ export const CASES: Case[] = [
     checks: [
       {
         kind: "ci",
-        file: LAUNCH_DB,
+        file: LAUNCH_FLOWS,
         test: "#3 a campaign whose brief isn't signed off can't ask to launch: the panel says why, and the server action refuses",
         note: "A brief never signed off, and one edited after its sign-off. The UI's part is the panel's input (the refusal it shows instead of the form); the page itself isn't drawn in CI.",
       },
@@ -1034,9 +1036,10 @@ export const CASES: Case[] = [
     story: "P9-1",
     words: "Out-of-range input is refused with a plain reason (a budget of £0 or £501, 0 or 61 days, a start before 1 January 2026 or after 31 December 2027, a threshold of 0 or a CTR over 100%); a tampered request with another campaign's ad is refused like a 404.",
     checks: [
-      { kind: "ci", file: LAUNCH_DB, test: "#4 out-of-range input is refused with a plain reason, and the limits themselves are allowed" },
-      { kind: "ci", file: LAUNCH_DB, test: "#4 the action refuses out-of-range input with every reason and stores nothing; the database refuses it too" },
-      { kind: "ci", file: LAUNCH_DB, test: "#4 a tampered request with another campaign's ad is refused like a 404, and stores nothing" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#4 out-of-range input is refused with a plain reason, and the limits themselves are allowed" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#4 the action refuses out-of-range input with every reason and stores nothing" },
+      { kind: "ci", file: LAUNCH_DB, test: "#4 the database refuses out-of-range launch settings with its check constraints, and allows the limits themselves" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#4 a tampered request with another campaign's ad is refused like a 404, and stores nothing" },
     ],
   },
   {
@@ -1045,9 +1048,10 @@ export const CASES: Case[] = [
     story: "P9-1",
     words: "Refusing in the inbox leaves the campaign unlaunched, with the refusal and its reason; a second Ask to launch while one is open is refused.",
     checks: [
-      { kind: "ci", file: LAUNCH_DB, test: "#5 Refuse in the inbox leaves the campaign unlaunched, with the refusal and its reason; it can be asked for again" },
-      { kind: "ci", file: LAUNCH_DB, test: "#5 a second Ask to launch while one is open is refused, in the app and by the database's indexes" },
-      { kind: "ci", file: LAUNCH_DB, test: "#5 two Ask to launch clicks at once make one launch request" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#5 Refuse in the inbox leaves the campaign unlaunched, with the refusal and its reason; it can be asked for again" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#5 a second Ask to launch while one is open, or while one is live, is refused in the app" },
+      { kind: "ci", file: LAUNCH_DB, test: "#5 the database's unique indexes allow one open and one live launch per campaign; ended and refused ones don't count" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#5 two Ask to launch clicks at once make one launch request" },
     ],
   },
   {
@@ -1069,7 +1073,7 @@ export const CASES: Case[] = [
         title: LAUNCH,
         note: "P9-1 has no simulated clock (that is P9-2), so the launch ends before its first simulated day; the day it ends on is shown once the clock runs.",
       },
-      { kind: "ci", file: LAUNCH_DB, test: "#7 End the launch records who ended it and when; only a live launch can end, and the campaign can launch again" },
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#7 End the launch records who ended it and when; only a live launch can end, and the campaign can launch again" },
     ],
   },
   {
@@ -1077,7 +1081,10 @@ export const CASES: Case[] = [
     sprint: 9,
     story: "P9-1",
     words: "Another workspace can't see, approve or end a launch.",
-    checks: [{ kind: "ci", file: LAUNCH_DB, test: "#8 another workspace can't see, approve or end a launch: the same refusal as a missing one, and RLS in the database" }],
+    checks: [
+      { kind: "ci", file: LAUNCH_FLOWS, test: "#8 another workspace can't see, approve or end a launch: the same refusal as a missing one" },
+      { kind: "ci", file: LAUNCH_DB, test: "#8 another workspace can't read, change or write a launch in the database: row-level security, the grants and the composite foreign key" },
+    ],
   },
   {
     id: "P9-1.9",
@@ -1087,7 +1094,7 @@ export const CASES: Case[] = [
     checks: [
       {
         kind: "ci",
-        file: LAUNCH_DB,
+        file: LAUNCH_FLOWS,
         test: "#9 hostile: a refusal reason of 2,000 characters with <script> is capped at 500, kept as plain text and shown as text",
         note: "Shown as text: the refusal's component is rendered to HTML in the test, and the markup comes out escaped.",
       },
