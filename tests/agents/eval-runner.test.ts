@@ -89,6 +89,25 @@ describe("F-5 evals runner", () => {
     expect(r.stdout).toContain("Nothing was run. Add --yes");
   }, 120_000);
 
+  it("F-16a --part=k/n estimates every nth case of an agent, so imagery can be split across runs", () => {
+    const env: Record<string, string | undefined> = { ...process.env, MODEL_PROVIDER_OVERRIDE: "" };
+    delete env.ANTHROPIC_API_KEY;
+    delete env.GOOGLE_GENERATIVE_AI_API_KEY;
+    const run = (part: string) => spawnSync("node", ["scripts/eval.mjs", "monitorPlan", `--part=${part}`], { encoding: "utf8", env: env as NodeJS.ProcessEnv, timeout: 120_000 });
+    const first = run("1/2");
+    expect(first.stdout).toMatch(/Estimate for monitorPlan: 8 cases, up to about [\d.]+p\./);
+    expect(first.stdout).toContain("Only part 1 of 2 of each agent's cases.");
+    expect(run("3/3").stdout).toMatch(/Estimate for monitorPlan: 5 cases, /);
+  }, 240_000);
+
+  it("F-16a --part needs k/n with 1 <= k <= n <= 10", () => {
+    for (const bad of ["--part=0/2", "--part=3/2", "--part=1/11", "--part=half", "--part=1/2;rm"]) {
+      const r = spawnSync("node", ["scripts/eval.mjs", "tagline", bad], { encoding: "utf8" });
+      expect(r.status, bad).toBe(2);
+      expect(r.stderr).toContain("--part needs k/n");
+    }
+  });
+
   it("F-16a --max-pence needs a number", () => {
     const r = spawnSync("node", ["scripts/eval.mjs", "tagline", "--yes", "--max-pence=lots"], { encoding: "utf8" });
     expect(r.status).toBe(2);

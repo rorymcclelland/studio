@@ -14,9 +14,15 @@ import { createMember } from "../helpers/db";
 const wanted = (process.env.EVAL_AGENTS ?? "").split(",").filter((a) => /^[a-z][a-zA-Z0-9]*$/.test(a));
 const mode = process.env.EVAL_MODE === "real" ? "real" : "mock";
 // Imported by name (scripts/eval.mjs has checked the files exist), so a new eval file is always picked up.
-const modules: EvalModule[] = await Promise.all(
+const loaded: EvalModule[] = await Promise.all(
   wanted.map(async (a) => ((await import(/* @vite-ignore */ `./${a}.eval.ts`)) as { default: EvalModule }).default),
 );
+// --part=k/n (checked by scripts/eval.mjs): every nth case, starting at the kth, so an
+// agent that costs more than one run's cap can be split across runs (F-16a).
+const partMatch = /^(\d+)\/(\d+)$/.exec(process.env.EVAL_PART ?? "");
+const part = partMatch ? { k: Number(partMatch[1]), n: Number(partMatch[2]) } : null;
+const modules: EvalModule[] = part ? loaded.map((m) => ({ ...m, cases: m.cases.filter((_, i) => i % part.n === part.k - 1) })) : loaded;
+const partLabel = part ? ` (part ${part.k} of ${part.n})` : "";
 
 /** A generous estimate: 8,000 tokens in and the full output allowance, twice (one repair) per case, plus any pictures. */
 function estimatePence(mod: EvalModule): number {
@@ -53,6 +59,7 @@ describe("agent evals", () => {
     if (mode === "real") {
       const total = modules.reduce((s, m) => s + estimatePence(m), 0);
       console.log(`\nReal-model evals for ${modules.map((m) => m.agent).join(", ")}: up to about ${total.toFixed(1)}p.`);
+      if (part) console.log(`  Only part ${part.k} of ${part.n} of each agent's cases.`);
       // F-16a: each agent's share, so a run can be split to stay inside the cap.
       for (const m of modules) console.log(`  Estimate for ${m.agent}: ${m.cases.length} cases, up to about ${estimatePence(m).toFixed(1)}p.`);
       if (!process.env.EVAL_CONFIRMED) {
@@ -67,10 +74,12 @@ describe("agent evals", () => {
       const when = new Date();
       const dir = mode === "mock" ? "evals/reports/mock" : "evals/reports";
       mkdirSync(dir, { recursive: true });
-      const path = `${dir}/${mod.agent}-${when.toISOString().slice(0, 10)}.md`;
-      writeFileSync(path, reportMarkdown(r, when));
+      const path = `${dir}/${mod.agent}-${when.toISOString().slice(0, 10)}${part ? `-part-${part.k}-of-${part.n}` : ""}.md`;
+      const report = reportMarkdown(r, when);
+      // A part's report says so, so it is never read as the agent's whole set of cases.
+      writeFileSync(path, part ? report.replace("\n\n", `\n\nPart ${part.k} of ${part.n} of this agent's cases (every ${part.n === 2 ? "second" : `${part.n}th`} case, from case ${part.k}).\n\n`) : report);
       const passed = r.results.filter((x) => x.outcome === "pass").length;
-      console.log(`\n${mod.agent}: ${passed} of ${r.results.length} passed (report: ${path})`);
+      console.log(`\n${mod.agent}${partLabel}: ${passed} of ${r.results.length} passed (report: ${path})`);
       for (const x of r.results.filter((y) => y.outcome !== "pass")) console.log(`  ${x.outcome}: ${x.name}: ${x.notes}`);
     }
     expect(exitCode(results), "every case should pass").toBe(0);

@@ -21,6 +21,10 @@ on:
         description: "Agents to evaluate, space-separated (empty for all)"
         required: false
         default: ""
+      part:
+        description: "Only part k of n of each agent's cases, for example 1/2 (empty for all)"
+        required: false
+        default: ""
 
 jobs:
   evals:
@@ -49,6 +53,7 @@ jobs:
       - name: Estimate the cost before spending
         env:
           AGENTS: ${{ inputs.agents }}
+          PART: ${{ inputs.part }}
         # No key here: unconfirmed, the runner prints the estimate and stops before any
         # model call, so it exits non-zero by design. The estimate is a generous ceiling
         # (8,000 tokens in and the full reply, twice, per case, plus pictures and searches);
@@ -56,7 +61,8 @@ jobs:
         run: |
           set -uo pipefail
           log="$RUNNER_TEMP/estimate.log"
-          npm run eval -- $AGENTS --real > "$log" 2>&1 || true
+          # scripts/eval.mjs checks the agent names and --part.
+          npm run eval -- $AGENTS ${PART:+--part=$PART} --real > "$log" 2>&1 || true
           total=$(grep -oE 'Real-model evals for [A-Za-z, ]+: up to about [0-9.]+p\.' "$log" | head -n 1 || true)
           if [ -z "$total" ]; then
             tail -n 60 "$log"
@@ -81,12 +87,15 @@ jobs:
       - name: Run the evals
         env:
           AGENTS: ${{ inputs.agents }}
-          # Only this step sees the key, not npm install scripts (review 16) or the estimate.
+          PART: ${{ inputs.part }}
+          # Only this step sees the keys, not npm install scripts (review 16) or the estimate.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          # Imagery draws its pictures with Google's image model (F-16a, Rory, 6 Nov).
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
         # Agent names are checked by scripts/eval.mjs against the eval files. --max-pence: the
         # run fails if the usage ledger's real cost is over 100p or an agent has no report
         # (F-16a #1); the totals go in the job summary.
-        run: npm run eval -- $AGENTS --yes --max-pence=100
+        run: npm run eval -- $AGENTS ${PART:+--part=$PART} --yes --max-pence=100
       - name: Upload the reports
         if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
@@ -121,6 +130,14 @@ jobs:
           if ! ls "$RUNNER_TEMP/eval-results/evals/reports/"*.md > /dev/null 2>&1; then
             echo "::warning title=No reports::The eval job wrote no reports, so nothing is pushed."
             exit 0
+          fi
+          # An eval run is often one batch of several (each capped at 100p), so the reports
+          # already on the branch are kept; a report of the same name from this run replaces it.
+          if git fetch --depth=1 origin "refs/heads/e2e-results/evals/$SOURCE_BRANCH" 2> /dev/null; then
+            earlier="$RUNNER_TEMP/earlier-reports"
+            mkdir -p "$earlier"
+            git archive FETCH_HEAD | tar -x -C "$earlier"
+            cp -rn "$earlier/." "$RUNNER_TEMP/eval-results/"
           fi
           # A commit with no parent, made from the reports folder through a separate index, so
           # the checkout is untouched; the push uses the checkout's token (contents: write).

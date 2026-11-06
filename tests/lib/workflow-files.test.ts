@@ -59,19 +59,21 @@ describe("F-16a the real-model eval workflow", () => {
   it("prints the estimate, with no key, before the run, and puts it in the job summary", () => {
     const estimate = stepOf(evalsJob, "Estimate the cost before spending");
     expect(evalsJob.indexOf("Estimate the cost before spending")).toBeLessThan(evalsJob.indexOf("- name: Run the evals"));
-    expect(estimate).toContain("npm run eval -- $AGENTS --real");
+    expect(estimate).toContain("npm run eval -- $AGENTS ${PART:+--part=$PART} --real");
     expect(estimate).not.toContain("--yes");
     expect(estimate).not.toMatch(/secrets\.|API_KEY/);
     expect(estimate).toContain('>> "$GITHUB_STEP_SUMMARY"');
     expect(estimate).toMatch(/exit 1/);
   });
 
-  it("runs with the key in that step only, capped at 100p and failing over it", () => {
+  it("runs with the keys in that step only, capped at 100p and failing over it", () => {
     const run = stepOf(evalsJob, "Run the evals");
     expect(run).toContain("ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}");
-    expect(run).toContain("npm run eval -- $AGENTS --yes --max-pence=100");
+    expect(run).toContain("GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}");
+    expect(run).toContain("npm run eval -- $AGENTS ${PART:+--part=$PART} --yes --max-pence=100");
     expect(yml.match(/^.*ANTHROPIC_API_KEY.*$/gm)).toHaveLength(1);
-    expect([...yml.matchAll(/secrets\.(\w+)/g)].map((m) => m[1])).toEqual(["ANTHROPIC_API_KEY"]);
+    expect(yml.match(/^.*GOOGLE_GENERATIVE_AI_API_KEY.*$/gm)).toHaveLength(1);
+    expect([...yml.matchAll(/secrets\.(\w+)/g)].map((m) => m[1])).toEqual(["ANTHROPIC_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"]);
     expect(evalsJob).toContain('DAILY_CAP_PENCE: "100"');
     expect(evalsJob).toContain("persist-credentials: false");
   });
@@ -94,6 +96,11 @@ describe("F-16a the real-model eval workflow", () => {
     expect(push).toContain('GIT_INDEX_FILE="$RUNNER_TEMP/eval-results.index"');
     expect(push).toContain('git commit-tree "$tree" -m');
     expect(push).toContain('git push --force origin "$commit:refs/heads/e2e-results/evals/$SOURCE_BRANCH"');
+    // A run is often one batch of several, so the reports already on the branch are kept,
+    // without overwriting this run's (cp -n), and before the commit is made.
+    expect(push).toContain('git fetch --depth=1 origin "refs/heads/e2e-results/evals/$SOURCE_BRANCH"');
+    expect(push).toContain('cp -rn "$earlier/." "$RUNNER_TEMP/eval-results/"');
+    expect(push.indexOf("cp -rn")).toBeLessThan(push.indexOf("git add --all"));
     const ci = readFileSync(join(process.cwd(), ".github/workflows/ci.yml"), "utf8");
     expect(ci).toContain('branches-ignore: ["e2e-results/**"]');
   });

@@ -6,6 +6,7 @@
 //   npm run eval -- --real             every agent, real model: prints the estimate and stops
 //   npm run eval -- brief --yes        one agent, real model, within the daily AI cap
 //   --max-pence=100                    with --yes: fail if the run's real cost is over 100p (F-16a)
+//   --part=1/2                         only every second case of each agent, starting at the first
 // Real-model runs need the provider key in .env.local; the estimate doesn't, as
 // it calls no model. Each run rebuilds a local eval database with the demo
 // brands, so it never touches the hosted one.
@@ -30,6 +31,15 @@ if (maxArg && !(maxPence !== null && Number.isFinite(maxPence) && maxPence >= 0)
   console.error("--max-pence needs a number of pence, for example --max-pence=100.");
   process.exit(2);
 }
+// --part=k/n runs every nth case of each agent, starting at the kth, so an agent whose
+// cases cost more than one run's cap (imagery, with its pictures) can be split (F-16a).
+const partArg = args.find((a) => a.startsWith("--part="));
+const partMatch = partArg ? /^--part=([1-9]\d?)\/([1-9]\d?)$/.exec(partArg) : null;
+if (partArg && !(partMatch && Number(partMatch[1]) <= Number(partMatch[2]) && Number(partMatch[2]) <= 10)) {
+  console.error("--part needs k/n with 1 <= k <= n <= 10, for example --part=1/2.");
+  process.exit(2);
+}
+const part = partMatch ? `${partMatch[1]}/${partMatch[2]}` : "";
 const agents = named.length ? named : available;
 const base = process.env.EVAL_DATABASE_URL ?? "postgres://postgres@localhost:54329/campaign_studio_eval";
 
@@ -69,6 +79,7 @@ const env = {
   EVAL_MODE: mock ? "mock" : "real",
   EVAL_CONFIRMED: yes ? "1" : "",
   EVAL_CARRIED_PENCE: String(carried),
+  EVAL_PART: part,
   DAILY_CAP_PENCE: cap,
   // The eval database has one workspace, so it may use the whole cap (decision 0010's
   // per-workspace limit is for production's invited workspaces).
