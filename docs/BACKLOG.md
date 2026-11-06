@@ -220,6 +220,21 @@ Picked, compliant ads launch into a simulation after an approval. The simulation
 | N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Carried from Sprint 8 |
 | N-9a | Sprint 9 test pack, hand checks of real AI output only (the monitor's answers) | S | Ready, Sprint 9 |
 
+## Where the F-16a eval findings now live
+
+F-16a's first real-model runs (6 November; reports on `e2e-results/evals/sprint-9`). Run A (brief, market) cost 57p and run B (copy, localise and the nine small agents) 83p. Every failure is a row here, for ranking at the Sprint 9 review. Imagery's three runs wait for the Google key.
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| BUG-2 | Audience on Haiku: 0 of 4. Two replies aren't valid JSON; two put numbers in segment text, which the checks refuse | F-16a run B | Backlog, from F-16a's run |
+| BUG-3 | Persona on Haiku: 0 of 4. Two replies aren't valid JSON; two fail in the brief step (BUG-4) | F-16a run B | Backlog, from F-16a's run |
+| BUG-4 | The brief's quantities-in-words check refuses "most of", "Many people", "a good share of" and "Plenty of customers", and the brief keeps writing them: it fails cases in brief, copy, persona and testPlan. The prompt and the check disagree | F-16a runs A and B | Backlog, from F-16a's run |
+| BUG-5 | Localise: 3 of 6. French and Spanish paid-social bodies don't fit 1080 × 1080 Full bleed; one French headline is 41 characters (limit 40) | F-16a run B | Backlog, from F-16a's run |
+| BUG-6 | Brief: the Quillmoor win-back brief mentions a guarantee; one insight cites more than the schema's four sources | F-16a run A | Backlog, from F-16a's run |
+| BUG-7 | Monitor answer: invited to forecast, the model wrote "next month"; the check refused it (nothing wrong was shown), but the person gets no answer | F-16a run B | Backlog, from F-16a's run |
+| BUG-8 | Pretest: one reply of six isn't valid JSON | F-16a run B | Backlog, from F-16a's run |
+| BUG-9 | Eval reports show 0 tokens and 0p for a case that errored, so each agent's cost undercounts; the run's total, from the usage ledger, is right | F-16a run B | Backlog, from F-16a's run |
+
 ## Not yet in a sprint (ranked)
 
 Re-ranked at the Sprint 8 close; Sprint 9 is above.
