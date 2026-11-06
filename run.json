@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "42206466513",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/studio/actions/runs/42206466513",
+  "repository": "rorymcclelland/studio",
+  "commit": "1ed9981abc292e45d15f1e290bc5e8326d254d7a",
+  "branch": "sprint-9-refinement",
+  "date": "2026-11-06T11:17:57.997Z",
+  "checksJob": "success"
+}
