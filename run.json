@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "42206544836",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/studio/actions/runs/42206544836",
+  "repository": "rorymcclelland/studio",
+  "commit": "ad2c30234c3484ffd4546203d12b726612eeea5c",
+  "branch": "f23-ruleset",
+  "date": "2026-11-06T11:13:11.914Z",
+  "checksJob": "success"
+}
