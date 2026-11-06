@@ -234,6 +234,8 @@ F-16a's first real-model runs (6 November; reports on `e2e-results/evals/sprint-
 | BUG-7 | Monitor answer: invited to forecast, the model wrote "next month"; the check refused it (nothing wrong was shown), but the person gets no answer | F-16a run B | Backlog, from F-16a's run |
 | BUG-8 | Pretest: one reply of six isn't valid JSON | F-16a run B | Backlog, from F-16a's run |
 | BUG-9 | Eval reports show 0 tokens and 0p for a case that errored, so each agent's cost undercounts; the run's total, from the usage ledger, is right | F-16a run B | Backlog, from F-16a's run |
+| BUG-10 | The monitor's answer check rounded half-way figures differently from the table (£8.335 shown as £8.34, checked as £8.33), so about 3.6% of correct answers were refused; it made P9-4.4's browser test flaky | Sprint 9 demo CI run (passed on a retry) | Done, Sprint 9: the check also accepts the figure exactly as the table shows it |
+| F-35 | The monitor workflow's plan and answer steps catch every error, so a transient database or Inngest error becomes a permanent "AI unreached" refusal instead of a retry | BUG-10 investigation | Backlog, from Sprint 9 |
 
 ## Not yet in a sprint (ranked)
 
