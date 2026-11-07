@@ -2,7 +2,9 @@
 
 A multi-agent campaign studio for marketing teams. Three squads of AI agents (Strategy, Creative and Performance) share one Business Context store and take a campaign from a one-line objective to on-brand creative that stays above its performance threshold. A person approves every consequential move.
 
-**Status: Sprint 8 of 11 closed (Creative and compliance complete); Sprint 9, the Performance squad, is next.** What works today:
+**About this project.** Studio is a demonstration, built to show how a team of AI agents can take on marketing production safely, and it has no commercial aim: it is not for sale, and it is not offered as a service. The idea was inspired by multi-agent campaign platforms I saw while working at Elsewhen. Studio was built independently, after I left, and uses none of Elsewhen's code, data, or designs. All brands and figures in the app are fictional or simulated.
+
+**Status: Sprint 9 of 11 (Performance I: simulator and monitor).** What works today:
 
 - sign-in by emailed link or invite, with each person in their own workspace;
 - brands and their Business Context;
@@ -11,9 +13,10 @@ A multi-agent campaign studio for marketing teams. Three squads of AI agents (St
 - compliance checks on every ad, including ads uploaded from outside Studio, with a person deciding anything that needs judgement;
 - a synthetic pre-test panel;
 - a launch pack of the ads that pass;
+- simulated launches, approved in the inbox, with a simulated clock a person moves, a performance view, alerts and plain-English questions about the results;
 - a full decision trail for every agent run, and a daily spending cap on every model call.
 
-The Performance squad (a simulator, monitoring, swaps and budget) arrives in Sprints 9 and 10. All brands and figures in the app are fictional or simulated.
+The rest of the Performance squad (fatigue forecasts, swaps and budget) arrives in Sprint 10. Every performance figure is simulated, and the app says so wherever it shows one.
 
 ## Stack
 

@@ -137,7 +137,7 @@ All of it on the public address.
 
 ### S4-3 Market agent (L)
 
-**The job.** The brief can only cite what the store holds, so it never says anything about the market. The Market agent adds outside evidence (category trends, seasonal timing, what rivals are doing, positioning gaps), each item with its sources. The roadmap's "Market Intelligence Monitor".
+**The job.** The brief can only cite what the store holds, so it never says anything about the market. The Market agent adds outside evidence (category trends, seasonal timing, what rivals are doing, positioning gaps), each item with its sources.
 
 **How it works.**
 - **"Refresh market notes"** on the brand page runs one Market agent call: Claude with Anthropic's web search tool. Searches are limited to 5 per run, and the request is limited to the UK and the brand's category.

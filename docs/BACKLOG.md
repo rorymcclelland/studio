@@ -120,7 +120,7 @@ Evidence: 418 unit, database and agent tests and 51 end-to-end specs passing; mo
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
-| F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Backlog |
+| F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Done, 6 Nov 2026: the repository is public, and a ruleset on `main` takes changes only through a pull request whose three CI checks pass on the latest code, so production deploys only checked code. Vercel's own "wait for checks" is not needed |
 | F-24 | The picture check looks for text only. For finance brands, ask it about faces too (a close-up face is refused in the prompt today, but a picture could still show one) | Sprint 5 production check (picture 3: correct, but only the prompt kept the face out) | Backlog, from Sprint 5 review |
 | F-25 | Make creative's worst case is 31p (every picture redrawn, every call repaired at full length) against the refined 20p; a typical run measured 14.7p. Options: one redraw across the four pictures, or a lower output allowance for repairs | Sprint 5 review, finding 9 | Backlog, from Sprint 5 review |
 | F-26 | Redraw existing ads with the current kit, at no AI cost, after a logo, palette or font change (today ads keep the kit they were made with, and a change means new pictures) | Sprint 5 build (decision 0014) | Backlog, from Sprint 5 review |
@@ -210,7 +210,7 @@ Picked, compliant ads launch into a simulation after an approval. The simulation
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| F-23 | Production deploys wait for the checks: Vercel's Deployment Checks, or a deploy hook from CI's last job | S | Ready, Sprint 9 |
+| F-23 | Production deploys wait for the checks | S | Done, Sprint 9: a ruleset on `main` (6 Nov) takes changes only through a pull request whose three CI checks pass on the latest code; Vercel's Deployment Checks aren't needed (decision 0026, amended) |
 | P9-1 | Launch a simulated campaign: budget, length, start date and KPI threshold; the pack's eligibility rule; approval in the inbox | M | Ready, Sprint 9 |
 | P9-2 | The simulator: daily results per ad from a seed, fatigue, weekends, UK bank holidays, Black Friday; a clock a person moves | L | Ready, Sprint 9 |
 | P9-3 | Performance dashboard and healthy spend share; one line on Studio's home | M | Ready, Sprint 9 |
@@ -279,3 +279,4 @@ Re-ranked at the Sprint 8 close; Sprint 9 is above.
 | 5 Nov 2026 | CI moves to its own Neon project, `campaign-studio-ci`, after Neon's storage alert; its key is scoped to that project (F-34, F-29; decision 0015 update) |
 | 6 Nov 2026 | Sprint 8 closed: C8-1 to C8-4, N-8d and N-8e done (Rory reported the hand checks passed); F-28a and N-7a carried into Sprint 9 (dated); no new findings. Sprint 9 (Performance I: simulator and monitor) refined, with F-23 and F-16a proposed to join |
 | 6 Nov 2026 | Sprint 9 confirmed (all seven as recommended): launches approved in the inbox; a clock a person moves; base rates from the seed, not the panel; learning spend outside the share; Deployment Checks or a deploy hook (F-23); Rory checks the eval key (F-16a); four KPI measures |
+| 6 Nov 2026 | Repository made public and renamed `studio`. A ruleset on `main` now requires a pull request whose three CI checks pass on the latest code (F-23 done) |

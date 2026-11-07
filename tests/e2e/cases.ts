@@ -1639,7 +1639,7 @@ export const CASES: Case[] = [
     checks: [
       {
         kind: "hand",
-        why: "It can't be a browser test, and it must not touch production: Claude checks it once, by hand. The evidence, a failing commit held back from promotion, is recorded in docs/decisions/0026-production-waits-for-ci.md once Vercel's Deployment Checks are on.",
+        why: "It can't be a browser test, and it must not touch production: Claude checks it once, by hand. The gate is the ruleset on main (decision 0026, amended 7 Nov): a pull request can't merge, so nothing reaches production, until CI's three checks pass on its latest commit. The evidence, GitHub refusing the Sprint 9 pull request's merge while its checks were still running, is recorded in docs/decisions/0026-production-waits-for-ci.md.",
       },
     ],
   },
@@ -1651,7 +1651,7 @@ export const CASES: Case[] = [
     checks: [
       {
         kind: "hand",
-        why: "Only a real merge to main shows it: Claude records the time from merge to live at the Sprint 9 deploy, after sign-off. Decision 0026 expects about 40 minutes, once CI has run.",
+        why: "Only a real merge to main shows it: Claude records the time from merge to live at the Sprint 9 deploy, after sign-off. With the ruleset, CI's wait (about 40 minutes) comes before the merge, so the time from merge to live is Vercel's build, a few minutes.",
       },
     ],
   },

@@ -211,10 +211,10 @@ describe("the case list", () => {
     expect(f23.map((c) => c.id)).toEqual(["F-23.1", "F-23.2"]);
     for (const c of f23) expect(c.sprint, c.id).toBe(9);
     expect(f23.map(caseKind)).toEqual(["hand", "hand"]);
-    // Case 1's evidence goes in decision 0026 once Deployment Checks are on; case 2 is timed at the Sprint 9 deploy.
+    // Case 1's gate is the ruleset on main (decision 0026, amended 7 Nov); case 2 is timed at the Sprint 9 deploy.
     expect(existsSync(join(root, "docs/decisions/0026-production-waits-for-ci.md"))).toBe(true);
-    expect(f23[0].checks).toEqual([{ kind: "hand", why: expect.stringMatching(/can't be a browser test.*must not touch production.*docs\/decisions\/0026-production-waits-for-ci\.md.*Deployment Checks/) }]);
-    expect(f23[1].checks).toEqual([{ kind: "hand", why: expect.stringMatching(/time from merge to live.*Sprint 9 deploy.*about 40 minutes/) }]);
+    expect(f23[0].checks).toEqual([{ kind: "hand", why: expect.stringMatching(/can't be a browser test.*must not touch production.*ruleset on main.*docs\/decisions\/0026-production-waits-for-ci\.md/) }]);
+    expect(f23[1].checks).toEqual([{ kind: "hand", why: expect.stringMatching(/time from merge to live.*Sprint 9 deploy.*before the merge/) }]);
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("F-16a")).toBeLessThan(order.indexOf("F-23"));
     expect(STORIES.find((s) => s.id === "F-23")).toEqual({ sprint: 9, id: "F-23", title: "Production deploys wait for the checks" });

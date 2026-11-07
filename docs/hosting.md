@@ -61,14 +61,14 @@ Only production sends email. Local work, CI and previews use the console mailer:
    Without a required variable, every page shows a configuration page naming it (for example a missing `RESEND_API_KEY` or `EMAIL_FROM` in production).
 3. **Settings → Deployment Protection → Vercel Authentication:** **Preview deployments only**. The production address stays public (the after-deploy Action needs it); the app still requires sign-in, and signed-out visitors see the welcome page.
 4. **Deploy by pushing to `main`.** After changing a variable, redeploy by pushing, or with Vercel's own **Redeploy** button. A redeploy made through the Vercel API from an earlier deployment reuses that deployment's variables, so a changed `DATABASE_URL` is not picked up.
-5. **Production waits for CI (F-23, decision 0026).** **Settings → Build and Deployment → Deployment Checks → Add Checks → GitHub**, then add CI's three jobs and mark each **Required**:
+5. **Production waits for CI (F-23, decision 0026).** The gate is on GitHub, not Vercel: the ruleset **Protect main** (GitHub → Settings → Rules → Rulesets) takes changes to `main` only through a pull request whose three CI checks pass on its latest commit, with the branch up to date with `main`, and nobody can bypass it:
    - `Typecheck, lint, unit and database tests, build`
    - `End-to-end (app, Inngest dev server, mock model)`
    - `Migrations and database tests on a Neon branch`
 
-   Vercel then builds each push to `main` straight away but only promotes it to the production address when all three pass, which takes about 40 minutes. If one fails, the previous deployment stays live and the new one shows **Checks failed** under **Deployments**. Previews are not held. Two merges to `main` close together cancel the first one's CI run (`cancel-in-progress`), so only the later commit is promoted; the earlier one's deployment stays held, which is expected.
+   So every commit Vercel deploys from `main` has already passed CI; the wait (about 40 minutes) comes before the merge, and the deploy itself takes a few minutes. A branch behind `main` must merge `main` in and pass CI again before it can merge. Vercel's own Deployment Checks are not needed.
 
-   **In an emergency** (production is broken and the fix can't wait for CI), open the held deployment under **Deployments** and choose **⋯ → Promote**, or use **Instant Rollback** on an earlier one. Say so in the next commit, so the skipped checks are on record.
+   **In an emergency** (production is broken and the fix can't wait for CI), use **Instant Rollback** on an earlier deployment in Vercel. A fix still goes through a pull request.
 
 ## 5. Inngest
 
