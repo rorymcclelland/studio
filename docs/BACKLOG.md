@@ -120,7 +120,7 @@ Evidence: 418 unit, database and agent tests and 51 end-to-end specs passing; mo
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
-| F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Backlog |
+| F-23 | Gate production on the checks: Vercel waits for GitHub's checks before a production deploy, and `main` takes changes only through pull requests whose checks pass. About ten minutes more per deploy; worth it before real users arrive. Today CI reports (and emails) but doesn't stop a deploy | Rory, 27 Oct 2026, after the real-Supabase job was made required | Done, 6 Nov 2026: the repository is public, and a ruleset on `main` takes changes only through a pull request whose three CI checks pass on the latest code, so production deploys only checked code. Vercel's own "wait for checks" is not needed |
 | F-24 | The picture check looks for text only. For finance brands, ask it about faces too (a close-up face is refused in the prompt today, but a picture could still show one) | Sprint 5 production check (picture 3: correct, but only the prompt kept the face out) | Backlog, from Sprint 5 review |
 | F-25 | Make creative's worst case is 31p (every picture redrawn, every call repaired at full length) against the refined 20p; a typical run measured 14.7p. Options: one redraw across the four pictures, or a lower output allowance for repairs | Sprint 5 review, finding 9 | Backlog, from Sprint 5 review |
 | F-26 | Redraw existing ads with the current kit, at no AI cost, after a logo, palette or font change (today ads keep the kit they were made with, and a change means new pictures) | Sprint 5 build (decision 0014) | Backlog, from Sprint 5 review |
@@ -207,7 +207,7 @@ Re-ranked at the Sprint 7 close; Sprint 8 is above.
 1. F-16a: the first real-model eval report and regression cases (S). Every production fix would have been caught by one. It would join Sprint 8 if room allows.
 2. F-30: don't swallow database errors inside transactions (S), with F-31.
 3. F-31: try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S).
-4. F-23: gate production deploys on the checks, before real users arrive (S).
+4. ~~F-23: gate production deploys on the checks, before real users arrive (S).~~ Done 6 Nov 2026 (ruleset on `main`).
 5. F-29: narrow the Neon API key (S).
 6. F-32: keep the results branch small (S).
 7. F-20: the persona facts check compares age and region (S).
@@ -240,3 +240,4 @@ Re-ranked at the Sprint 7 close; Sprint 8 is above.
 | 3 Nov 2026 | Sprint 8 (Compliance and pre-testing) refined; Rory took all seven answers as recommended: Studio's own thresholds in one config file, density not on banners, review items accepted inline, only the finance face rule fails on the model's word, unaccepted reviews left out of the pack, pre-test on a click, the 9:16 zone rule in Sprint 8 |
 | 3 Nov 2026 | Sprint 8 signed off from the demo page (CI run 41717589833) and deployed with Rory's approval: five migrations applied to preview, then production (both match a fresh build in all 11 fingerprint parts), merged to `main` as `3be96cf`; CI and After production deploy passed, health OK. Hand checks (N-8d, N-8e) follow on production |
 | 5 Nov 2026 | CI moves to its own Neon project, `campaign-studio-ci`, after Neon's storage alert; its key is scoped to that project (F-34, F-29; decision 0015 update) |
+| 6 Nov 2026 | Repository made public and renamed `studio`. A ruleset on `main` now requires a pull request whose three CI checks pass on the latest code (F-23 done) |
