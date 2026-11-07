@@ -222,18 +222,20 @@ Picked, compliant ads launch into a simulation after an approval. The simulation
 
 ## Where the F-16a eval findings now live
 
-F-16a's first real-model runs (6 November; reports on `e2e-results/evals/sprint-9`). Run A (brief, market) cost 57p and run B (copy, localise and the nine small agents) 83p. Every failure is a row here, for ranking at the Sprint 9 review. Imagery's three runs wait for the Google key.
+F-16a's first real-model runs (6 and 7 November; reports on `e2e-results/evals/sprint-9`). Run A (brief, market) cost 57p, run B (copy, localise and the nine small agents) 83p, and imagery's three parts 42p, 25p and 41p: £2.49 in all, each run under its £1 cap. Every failure is a row here, for ranking at the Sprint 9 review.
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
 | BUG-2 | Audience on Haiku: 0 of 4. Two replies aren't valid JSON; two put numbers in segment text, which the checks refuse | F-16a run B | Backlog, from F-16a's run |
 | BUG-3 | Persona on Haiku: 0 of 4. Two replies aren't valid JSON; two fail in the brief step (BUG-4) | F-16a run B | Backlog, from F-16a's run |
-| BUG-4 | The brief's quantities-in-words check refuses "most of", "Many people", "a good share of" and "Plenty of customers", and the brief keeps writing them: it fails cases in brief, copy, persona and testPlan. The prompt and the check disagree | F-16a runs A and B | Backlog, from F-16a's run |
+| BUG-4 | The brief's quantities-in-words check refuses "most of", "Many people", "a good share of" and "Plenty of customers", and the brief keeps writing them: it fails cases in brief, copy, persona, testPlan and imagery (whose cases make a brief first). The prompt and the check disagree | F-16a runs A, B and imagery part 2 | Backlog, from F-16a's run |
 | BUG-5 | Localise: 3 of 6. French and Spanish paid-social bodies don't fit 1080 × 1080 Full bleed; one French headline is 41 characters (limit 40) | F-16a run B | Backlog, from F-16a's run |
 | BUG-6 | Brief: the Quillmoor win-back brief mentions a guarantee; one insight cites more than the schema's four sources | F-16a run A | Backlog, from F-16a's run |
 | BUG-7 | Monitor answer: invited to forecast, the model wrote "next month"; the check refused it (nothing wrong was shown), but the person gets no answer | F-16a run B | Backlog, from F-16a's run |
 | BUG-8 | Pretest: one reply of six isn't valid JSON | F-16a run B | Backlog, from F-16a's run |
 | BUG-9 | Eval reports show 0 tokens and 0p for a case that errored, so each agent's cost undercounts; the run's total, from the usage ledger, is right | F-16a run B | Backlog, from F-16a's run |
+| BUG-11 | Imagery, Fernhollow winter range: the brief reached the image-prompt model with the brand's name in it, which invites the picture model to draw it as text (rule 8) | F-16a imagery part 3 | Backlog, from F-16a's run |
+| BUG-12 | Imagery, Fernhollow winter range: 3 of 4 pictures kept; one was dropped | F-16a imagery part 3 | Backlog, from F-16a's run |
 | BUG-10 | The monitor's answer check rounded half-way figures differently from the table (£8.335 shown as £8.34, checked as £8.33), so about 3.6% of correct answers were refused; it made P9-4.4's browser test flaky | Sprint 9 demo CI run (passed on a retry) | Done, Sprint 9: the check also accepts the figure exactly as the table shows it |
 | F-35 | The monitor workflow's plan and answer steps catch every error, so a transient database or Inngest error becomes a permanent "AI unreached" refusal instead of a retry | BUG-10 investigation | Backlog, from Sprint 9 |
 
