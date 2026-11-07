@@ -49,6 +49,20 @@
   --on-danger: #ffffff;
 
   --focus: #4f50cf;
+
+  /* Chart series (P9-3): one per ad, assigned in this fixed order and never
+     cycled. The order passes the dataviz validator on --surface (adjacent
+     colour-blind and normal-vision separation); slots 3, 4 and 5 are under
+     3:1 against it, so every chart has a legend and a table version. Text
+     never wears these colours. */
+  --chart-1: #2a78d6;
+  --chart-2: #eb6834;
+  --chart-3: #1baf7a;
+  --chart-4: #eda100;
+  --chart-5: #e87ba4;
+  --chart-6: #008300;
+  --chart-7: #6250d6;
+  --chart-8: #e34948;
   color-scheme: only light;
 }
 
@@ -75,6 +89,14 @@
   --color-danger: var(--danger);
   --color-on-danger: var(--on-danger);
   --color-focus: var(--focus);
+  --color-chart-1: var(--chart-1);
+  --color-chart-2: var(--chart-2);
+  --color-chart-3: var(--chart-3);
+  --color-chart-4: var(--chart-4);
+  --color-chart-5: var(--chart-5);
+  --color-chart-6: var(--chart-6);
+  --color-chart-7: var(--chart-7);
+  --color-chart-8: var(--chart-8);
 
   --font-sans: "Figtree Variable", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
 

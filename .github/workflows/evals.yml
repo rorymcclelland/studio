@@ -4,7 +4,12 @@ name: Real-model evals
 # key from a repository secret (it is never kept locally, rule 6). Each run is
 # capped at £1 (DAILY_CAP_PENCE, in a fresh eval database); give the key its
 # own spending limit in the Anthropic console, since several runs a day each
-# get their own pound. Reports are uploaded as an artifact to review and commit.
+# get their own pound.
+# F-16a: the estimate is printed (and put in the job summary) before anything
+# is spent, the run fails if its real cost is over 100p or an agent has no
+# report (scripts/eval-check.mjs), and the reports go to the branch
+# e2e-results/evals/<branch> as well as an artefact, because a cloud session
+# can't download Actions artefacts. CI's push trigger ignores e2e-results/**.
 
 permissions:
   contents: read
@@ -16,9 +21,14 @@ on:
         description: "Agents to evaluate, space-separated (empty for all)"
         required: false
         default: ""
+      part:
+        description: "Only part k of n of each agent's cases, for example 1/2 (empty for all)"
+        required: false
+        default: ""
 
 jobs:
   evals:
+    name: Real-model evals (capped at 100p)
     runs-on: ubuntu-latest
     services:
       postgres:
@@ -32,22 +42,117 @@ jobs:
       DAILY_CAP_PENCE: "100"
     steps:
       - uses: actions/checkout@v4
+        with:
+          # This job runs the evals with the key; it never pushes, so it keeps no token.
+          persist-credentials: false
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Estimate the cost before spending
+        env:
+          AGENTS: ${{ inputs.agents }}
+          PART: ${{ inputs.part }}
+        # No key here: unconfirmed, the runner prints the estimate and stops before any
+        # model call, so it exits non-zero by design. The estimate is a generous ceiling
+        # (8,000 tokens in and the full reply, twice, per case, plus pictures and searches);
+        # the cap is what limits spend.
+        run: |
+          set -uo pipefail
+          log="$RUNNER_TEMP/estimate.log"
+          # scripts/eval.mjs checks the agent names and --part.
+          npm run eval -- $AGENTS ${PART:+--part=$PART} --real > "$log" 2>&1 || true
+          total=$(grep -oE 'Real-model evals for [A-Za-z, ]+: up to about [0-9.]+p\.' "$log" | head -n 1 || true)
+          if [ -z "$total" ]; then
+            tail -n 60 "$log"
+            echo "::error title=No estimate::The runner printed no estimate, so nothing is spent."
+            exit 1
+          fi
+          echo "$total"
+          grep -oE 'Estimate for [A-Za-z]+: [0-9]+ cases, up to about [0-9.]+p\.' "$log" || true
+          pence=$(echo "$total" | sed -E 's/.* ([0-9.]+)p\.$/\1/')
+          {
+            echo "### Estimate before spending"
+            echo
+            echo "$total"
+            echo
+            grep -oE 'Estimate for [A-Za-z]+: [0-9]+ cases, up to about [0-9.]+p\.' "$log" | sed 's/^/- /' || true
+            echo
+            echo "The run is capped at ${DAILY_CAP_PENCE}p and fails if its real cost is over 100p."
+          } >> "$GITHUB_STEP_SUMMARY"
+          if awk -v p="$pence" -v c="$DAILY_CAP_PENCE" 'BEGIN { exit !(p > c) }'; then
+            echo "::warning title=Estimate over the cap::Up to about ${pence}p against a ${DAILY_CAP_PENCE}p cap: if the run needs it all, the cap stops it and the remaining cases are 'not run'. Run fewer agents at a time to cover them all."
+          fi
       - name: Run the evals
         env:
           AGENTS: ${{ inputs.agents }}
-          # Only this step sees the key, not npm install scripts (review 16).
+          PART: ${{ inputs.part }}
+          # Only this step sees the keys, not npm install scripts (review 16) or the estimate.
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-        # Agent names are checked by scripts/eval.mjs against the eval files.
-        run: npm run eval -- $AGENTS --yes
+          # Imagery draws its pictures with Google's image model (F-16a, Rory, 6 Nov).
+          GOOGLE_GENERATIVE_AI_API_KEY: ${{ secrets.GOOGLE_GENERATIVE_AI_API_KEY }}
+        # Agent names are checked by scripts/eval.mjs against the eval files. --max-pence: the
+        # run fails if the usage ledger's real cost is over 100p or an agent has no report
+        # (F-16a #1); the totals go in the job summary.
+        run: npm run eval -- $AGENTS ${PART:+--part=$PART} --yes --max-pence=100
       - name: Upload the reports
-        if: always()
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v4
         with:
           name: eval-reports
+          # The real-model reports only: mock reports go to evals/reports/mock.
           path: evals/reports/*.md
           if-no-files-found: warn
+
+  publish:
+    name: Push the reports to e2e-results/evals/<branch>
+    needs: evals
+    # Whether the evals passed or failed: a failed run's reports are what need reading.
+    if: ${{ !cancelled() }}
+    # One push at a time per branch: two runs' publish jobs each keep the reports already on the
+    # branch, so they wait for each other rather than force-push at once and lose a run's reports.
+    # GitHub keeps one waiting job per group and cancels an older waiting one, so a cancelled publish
+    # leaves that run's reports in its artefact only: re-run the job to add them to the branch.
+    concurrency:
+      group: eval-reports-${{ github.ref }}
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    # Only to push the reports branch below; this job has no key and runs no repository code.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get the reports from the eval job
+        continue-on-error: true
+        uses: actions/download-artifact@v4
+        with:
+          name: eval-reports
+          path: ${{ runner.temp }}/eval-results/evals/reports
+      - name: Push them to e2e-results/evals/<branch> as one orphan commit
+        env:
+          SOURCE_BRANCH: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          if ! ls "$RUNNER_TEMP/eval-results/evals/reports/"*.md > /dev/null 2>&1; then
+            echo "::warning title=No reports::The eval job wrote no reports, so nothing is pushed."
+            exit 0
+          fi
+          # An eval run is often one batch of several (each capped at 100p), so the reports
+          # already on the branch are kept; a report of the same name from this run replaces it.
+          if git fetch --depth=1 origin "refs/heads/e2e-results/evals/$SOURCE_BRANCH" 2> /dev/null; then
+            earlier="$RUNNER_TEMP/earlier-reports"
+            mkdir -p "$earlier"
+            git archive FETCH_HEAD | tar -x -C "$earlier"
+            cp -rn "$earlier/." "$RUNNER_TEMP/eval-results/"
+          fi
+          # A commit with no parent, made from the reports folder through a separate index, so
+          # the checkout is untouched; the push uses the checkout's token (contents: write).
+          export GIT_DIR="$GITHUB_WORKSPACE/.git" GIT_WORK_TREE="$RUNNER_TEMP/eval-results" GIT_INDEX_FILE="$RUNNER_TEMP/eval-results.index"
+          cd "$GIT_WORK_TREE"
+          git add --all
+          tree=$(git write-tree)
+          commit=$(GIT_AUTHOR_NAME="Studio CI" GIT_AUTHOR_EMAIL="ci@example.test" GIT_COMMITTER_NAME="Studio CI" GIT_COMMITTER_EMAIL="ci@example.test" \
+            git commit-tree "$tree" -m "Real-model eval reports: run $GITHUB_RUN_ID, $SOURCE_BRANCH at ${GITHUB_SHA::7}")
+          git push --force origin "$commit:refs/heads/e2e-results/evals/$SOURCE_BRANCH"
+          echo "Reports on e2e-results/evals/$SOURCE_BRANCH: $(ls evals/reports | tr '\n' ' ')"

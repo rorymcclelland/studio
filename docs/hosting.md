@@ -13,7 +13,7 @@ The sections below describe the set-up as it stands. The Cutover section and the
    | Branch | Holds | Used by |
    | --- | --- | --- |
    | `production` | the app's data | Vercel Production |
-   | `ci` | retired 5 November 2026: CI now has its own project (step 7) | nothing |
+   | `ci` | no longer used by CI (5 November 2026: CI has its own project, step 7), but kept: `preview` was made from it and Neon keeps a parent while a child exists | `preview`'s parent only |
    | `preview` | made from `ci`, every migration applied, demo data only | Vercel Preview |
 
    Never reset `preview` from `production`, so no invitee's data reaches a copy. The free plan allows 10 branches and 1 GB of storage per project, and every branch's writes count towards the project's storage.
@@ -61,12 +61,20 @@ Only production sends email. Local work, CI and previews use the console mailer:
    Without a required variable, every page shows a configuration page naming it (for example a missing `RESEND_API_KEY` or `EMAIL_FROM` in production).
 3. **Settings → Deployment Protection → Vercel Authentication:** **Preview deployments only**. The production address stays public (the after-deploy Action needs it); the app still requires sign-in, and signed-out visitors see the welcome page.
 4. **Deploy by pushing to `main`.** After changing a variable, redeploy by pushing, or with Vercel's own **Redeploy** button. A redeploy made through the Vercel API from an earlier deployment reuses that deployment's variables, so a changed `DATABASE_URL` is not picked up.
+5. **Production waits for CI (F-23, decision 0026).** The gate is on GitHub, not Vercel: the ruleset **Protect main** (GitHub → Settings → Rules → Rulesets) takes changes to `main` only through a pull request whose three CI checks pass on its latest commit, with the branch up to date with `main`, and nobody can bypass it:
+   - `Typecheck, lint, unit and database tests, build`
+   - `End-to-end (app, Inngest dev server, mock model)`
+   - `Migrations and database tests on a Neon branch`
+
+   So every commit Vercel deploys from `main` has already passed CI; the wait (about 40 minutes) comes before the merge, and the deploy itself takes a few minutes. A branch behind `main` must merge `main` in and pass CI again before it can merge. Vercel's own Deployment Checks are not needed.
+
+   **In an emergency** (production is broken and the fix can't wait for CI), use **Instant Rollback** on an earlier deployment in Vercel. A fix still goes through a pull request.
 
 ## 5. Inngest
 
 1. In Vercel, **Integrations → Browse Marketplace → Inngest → Install**, and connect it to the `campaign-studio` project. It creates the Inngest account, adds `INNGEST_EVENT_KEY` and `INNGEST_SIGNING_KEY` to the project, and registers the app at `/api/inngest`. Redeploy so the new variables take effect.
 2. In the Inngest dashboard, **Apps** lists `campaign-studio`, and **Functions** lists **Agent run**.
-3. On every push to `main`, the **After production deploy** GitHub Action waits until `/api/health` reports the new commit (up to 15 minutes), then resyncs Inngest and checks `agent-run` is served. If it fails, resync by hand (see "Notes").
+3. When CI passes on `main`, the **After production deploy** GitHub Action waits until `/api/health` reports the new commit (up to 15 minutes), then resyncs Inngest and checks `agent-run` is served. If it fails, resync by hand (see "Notes").
 
 ## 6. GitHub
 
@@ -183,8 +191,8 @@ Done once, in this order, after the Sprint 4 deploy. Steps 1 and 3 were replaced
 3. **Preview database (F-8).** A second free Supabase project, `campaign-studio-preview`, in London, with the same migrations. In Vercel, for **Preview** only, set `DATABASE_URL` to its transaction pooler string (port 6543), `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` to the preview project's (so previews sign in against their own users, review 7), and `MODEL_PROVIDER_OVERRIDE=mock`, so previews never spend or touch production data. Add your email as a user in the preview project (Authentication → Users → Add user) to sign in there; its built-in email reaches you as a team member.
 4. **Redeploy** production by pushing to GitHub (or Vercel's Redeploy button), so the new variables apply.
 5. **Public address (F-3).** Vercel → campaign-studio → Settings → Deployment Protection → **Vercel Authentication**: set it to protect **Preview deployments only** (not production). The app still requires sign-in; signed-out visitors see the welcome page.
-6. **Inngest sync after every deploy (F-15, F-17).** Nothing to set up: on every push to `main` the `After production deploy` GitHub Action waits until `/api/health` reports the new commit (up to 15 minutes), then syncs Inngest and checks `agent-run` is served. It needs the production address to be public (step 5). Vercel doesn't send this repo deployment events, so the Action doesn't rely on them. If it fails, use the manual resync above.
-7. **Real-model evals (F-16, optional).** GitHub → the repo → Settings → Secrets and variables → Actions → New repository secret `ANTHROPIC_API_KEY` (a key with its own spending limit). Run them from Actions → Real-model evals → Run workflow; the reports are attached to the run.
+6. **Inngest sync after every deploy (F-15, F-17).** Nothing to set up: when CI passes on `main` the `After production deploy` GitHub Action waits until `/api/health` reports the new commit (up to 15 minutes), then syncs Inngest and checks `agent-run` is served. It needs the production address to be public (step 5). Vercel doesn't send this repo deployment events, so the Action doesn't rely on them. If it fails, use the manual resync above.
+7. **Real-model evals (F-16, optional).** GitHub → the repo → Settings → Secrets and variables → Actions → New repository secret `ANTHROPIC_API_KEY` (a key with its own spending limit). Run them from Actions → Real-model evals → Run workflow. The job summary shows the estimate before anything is spent (worked out with no key), then each agent's model, pass rate and cost, and the total; the run fails if the total is over 100p or an agent has no report (F-16a). The reports are attached to the run and pushed to the branch `e2e-results/evals/<branch>` (one orphan commit, replaced each run), which a cloud session can read. The workflow has only the Anthropic key, so the Imagery cases that draw pictures can't draw them there (they need the Google key).
 
 **Inviting someone:** sign in, open the account menu → **Invites**, enter their email, copy the link and send it in your own message. It works once, for 7 days. If they lose their session later, make a new invite. Revoke an invite to stop the link, or to remove someone who has used it.
 

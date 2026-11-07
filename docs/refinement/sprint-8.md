@@ -303,3 +303,10 @@ No acceptance criteria changed. C8-1 to C8-4 and N-8e are Ready, Sprint 8. Build
 - Rory approved the deploy. The five Sprint 8 migrations were applied to the `preview` Neon branch, checked, then applied to `production`; both match a fresh build from `db/migrations` in all 11 fingerprint parts.
 - `sprint-8` merged to `main` as `3be96cf`, which also carried Sprint 7's sign-off pipeline (F-33). CI on `main` and After production deploy passed; `/api/health` reports database ok and commit `3be96cf`.
 - Still open before the close: the hand checks in `docs/testing/sprint-8-test-pack.md` (N-8e) and Sprint 7's (N-8d), F-28a's log watch to 9 November, and N-7a on or after 12 November.
+
+## Close (6 November 2026)
+
+- Rory reported the hand checks passed: HC-1 to HC-4 in `docs/testing/sprint-8-test-pack.md` (N-8e) and Sprint 7's four (N-8d).
+- C8-1 to C8-4, F-33, N-8d and N-8e are done. F-28a (log watch to 9 November) and N-7a (on or after 12 November) are dated, so they carry into Sprint 9.
+- No new findings came from the demo or the hand checks. F-34 and F-29, raised by Neon's storage alert during the sprint, were fixed on 5 November.
+- Next: Sprint 9, Performance I (`docs/refinement/sprint-9.md`).

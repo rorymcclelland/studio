@@ -39,6 +39,18 @@ export const TYPICAL_TOKENS = {
    * an answer per don't rule.
    */
   readAdOne: { input: 3_000, output: 2_000 },
+  /**
+   * P9-4: Ask about this campaign's plan step: the instructions (the plan's shape and the measure
+   * keys), the question and the campaign's ads by number and headline; a plan of about 100 tokens,
+   * rounded up for a repair-free reply with a long reason.
+   */
+  monitorPlan: { input: 3_000, output: 300 },
+  /**
+   * P9-4: the answer step: the instructions, the question and the query's result, which can be up
+   * to 30 rows (a day-by-day table) with each measure's value and how it is shown; up to three
+   * sentences back.
+   */
+  monitorAnswer: { input: 7_000, output: 300 },
 } as const;
 
 /** What a repair prompt adds to the first prompt besides the previous reply: the issues and the instructions. */
@@ -64,7 +76,7 @@ const round = (p: number) => Math.round(p * 10_000) / 10_000;
 /** A button that shows the typical cost only; the worst case is kept for any check against the cap. */
 const est = (pence: number, worstPence: number): Estimate => ({ pence: round(pence), worstPence: round(worstPence), label: aboutPence(pence) });
 
-type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise" | "pretest" | "readAd";
+type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise" | "pretest" | "readAd" | "monitorPlan" | "monitorAnswer";
 
 function modelCall(agent: ModelAgent, tokens: { input: number; output: number }, env: Env): number {
   const m = resolveAgentModel(agent, env);
@@ -174,4 +186,17 @@ export function pictureCheckEstimate(pictures: number, env: Env = process.env): 
   const worstPence = n * worstModelCall("imageCheck", TYPICAL_TOKENS.imageCheck.input, env);
   const label = n === 0 ? "nothing to check" : n === 1 ? `about ${smallPence(each)}` : `about ${smallPence(each)} a picture, ${smallPence(pence)} in all`;
   return { pence: round(pence), worstPence: round(worstPence), perPicturePence: round(each), label };
+}
+
+/**
+ * P9-4: Ask about this campaign: one Haiku call to plan the query and one to
+ * word the answer (about 0.1p a question); the query itself is code. The
+ * worst case repairs each call once (a plan that names an ad the campaign
+ * hasn't, an answer with a figure not in the result), each writing its full
+ * output allowance.
+ */
+export function askEstimate(env: Env = process.env): Estimate {
+  const pence = modelCall("monitorPlan", TYPICAL_TOKENS.monitorPlan, env) + modelCall("monitorAnswer", TYPICAL_TOKENS.monitorAnswer, env);
+  const worstPence = worstModelCall("monitorPlan", TYPICAL_TOKENS.monitorPlan.input, env) + worstModelCall("monitorAnswer", TYPICAL_TOKENS.monitorAnswer.input, env);
+  return { pence: round(pence), worstPence: round(worstPence), label: `about ${smallPence(pence)}` };
 }

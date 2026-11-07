@@ -150,8 +150,8 @@ Evidence: 532 unit, database and agent tests and 55 end-to-end specs; CI green o
 | --- | --- | --- | --- |
 | N-7a | After 12 November (Q6): remove the one-off copy Action, `scripts/copy-data.mjs`, `scripts/check-copy.mjs` and their test; the `cutover` environment and its secrets; Supabase's three Vercel variables; then pause and delete both Supabase projects (Rory) | N-7 split | Backlog, returned from Sprint 6; Ready, Sprint 7 |
 | F-28 | The `postgres` 3.4.9 patch (decision 0016): report the three bugs upstream, drop the patch when a release fixes them, and watch production's logs for connection errors for a week (behaviour under a real Vercel suspension is unverified) | Cutover day | Backlog, from Sprint 6 review; Ready, Sprint 7 |
-| F-29 | `NEON_API_KEY` is a repository secret, so CI on any branch can fetch any branch's connection string, production's included. Move the CI job to a GitHub environment or use a narrower key | Sprint 6 review, note | Done with F-34 once Rory swaps the key: `NEON_API_KEY` becomes a key scoped to the CI project only |
-| F-34 | Neon alert (early November): `campaign-studio` reached 100% of its 1 GB storage, which blocks writes on production. Cause: CI's throwaway branches in the same project (production has written 48 MB in all). Fix: CI in its own Neon project, `campaign-studio-ci` (decision 0015 update); then retire the old `ci` branch | Neon alert, Rory, 5 Nov 2026 | In progress: project made and CI pointed at it; waits for Rory's project-scoped key in GitHub and his approval to merge |
+| F-29 | `NEON_API_KEY` is a repository secret, so CI on any branch can fetch any branch's connection string, production's included. Move the CI job to a GitHub environment or use a narrower key | Sprint 6 review, note | Done, 5 Nov 2026 with F-34: `NEON_API_KEY` is now a key scoped to the CI project only |
+| F-34 | Neon alert (early November): `campaign-studio` reached 100% of its 1 GB storage, which blocks writes on production. Cause: CI's throwaway branches in the same project (production has written 48 MB in all). Fix: CI in its own Neon project, `campaign-studio-ci` (decision 0015 update); the old `ci` branch stays as `preview`'s parent | Neon alert, Rory, 5 Nov 2026 | Done, 5 Nov 2026 (merged as `85f4cc0` with Rory's approval; CI passed on the new project with his project-scoped key) |
 | F-31 | Try `postgres` 4.0.0 (released 29 Oct 2026, a rewrite of the connection code that checks for a closed connection before writing): upgrade on a branch, run the dropped-connection tests without the 3.4.9 patch, and drop the patch if they pass; keep it if not. Replaces reporting the 3.4.9 bugs upstream (F-28) | Sprint 7, F-28 | Backlog, from Sprint 7 (Rory, 2 Nov) |
 | F-30 | A database error caught inside an `asUser` callback could let later statements run on a connection that has reconnected, outside the transaction and its role. Don't swallow database errors there; optionally make a transaction refuse statements after its connection closes | Connection-fix review, note | Backlog, from Sprint 6 review |
 | F-23 | Folded: on this plan GitHub doesn't enforce required checks or reviewers on a private repository, so F-23 needs Vercel's own "wait for checks" or a plan change | Sprint 6 review | Folded into F-23 |
@@ -184,37 +184,74 @@ Evidence: 718 unit, database and agent tests and 33 browser tests (22 Sprint 7 c
 | F-33 | Merge the sign-off pipeline, QA test fixes and the `data-words` attribute to `main` (a production deploy, with nothing visible to users), once Rory approves the deploy | Sprint 7 close | Done, Sprint 8 (deployed with Sprint 8 at `3be96cf`, 3 November) |
 | QA-7 | Folded: the independent QA review's 12 findings on the Sprint 7 tests | Sprint 7 QA review | Fixed in Sprint 7 (`68999d5`), before the demo |
 
-## Sprint 8: Compliance and pre-testing (confirmed and refined 3 November 2026)
+## Sprint 8: Compliance and pre-testing (closed 6 November 2026)
 
 Every ad in the pack checked against the brand's and the channel's rules in every size and language, as pass, review or fail with the reason and a fix; a synthetic panel scores picked ads before spend. Demo gate 2. Detail: `docs/refinement/sprint-8.md`.
 
 | ID | Item | Size | Status |
 | --- | --- | --- | --- |
-| C8-1 | Compliance checks in code: contrast margin, legal lines, banned terms, logo safe zone, text density, 9:16 platform zones, don't rules for a person; decisions recorded; the pack holds only ads that pass or are accepted | L | Ready, Sprint 8 |
-| C8-2 | Vision checks for judgement calls (faces for finance brands, the kit's don't rules), with F-24 folded in; Check pictures for older campaigns | M | Ready, Sprint 8 |
-| C8-3 | Check an uploaded ad: words read by AI, checked in code; estimates labelled | M | Ready, Sprint 8 |
-| C8-4 | Pre-test panel: the brief's personas score picked ads, labelled synthetic | M | Ready, Sprint 8 (first to move if over) |
+| C8-1 | Compliance checks in code: contrast margin, legal lines, banned terms, logo safe zone, text density, 9:16 platform zones, don't rules for a person; decisions recorded; the pack holds only ads that pass or are accepted | L | Done, Sprint 8 (signed off 3 Nov, CI run 41717589833; deployed as `3be96cf`) |
+| C8-2 | Vision checks for judgement calls (faces for finance brands, the kit's don't rules), with F-24 folded in; Check pictures for older campaigns | M | Done, Sprint 8. Residual: real-model judgement is a hand check (N-8e, passed) |
+| C8-3 | Check an uploaded ad: words read by AI, checked in code; estimates labelled | M | Done, Sprint 8 (upload limit 4 MB, decision 0025) |
+| C8-4 | Pre-test panel: the brief's personas score picked ads, labelled synthetic | M | Done, Sprint 8 |
 | F-33 | Merge Sprint 7's tests and pipeline to `main` | S | Done, Sprint 8 (merged with Sprint 8 at `3be96cf`) |
-| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Ready, Sprint 8 |
-| F-28a | Watch production's logs until 9 November | S | Ready, Sprint 8 |
-| N-8d | Rory's Sprint 7 hand checks | S | Ready, Sprint 8 |
-| N-8e | Sprint 8 test pack, hand checks of real AI output only | S | Ready, Sprint 8 |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Returned from Sprint 8 (waits for 12 Nov); carried into Sprint 9 |
+| F-28a | Watch production's logs until 9 November | S | Returned from Sprint 8 (runs to 9 Nov); carried into Sprint 9 |
+| N-8d | Rory's Sprint 7 hand checks | S | Done, Sprint 8 (Rory reported them passed, 6 Nov) |
+| N-8e | Sprint 8 test pack, hand checks of real AI output only | S | Done, Sprint 8 (`docs/testing/sprint-8-test-pack.md`; Rory reported HC-1 to HC-4 passed, 6 Nov) |
+
+## Where the Sprint 8 review items now live
+
+No new findings came from the demo or the hand checks. The two items raised during the sprint, F-34 (Neon storage) and F-29 (the narrow key), are in the Sprint 6 table above, both done on 5 November.
+
+## Sprint 9: Performance I, the simulator and monitor (refined and confirmed 6 November 2026)
+
+Picked, compliant ads launch into a simulation after an approval. The simulation gives deterministic daily results, with fatigue and events. A Performance dashboard is headed by healthy spend share. A monitor raises alerts and answers questions from the stored results. Every figure is simulated and labelled. Detail: `docs/refinement/sprint-9.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-23 | Production deploys wait for the checks | S | Done, Sprint 9: a ruleset on `main` (6 Nov) takes changes only through a pull request whose three CI checks pass on the latest code; Vercel's Deployment Checks aren't needed (decision 0026, amended) |
+| P9-1 | Launch a simulated campaign: budget, length, start date and KPI threshold; the pack's eligibility rule; approval in the inbox | M | Ready, Sprint 9 |
+| P9-2 | The simulator: daily results per ad from a seed, fatigue, weekends, UK bank holidays, Black Friday; a clock a person moves | L | Ready, Sprint 9 |
+| P9-3 | Performance dashboard and healthy spend share; one line on Studio's home | M | Ready, Sprint 9 |
+| P9-4 | Monitor agent: alerts in code (below threshold, tiring, not compliant) and ask-your-data (a typed query plan, figures checked in the answer) | M | Ready, Sprint 9 (ask-your-data first to move if over) |
+| F-16a | First real-model eval run and report, with the production regression cases | S | Ready, Sprint 9 (Rory adds or checks the key in GitHub) |
+| F-28a | Watch production's logs until 9 November | S | Carried from Sprint 8 |
+| N-7a | Remove the cutover pieces and Supabase, on or after 12 November | S | Carried from Sprint 8 |
+| N-9a | Sprint 9 test pack, hand checks of real AI output only (the monitor's answers) | S | Ready, Sprint 9 |
+
+## Where the F-16a eval findings now live
+
+F-16a's first real-model runs (6 and 7 November; reports on `e2e-results/evals/sprint-9`). Run A (brief, market) cost 57p, run B (copy, localise and the nine small agents) 83p, and imagery's three parts 42p, 25p and 41p: £2.49 in all, each run under its £1 cap. Every failure is a row here, for ranking at the Sprint 9 review.
+
+| ID | Item | Source | Status |
+| --- | --- | --- | --- |
+| BUG-2 | Audience on Haiku: 0 of 4. Two replies aren't valid JSON; two put numbers in segment text, which the checks refuse | F-16a run B | Backlog, from F-16a's run |
+| BUG-3 | Persona on Haiku: 0 of 4. Two replies aren't valid JSON; two fail in the brief step (BUG-4) | F-16a run B | Backlog, from F-16a's run |
+| BUG-4 | The brief's quantities-in-words check refuses "most of", "Many people", "a good share of" and "Plenty of customers", and the brief keeps writing them: it fails cases in brief, copy, persona, testPlan and imagery (whose cases make a brief first). The prompt and the check disagree | F-16a runs A, B and imagery part 2 | Backlog, from F-16a's run |
+| BUG-5 | Localise: 3 of 6. French and Spanish paid-social bodies don't fit 1080 × 1080 Full bleed; one French headline is 41 characters (limit 40) | F-16a run B | Backlog, from F-16a's run |
+| BUG-6 | Brief: the Quillmoor win-back brief mentions a guarantee; one insight cites more than the schema's four sources | F-16a run A | Backlog, from F-16a's run |
+| BUG-7 | Monitor answer: invited to forecast, the model wrote "next month"; the check refused it (nothing wrong was shown), but the person gets no answer | F-16a run B | Backlog, from F-16a's run |
+| BUG-8 | Pretest: one reply of six isn't valid JSON | F-16a run B | Backlog, from F-16a's run |
+| BUG-9 | Eval reports show 0 tokens and 0p for a case that errored, so each agent's cost undercounts; the run's total, from the usage ledger, is right | F-16a run B | Backlog, from F-16a's run |
+| BUG-11 | Imagery, Fernhollow winter range: the brief reached the image-prompt model with the brand's name in it, which invites the picture model to draw it as text (rule 8) | F-16a imagery part 3 | Backlog, from F-16a's run |
+| BUG-12 | Imagery, Fernhollow winter range: 3 of 4 pictures kept; one was dropped | F-16a imagery part 3 | Backlog, from F-16a's run |
+| BUG-10 | The monitor's answer check rounded half-way figures differently from the table (£8.335 shown as £8.34, checked as £8.33), so about 3.6% of correct answers were refused; it made P9-4.4's browser test flaky | Sprint 9 demo CI run (passed on a retry) | Done, Sprint 9: the check also accepts the figure exactly as the table shows it |
+| F-35 | The monitor workflow's plan and answer steps catch every error, so a transient database or Inngest error becomes a permanent "AI unreached" refusal instead of a retry | BUG-10 investigation | Backlog, from Sprint 9 |
 
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 7 close; Sprint 8 is above.
+Re-ranked at the Sprint 8 close; Sprint 9 is above.
 
-1. F-16a: the first real-model eval report and regression cases (S). Every production fix would have been caught by one. It would join Sprint 8 if room allows.
-2. F-30: don't swallow database errors inside transactions (S), with F-31.
-3. F-31: try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S).
-4. ~~F-23: gate production deploys on the checks, before real users arrive (S).~~ Done 6 Nov 2026 (ruleset on `main`).
-5. F-29: narrow the Neon API key (S).
-6. F-32: keep the results branch small (S).
-7. F-20: the persona facts check compares age and region (S).
-8. F-19: withdrawn sign-offs get their own state (S).
-9. F-25: a cheaper worst case for Make creative (S).
-10. F-9: the dark theme, once the light design system has settled.
-11. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
+1. F-30: don't swallow database errors inside transactions (S), with F-31.
+2. F-31: try `postgres` 4.0.0 and drop the patch if the dropped-connection tests pass (S).
+3. F-32: keep the results branch small (S). Sprint 9 adds recordings, so it moves up.
+4. F-20: the persona facts check compares age and region (S).
+5. F-19: withdrawn sign-offs get their own state (S).
+6. F-25: a cheaper worst case for Make creative (S).
+7. F-9: the dark theme, once the light design system has settled.
+8. Sprint 10 (Performance II: fatigue forecasts, swaps, diagnostics, budget, and the test plan's sample sizes) and Sprint 11 (the flywheel, demo mode and launch), from the roadmap.
+9. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
 
 ## Decisions
 
@@ -240,4 +277,6 @@ Re-ranked at the Sprint 7 close; Sprint 8 is above.
 | 3 Nov 2026 | Sprint 8 (Compliance and pre-testing) refined; Rory took all seven answers as recommended: Studio's own thresholds in one config file, density not on banners, review items accepted inline, only the finance face rule fails on the model's word, unaccepted reviews left out of the pack, pre-test on a click, the 9:16 zone rule in Sprint 8 |
 | 3 Nov 2026 | Sprint 8 signed off from the demo page (CI run 41717589833) and deployed with Rory's approval: five migrations applied to preview, then production (both match a fresh build in all 11 fingerprint parts), merged to `main` as `3be96cf`; CI and After production deploy passed, health OK. Hand checks (N-8d, N-8e) follow on production |
 | 5 Nov 2026 | CI moves to its own Neon project, `campaign-studio-ci`, after Neon's storage alert; its key is scoped to that project (F-34, F-29; decision 0015 update) |
+| 6 Nov 2026 | Sprint 8 closed: C8-1 to C8-4, N-8d and N-8e done (Rory reported the hand checks passed); F-28a and N-7a carried into Sprint 9 (dated); no new findings. Sprint 9 (Performance I: simulator and monitor) refined, with F-23 and F-16a proposed to join |
+| 6 Nov 2026 | Sprint 9 confirmed (all seven as recommended): launches approved in the inbox; a clock a person moves; base rates from the seed, not the panel; learning spend outside the share; Deployment Checks or a deploy hook (F-23); Rory checks the eval key (F-16a); four KPI measures |
 | 6 Nov 2026 | Repository made public and renamed `studio`. A ruleset on `main` now requires a pull request whose three CI checks pass on the latest code (F-23 done) |

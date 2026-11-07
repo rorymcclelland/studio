@@ -35,6 +35,10 @@ export const AGENT_MODELS = {
   // C8-3: Check an ad reads an uploaded ad on Haiku with vision (about 0.1p a check). Up to
   // 80 lines of words, each with its box, the logo, the face and up to 20 don't rules.
   readAd: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 4000 },
+  // P9-4: the Monitor's two steps on Haiku (about 0.1p a question). A plan is about 100 tokens
+  // of JSON; an answer is up to three sentences (the output allows 600 characters).
+  monitorPlan: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 600 },
+  monitorAnswer: { provider: "anthropic", model: "claude-haiku-5-5", maxOutputTokens: 400 },
 } satisfies Record<string, AgentModelConfig>;
 
 export type AgentKey = keyof typeof AGENT_MODELS;

@@ -7,6 +7,7 @@ import { executeCreativeRun } from "./creative-workflow";
 import { executeImageryRun } from "./imagery-workflow";
 import { executeLocaliseRun } from "./localise-workflow";
 import { executeMarketRun } from "./market-workflow";
+import { executeMonitorRun } from "./monitor-workflow";
 import { executePersonaRun, executeTestPlanRun } from "./review-workflows";
 import { executePictureCheckRun } from "./picture-check-workflow";
 import { executePretestRun } from "./pretest-workflow";
@@ -38,6 +39,8 @@ export const WORKFLOWS: Record<string, Workflow> = {
   creative: executeCreativeRun,
   // C8-2: Check pictures (the picture check on pictures made before it asked about faces and don't rules).
   pictureCheck: executePictureCheckRun,
+  // P9-4: Ask about this campaign (the Monitor: plan the query, run it in code, write the answer).
+  monitorPlan: executeMonitorRun,
 };
 
 /** Names for workflows that aren't model agents (run lists fall back to these). */

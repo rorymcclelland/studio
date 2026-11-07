@@ -10,6 +10,7 @@ import { listMarketNotes, type MarketNote } from "@/lib/strategy/market";
 import { getCreative } from "@/lib/creative/gallery";
 import { packSummary, planPack } from "@/lib/creative/pack";
 import { galleryCompliance } from "@/lib/compliance/compute";
+import { launchEligibility, launchesFor } from "@/lib/performance/launch";
 import { daysSince } from "@/components/format-day";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { StatusBadge } from "@/components/status-badge";
@@ -30,6 +31,7 @@ import {
   type Sources,
 } from "./brief-view";
 import { CreativeSection } from "./creative-section";
+import type { LaunchPanelData } from "./launch-panel";
 import { PersonasSection, TestPlanSection } from "./review-sections";
 import { MARKET_WARNING_DAYS, SignoffPanel, type OldMarketSource } from "./signoff-panel";
 
@@ -55,15 +57,30 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
   ]);
   if (viewing !== null && !old) notFound();
   // C7-3: what the launch pack will hold, fitted without drawing; it streams in beside the gallery.
-  const pack =
+  const planned =
     creative && viewing === null && creative.signedOff && creative.variants.length > 0
-      ? planPack(member.userId, campaign.id, creative).then(
-          (p) => (p ? packSummary(p) : null),
-          (err: unknown) => {
-            console.error("[pack] the launch pack couldn't be planned", err instanceof Error ? err.message : String(err));
-            return null;
-          },
-        )
+      ? planPack(member.userId, campaign.id, creative).catch((err: unknown) => {
+          console.error("[pack] the launch pack couldn't be planned", err instanceof Error ? err.message : String(err));
+          return null;
+        })
+      : null;
+  const pack = planned ? planned.then((p) => (p ? packSummary(p) : null)) : null;
+  // P9-1: the Launch (simulated) panel, built on the same plan (the pack's rule), streamed in after the pack.
+  const launch =
+    creative && viewing === null && creative.variants.length > 0
+      ? (async (): Promise<LaunchPanelData | null> => {
+          const plan = planned ? await planned : undefined;
+          // A plan that couldn't be made shows no panel, as it shows no pack.
+          if (plan === null) return null;
+          const [eligibility, launches] = await Promise.all([
+            launchEligibility(member.userId, campaign.id, plan === undefined ? {} : { plan }),
+            launchesFor(member.userId, campaign.id),
+          ]);
+          return eligibility && launches ? { eligibility, launches } : null;
+        })().catch((err: unknown) => {
+          console.error("[launch] the launch panel couldn't be built", err instanceof Error ? err.message : String(err));
+          return null;
+        })
       : null;
   // C8-1: each ad's compliance pill and the picked ads' summary line, worked out without drawing; they stream in too.
   const compliance =
@@ -159,7 +176,7 @@ async function CampaignPageContent(props: PageProps<"/campaigns/[id]">) {
           />
           <PersonasSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
           <TestPlanSection campaignId={campaign.id} currentVersion={campaign.currentVersion} reviews={reviews} />
-          {creative && <CreativeSection view={creative} pack={pack} compliance={compliance} />}
+          {creative && <CreativeSection view={creative} pack={pack} compliance={compliance} launch={launch} />}
         </>
       )}
 

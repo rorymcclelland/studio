@@ -1,0 +1,50 @@
+{
+  "case": "Market (listed under the brief in the refinement): the possessive names",
+  "source": "docs/refinement/sprint-4.md, Production check notes, \"26 Oct, second real Market run (Quillmoor): failed its checks, 14p, 42 s\": the name check flagged \"YouGov's\", \"UK's\", \"UK-focused\" and \"AER\"; and \"26 Oct, third real Market run\": one note left out over a false name flag (\"More UK\"). Fixed in code by commits ce2ceef (possessives, hyphenated words, finance abbreviations, sentence openers) and fc78c51 (\"Britons\", \"Brits\", \"More\")",
+  "provenance": "reconstructed",
+  "provenanceNote": "The production replies are in production's agent_steps and were never copied into the repository, so this is a reconstruction. Quoted from the production notes: the flagged words YouGov's, UK's, UK-focused, AER and More UK. The sentences follow ce2ceef's own test sentences; the bank in the third note is fictional (the real one in ce2ceef's test is left out here). Figures are left out so only the name check is in question; pages are example.com placeholders.",
+  "fixedIn": "code",
+  "input": { "brandName": "Quillmoor Money", "category": "Personal finance app", "description": "A budgeting and savings app.", "products": ["Plus plan"], "bannedTerms": ["guaranteed returns"], "places": [], "month": "October 2026" },
+  "pages": [
+    { "url": "https://www.example.com/financial-outlook", "title": "Financial outlook (example page)" },
+    { "url": "https://www.example.com/savings-rates", "title": "Savings rates (example page)" },
+    { "url": "https://www.example.com/budgeting-apps", "title": "Budgeting apps (example page)" }
+  ],
+  "reply": {
+    "notes": [
+      {
+        "kind": "trend",
+        "title": "Budgeting is on people's minds",
+        "text": "YouGov's UK financial outlook looks at how adults plan their spending, and budgeting comes up again and again.",
+        "sources": ["https://www.example.com/financial-outlook"],
+        "names": ["YouGov"]
+      },
+      {
+        "kind": "gap",
+        "title": "Easy-access savers want simple rates",
+        "text": "Among UK savers, simple easy-access accounts paying a clear AER on an ISA are what people look for. It fills a gap the UK-focused apps miss.",
+        "sources": ["https://www.example.com/savings-rates"],
+        "names": []
+      },
+      {
+        "kind": "rival_move",
+        "title": "A bank added a budgeting assistant",
+        "text": "Harbourline Bank launched the UK's first budgeting assistant inside its current account app.",
+        "sources": ["https://www.example.com/budgeting-apps"],
+        "names": ["Harbourline Bank"]
+      },
+      {
+        "kind": "timing",
+        "title": "New year, new budget",
+        "text": "More UK adults look for budgeting help in January than in any other month.",
+        "sources": ["https://www.example.com/budgeting-apps"],
+        "names": []
+      }
+    ]
+  },
+  "stillRefused": {
+    "why": "A real-looking company named without being declared is still refused after the fix.",
+    "text": "Rates at Northbank Savings fell, and Northbank Savings's customers moved their money.",
+    "expectName": "Northbank Savings"
+  }
+}

@@ -141,8 +141,11 @@ jobs:
     # CI has its own Neon project, campaign-studio-ci, so its writes never count against
     # production's 1 GB storage allowance (F-34, 5 Nov 2026), and NEON_API_KEY is a key
     # scoped to that project only, so CI can't reach production (F-29).
+    # main has its own lane (F-23): GitHub keeps one waiting run per group and
+    # cancels the rest, so a branch push could cancel main's run of this required
+    # check, and Vercel's Deployment Checks would then never promote that commit.
     concurrency:
-      group: neon-ci-branch
+      group: neon-ci-branch-${{ github.ref == 'refs/heads/main' && 'main' || 'branches' }}
       cancel-in-progress: false
     env:
       NEON_PROJECT_ID: little-shadow-88992377

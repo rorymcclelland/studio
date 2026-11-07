@@ -1,0 +1,13 @@
+{
+  "case": "Monitor answer: a figure not in the result, and a forecast",
+  "source": "docs/refinement/sprint-9.md, P9-4 test case 5: an answer that states a figure not in the result (\"about 40% better\"), or a forecast (\"will reach...\"), is repaired once and then refused",
+  "provenance": "from the refinement",
+  "provenanceNote": "P9-4 has not reached production, so no production reply broke it. These are the bad answers P9-4's agreed case 5 names, quoted from the refinement and completed into sentences; {top} and {figure} are filled in by the test from the result the eval case uses (the demo launch's simulated rows at day 14), so the good answer always names the top ad with its figure as shown.",
+  "fixedIn": "code (checkAnswer, with one repair)",
+  "question": "Which ad had the lowest cost per acquisition last week?",
+  "bad": [
+    { "why": "a figure that isn't in the result", "answer": "Ad {top} was about 40% better than the others last week." },
+    { "why": "a forecast", "answer": "Ad {top} had the lowest cost per acquisition last week, at {figure}, and will reach an even lower cost next week." }
+  ],
+  "good": "Ad {top} had the lowest cost per acquisition last week, at {figure}."
+}

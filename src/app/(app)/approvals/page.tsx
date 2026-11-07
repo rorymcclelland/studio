@@ -13,6 +13,9 @@ import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatWhen } from "@/lib/format";
 import { PersonaAverages, PLAN_NOTE, TestPlanSummary } from "../campaigns/[id]/reviews-view";
 import { SignoffDecision } from "./signoff-decision";
+import { LaunchDecision } from "./launch-decision";
+import { LaunchAdList, startDay } from "../campaigns/[id]/launch-view";
+import { formatPounds, NO_REAL_MONEY, thresholdPhrase } from "@/lib/performance/launch-rules";
 
 export const metadata = { title: "Approvals" };
 
@@ -20,6 +23,7 @@ const RUNNING = new Set(["queued", "running"]);
 
 type SignoffItem = Extract<InboxItem, { kind: "brief_signoff" }>;
 type ChoiceItem = Extract<InboxItem, { kind: "run_choice" }>;
+type LaunchItem = Extract<InboxItem, { kind: "launch" }>;
 
 async function ApprovalsContent() {
   const member = await requireMember();
@@ -48,8 +52,8 @@ async function ApprovalsContent() {
       {items.length === 0 ? (
         <EmptyState title="Nothing is waiting for you" headingLevel={2}>
           <p>
-            When a brief is sent for sign-off, or an agent run needs a choice, it appears here. Briefs are sent for sign-off
-            from their campaign page.
+            When a brief is sent for sign-off, a campaign asks to launch, or an agent run needs a choice, it appears here.
+            Briefs are sent for sign-off, and campaigns launched, from their campaign page.
           </p>
           <p className="mt-3">
             <TextLink href="/campaigns">Go to the campaigns</TextLink>
@@ -60,6 +64,8 @@ async function ApprovalsContent() {
           {items.map((item) =>
             item.kind === "brief_signoff" ? (
               <SignoffCard key={item.id} item={item} reviews={reviews.get(item.id)!} />
+            ) : item.kind === "launch" ? (
+              <LaunchCard key={item.id} item={item} />
             ) : (
               <ChoiceCard key={item.id} item={item} />
             ),
@@ -151,6 +157,60 @@ function Preparing({ run, what, none }: { run: Reviews["runs"][number] | null; w
     );
   }
   return <p className="mt-2 text-ink-2">{none}</p>;
+}
+
+/** P9-1: a launch into the simulation, with what the person approves: the ads, budget, length and threshold. */
+function LaunchCard({ item }: { item: LaunchItem }) {
+  const heading = `approval-${item.id}`;
+  return (
+    <Card as="li" tone="review" aria-labelledby={heading} data-inbox-item="launch" className="space-y-5">
+      <div>
+        <p className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+          <Pill tone="review">Launch (simulated)</Pill>
+          <TextLink href={`/brands/${item.brand.id}`}>{item.brand.name}</TextLink>
+          <span className="text-ink-2">Asked for {formatWhen(item.createdAt)}</span>
+        </p>
+        <h2 id={heading} className="mt-3 text-2xl font-strong tracking-tight wrap-anywhere">
+          {item.question}
+        </h2>
+        <p className="mt-2 max-w-prose wrap-anywhere">
+          <span className="font-semibold">Objective: </span>
+          {item.objective}
+        </p>
+        <p className="mt-2 max-w-prose font-semibold text-review-ink">{NO_REAL_MONEY}</p>
+        <p className="mt-1 text-sm text-ink-2">Closes {formatDay(item.expiresAt)}. If nobody decides by then, the request closes and the campaign isn&apos;t launched.</p>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="min-w-0 rounded-field bg-bg p-4">
+          <h3 className="font-strong">The launch (simulated)</h3>
+          <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 text-sm">
+            <dt className="text-ink-2">Budget</dt>
+            <dd>{formatPounds(item.dailyBudgetPence)} a day (simulated)</dd>
+            <dt className="text-ink-2">Length</dt>
+            <dd>{item.days} days</dd>
+            <dt className="text-ink-2">Starts</dt>
+            <dd>{startDay(item.startsOn)}</dd>
+            <dt className="text-ink-2">Threshold</dt>
+            <dd className="wrap-anywhere">{thresholdPhrase(item.kpiMeasure, item.kpiValue)}, for every ad</dd>
+          </dl>
+        </div>
+        <div className="min-w-0 rounded-field bg-bg p-4">
+          <h3 className="font-strong">
+            {item.ads.length === 1 ? "1 ad" : `${item.ads.length} ads`} to launch
+          </h3>
+          <div className="mt-2">
+            <LaunchAdList ads={item.ads} label="Ads in this launch" />
+          </div>
+        </div>
+      </div>
+
+      <p>
+        <TextLink href={`/campaigns/${item.campaignId}`}>See the ads on the campaign</TextLink>
+      </p>
+      <LaunchDecision approvalId={item.id} />
+    </Card>
+  );
 }
 
 function ChoiceCard({ item }: { item: ChoiceItem }) {

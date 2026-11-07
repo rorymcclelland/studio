@@ -1,0 +1,35 @@
+{
+  "case": "Market (listed under the brief in the refinement): the long note",
+  "source": "docs/refinement/sprint-4.md, Production check notes, \"26 Oct, first real Market run (Quillmoor): failed, 30p\": one note ran past 500 characters (the schema's limit then, commit 62d3236); the repair could not search and was not shown the pages, so it wrote a search instead of JSON. Fixed by commit a33b51b: notes asked for 400 characters with the schema allowing 700, and the repair shown the pages found, told no tools are left, and given the whole earlier reply",
+  "provenance": "reconstructed",
+  "provenanceNote": "The production replies are in production's agent_steps and were never copied into the repository, so this is a reconstruction. The production notes record that a note ran past 500 characters and that the repair wrote a search instead of JSON, but not their words or the note's exact length. The note here is written for this fixture at 555 characters (between the old limit and the new one); its pages are example.com placeholders whose text holds the note's figures; the repair's words are written to match \"wrote a search instead of JSON\". Simulated: no real page is cited.",
+  "fixedIn": "prompt, schema and repair",
+  "input": { "brandName": "Quillmoor Money", "category": "Personal finance app", "description": "A budgeting and savings app.", "products": ["Plus plan"], "bannedTerms": ["guaranteed returns"], "places": [], "month": "October 2026" },
+  "pages": [
+    { "url": "https://www.example.com/budgeting-survey-2026", "title": "Budgeting survey 2026 (example page)", "text": "In 2026, 41% of adults said they keep a monthly budget, up from 36% in 2025. Savers who budget are more likely to use round-ups." },
+    { "url": "https://www.example.com/january-money-habits", "title": "January money habits (example page)", "text": "January is the month when interest in budgeting peaks." }
+  ],
+  "reply": {
+    "notes": [
+      {
+        "kind": "trend",
+        "title": "Budgeting is growing among UK adults",
+        "text": "In 2026, 41% of adults said they keep a monthly budget, up from 36% in 2025, according to a national survey of money habits. The rise is steady rather than sudden, and it comes alongside wider use of round-ups and savings pots in budgeting apps. Savers who budget are more likely to use round-ups, which suggests that tools which make saving automatic are now part of how people manage their money rather than an extra. For a budgeting app, this points to messages about steady habits and small automatic steps, rather than one-off big changes in January.",
+        "sources": ["https://www.example.com/budgeting-survey-2026"],
+        "names": []
+      },
+      {
+        "kind": "timing",
+        "title": "January is the peak for budgeting interest",
+        "text": "January is the month when interest in budgeting peaks, so a return message lands best in the first weeks of the year.",
+        "sources": ["https://www.example.com/january-money-habits"],
+        "names": []
+      }
+    ]
+  },
+  "repairReply": "I'll run another search to find shorter sources for the first note. Searching for: UK budgeting survey 2026 summary",
+  "tooLongNote": {
+    "why": "A note over today's 700-character limit is still refused, and its repair is shown the pages found and told no tools are left.",
+    "length": 701
+  }
+}

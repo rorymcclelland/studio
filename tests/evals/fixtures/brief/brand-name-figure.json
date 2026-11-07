@@ -1,0 +1,37 @@
+{
+  "case": "Brief: the brand name read as a figure",
+  "source": "docs/refinement/sprint-4.md, Production check notes, \"26 Oct, first Quillmoor brief: failed, 5.1p, 37 s\"; fixed in code by commit 66e6794 (src/lib/brief/checks.ts, the FIGURE pattern)",
+  "provenance": "reconstructed",
+  "provenanceNote": "The production reply is in production's agent_steps and was never copied into the repository, so this is a reconstruction. Quoted from the production notes and 66e6794's test: the reply's words \"533 of 2,000 Quillmoor Money customers\" and the segment's words \"533 of 2,000 customers (26.6%) have not ordered in the 12 months\". Everything else (the other sections, the objective, the context items) is built around them so that only the figure check is in question. The production run's objective is not recorded; the objective here is the eval's Quillmoor win-back one. Simulated data: the demo brand and its customers are generated.",
+  "fixedIn": "code",
+  "objective": "Bring lapsed customers back to the Plus plan in January",
+  "context": [
+    { "ref": "C1", "kind": "brand_voice", "title": "Voice", "text": "Clear, calm, encouraging and honest. No exclamation marks." },
+    { "ref": "C2", "kind": "segment", "title": "Lapsed customers (no order in 12 months)", "text": "533 of 2,000 customers (26.6%) have not ordered in the 12 months to the data date. Simulated data." },
+    { "ref": "C3", "kind": "segment", "title": "Repeat customers (two or more orders)", "text": "1,443 customers (72.2%) have ordered more than once. Simulated data." },
+    { "ref": "C4", "kind": "product", "title": "Plus plan", "text": "Budgets, savings pots and round-ups in one plan. £4.99 a month." }
+  ],
+  "kit": { "legalLines": [], "bannedTerms": ["guaranteed returns"], "dontRules": [], "evidenceClaims": [] },
+  "reply": {
+    "title": "Plus, picked up where you left it",
+    "summary": "A calm January return to the Plus plan for customers who have not ordered in a year, built on the budgets and savings pots they already know.",
+    "story": "January is when people look at their money again. We remind lapsed customers that their Plus tools are still there, and show one clear first step back.",
+    "insights": [
+      { "text": "533 of 2,000 Quillmoor Money customers (26.6%) have not ordered in the 12 months to the data date.", "cites": ["C2"] },
+      { "text": "Repeat customers stay with the plan once they have used it more than once.", "cites": ["C3"] },
+      { "text": "The Plus plan costs £4.99 a month and holds budgets, savings pots and round-ups together.", "cites": ["C4"] }
+    ],
+    "audiences": [{ "segmentRef": "C2", "why": "They know the app already and need a calm reason to come back in January." }],
+    "channels": [
+      { "channel": "email", "role": "A plain reminder of what Plus still holds for them." },
+      { "channel": "app push", "role": "One gentle nudge in the first week of January." }
+    ],
+    "kpi": { "metric": "reactivation rate" },
+    "mustInclude": [],
+    "avoid": ["guaranteed returns"]
+  },
+  "stillRefused": {
+    "why": "The same shape with a figure the segment doesn't hold: the check must still refuse it after the fix.",
+    "insight": "612 of 2,000 Quillmoor Money customers (26.6%) have not ordered in the 12 months to the data date."
+  }
+}

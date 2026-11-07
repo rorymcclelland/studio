@@ -4,6 +4,7 @@ import { BriefEditError, CampaignError } from "@/lib/brief/repo";
 import { evidenceProblems, type KitLists } from "@/lib/brief/checks";
 import { contextById, realNamesFor } from "@/lib/brief/gather";
 import { storedBrief } from "@/lib/brief/schema";
+import { expireStaleLaunches, launchAdsFor, type LaunchAd, type LaunchAdView } from "@/lib/performance/launch";
 
 // S4-1: the approvals inbox, with brief sign-off as the first gate (rule 3).
 
@@ -132,38 +133,70 @@ export type InboxItem =
       brand: { id: string; name: string };
       objective: string;
     }
-  | { kind: "run_choice"; id: string; question: string; createdAt: Date; expiresAt: Date; runId: string; runLabel: string | null; agent: string };
+  | { kind: "run_choice"; id: string; question: string; createdAt: Date; expiresAt: Date; runId: string; runLabel: string | null; agent: string }
+  | {
+      /** P9-1: a launch into the simulation, waiting for a person (rule 3). */
+      kind: "launch";
+      id: string;
+      question: string;
+      createdAt: Date;
+      expiresAt: Date;
+      campaignId: string;
+      launchId: string;
+      brand: { id: string; name: string };
+      objective: string;
+      ads: LaunchAdView[];
+      dailyBudgetPence: number;
+      days: number;
+      startsOn: string;
+      kpiMeasure: string;
+      kpiValue: number;
+    };
 
-/** Everything waiting for a person, newest first. */
+/** Everything waiting for a person, newest first: open sign-offs and launch requests, and run choices whose run still waits. */
 export async function listInbox(userId: string): Promise<InboxItem[]> {
-  return asUser(userId, async (tx) => {
+  const rows = await asUser(userId, async (tx) => {
     await expireStaleSignoffs(tx);
-    const rows = await tx`
+    await expireStaleLaunches(tx);
+    return tx`
       select a.id, a.kind, a.question, a.created_at, a.expires_at, a.campaign_id, a.brief_version, a.run_id,
-        r.label as run_label, r.agent, c.objective, b.id as brand_id, b.name as brand_name
+        r.label as run_label, r.agent, c.objective, b.id as brand_id, b.name as brand_name,
+        l.id as launch_id, l.ads, l.daily_budget_pence, l.days, to_char(l.starts_on, 'YYYY-MM-DD') as starts_on,
+        l.kpi_measure, l.kpi_value::text as kpi_value
       from public.approvals a
       left join public.agent_runs r on r.id = a.run_id
       left join public.campaigns c on c.id = a.campaign_id
       left join public.brands b on b.id = c.brand_id
-      where a.status = 'pending' and a.expires_at > now()
-        and (a.kind = 'brief_signoff' or r.status = 'awaiting_approval')
+      left join public.launches l on l.approval_id = a.id and a.kind = 'launch'
+      where a.status = 'pending' and a.expires_at > now() and (a.kind in ('brief_signoff', 'launch') or r.status = 'awaiting_approval')
       order by a.created_at desc
       limit 100`;
-    return rows.map((r): InboxItem =>
-      r.kind === "brief_signoff"
-        ? {
-            kind: "brief_signoff", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at,
-            campaignId: r.campaign_id, version: r.brief_version, brand: { id: r.brand_id, name: r.brand_name }, objective: r.objective,
-          }
-        : { kind: "run_choice", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at, runId: r.run_id, runLabel: r.run_label, agent: r.agent },
-    );
   });
+  return Promise.all(
+    rows.map(async (r): Promise<InboxItem> => {
+      if (r.kind === "brief_signoff") {
+        return {
+          kind: "brief_signoff", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at,
+          campaignId: r.campaign_id, version: r.brief_version, brand: { id: r.brand_id, name: r.brand_name }, objective: r.objective,
+        };
+      }
+      if (r.kind === "launch") {
+        return {
+          kind: "launch", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at,
+          campaignId: r.campaign_id, launchId: r.launch_id, brand: { id: r.brand_id, name: r.brand_name }, objective: r.objective,
+          ads: await launchAdsFor(userId, r.campaign_id, (r.ads ?? []) as LaunchAd[]),
+          dailyBudgetPence: r.daily_budget_pence, days: r.days, startsOn: r.starts_on, kpiMeasure: r.kpi_measure, kpiValue: Number(r.kpi_value),
+        };
+      }
+      return { kind: "run_choice", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at, runId: r.run_id, runLabel: r.run_label, agent: r.agent };
+    }),
+  );
 }
 
 export async function inboxCount(userId: string): Promise<number> {
   const [r] = await asUser(userId, (tx) => tx`
     select count(*)::int as n from public.approvals a left join public.agent_runs r on r.id = a.run_id
-    where a.status = 'pending' and a.expires_at > now() and (a.kind = 'brief_signoff' or r.status = 'awaiting_approval')`);
+    where a.status = 'pending' and a.expires_at > now() and (a.kind in ('brief_signoff', 'launch') or r.status = 'awaiting_approval')`);
   return r.n as number;
 }
 

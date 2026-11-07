@@ -5,11 +5,15 @@ import { listRuns, runTitle } from "@/lib/agents/runs";
 import { knownAgentName } from "@/lib/agents/names";
 import { StatusBadge, statusRingTone } from "@/components/status-badge";
 import { Card } from "@/components/ui/card";
+import { Pill } from "@/components/ui/pill";
 import { EmptyState } from "@/components/ui/empty-state";
 import { TextLink } from "@/components/ui/button";
 import { Ring, countTones } from "@/components/ui/ring";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatCost, formatWhen } from "@/lib/format";
+import { homeHealth } from "@/lib/performance/dashboard";
+import { alertsLine } from "@/lib/performance/alerts";
+import { unseenAlertCount } from "@/lib/performance/alerts-store";
 import { SimulatedCostNote } from "@/components/simulated-cost-note";
 import { StartRunForm } from "./start-run-form";
 
@@ -17,11 +21,31 @@ const RECENT = 5;
 
 async function HomePageContent() {
   const member = await requireMember();
-  const runs = await listRuns(member.userId, RECENT);
+  const [runs, health, unseen] = await Promise.all([listRuns(member.userId, RECENT), homeHealth(member.userId), unseenAlertCount(member.userId)]);
   const tones = runs.map((r) => statusRingTone(r.status));
   const counts = countTones(tones);
   return (
     <div className="space-y-12">
+      {/* P9-3: the healthy spend share across the live simulated campaigns; nothing when none are live. */}
+      {health && (
+        <Card as="section" aria-label="Healthy spend share (simulated)" className="flex flex-wrap items-center gap-x-4 gap-y-2">
+          <Pill tone="review">Simulated</Pill>
+          <div className="min-w-0 space-y-1">
+            <p className="font-semibold wrap-anywhere" data-home-health="">
+              {health.line}
+            </p>
+            {/* P9-4: unseen alerts on the live campaigns; nothing at 0. */}
+            {unseen > 0 && (
+              <p className="font-medium text-attention-ink wrap-anywhere" data-home-alerts="">
+                {alertsLine(unseen)}
+              </p>
+            )}
+          </div>
+          <TextLink href="/campaigns" className="text-sm sm:ml-auto">
+            See the campaigns
+          </TextLink>
+        </Card>
+      )}
       <Card as="section" size="hero" aria-labelledby="try" className="grid gap-8 md:grid-cols-[minmax(0,1fr)_auto] md:items-center">
         <div className="min-w-0">
           <p className="font-medium text-ink-2">Sprint 1 test agent</p>

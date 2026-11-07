@@ -1,15 +1,21 @@
 name: After production deploy
 
-# F-15 and F-17: after a push to main, wait until Vercel serves that commit in
-# production, then make the app register its Inngest functions (PUT
+# F-15 and F-17: after CI passes on main, wait until Vercel serves that commit
+# in production, then make the app register its Inngest functions (PUT
 # /api/inngest asks the serve handler to sync itself) and check the health
 # endpoint lists them. Vercel doesn't send this repo GitHub deployment events,
 # so the job polls the health endpoint for the new commit instead.
+#
+# F-23: Vercel's Deployment Checks hold the production deployment until CI's
+# three jobs pass, so this starts when CI finishes, not at the push. It runs
+# only when CI succeeded; a failed CI leaves the previous deployment live.
 
 permissions: {}
 
 on:
-  push:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -18,11 +24,12 @@ concurrency:
 
 jobs:
   sync-inngest:
+    if: github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.event == 'push'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
       APP_URL: https://campaign-studio-neon.vercel.app
-      COMMIT: ${{ github.sha }}
+      COMMIT: ${{ github.event.workflow_run.head_sha }}
     steps:
       - name: Wait for production to serve this commit (up to 15 minutes)
         run: |

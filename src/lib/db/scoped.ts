@@ -16,6 +16,15 @@ export async function asUser<T>(userId: string, fn: (tx: Tx) => Promise<T>): Pro
   return inTransaction(claims, "authenticated", fn);
 }
 
+/**
+ * asUser(), or `fn` inside a transaction the caller already holds as the same
+ * user, so a check and the write it guards can share one transaction (and its
+ * locks) without a second connection.
+ */
+export async function asUserIn<T>(tx: Tx | undefined, userId: string, fn: (tx: Tx) => Promise<T>): Promise<T> {
+  return tx ? fn(tx) : asUser(userId, fn);
+}
+
 /** Runs `fn` as the anonymous role, for tests and health checks. */
 export async function asAnon<T>(fn: (tx: Tx) => Promise<T>): Promise<T> {
   return inTransaction('{"role":"anon"}', "anon", fn);
