@@ -360,3 +360,7 @@ No acceptance criteria changed. F-23, P9-1 to P9-4, F-16a and N-9a are Ready, Sp
 | # | Question | Answer | Effect |
 | --- | --- | --- | --- |
 | B1 | Every agent's real-model evals cost up to about 386p (imagery about 200p with its pictures), against a £1 cap per run. How should F-16a run? | Everything, up to about £3.86, in runs of at most 100p each; Rory adds `GOOGLE_GENERATIVE_AI_API_KEY` to GitHub for imagery's pictures | F-16a #1 changes: each run's total is at most £1 (the workflow's own check), and the runs together cover every agent and case. Five runs: brief and market; copy, localise and the nine small agents; imagery in three parts (`--part=k/n`) |
+
+## Close (8 November)
+
+Signed off by Rory from the demo page (CI run 42297709001: 38 cases, 13 passed in the browser, 21 in CI, 3 by hand) and deployed on 7 November (pull request #3, `94b9781`). F-23, P9-1 to P9-4, F-16a and N-9a are done. P9-4 case 9 (the real model's answers) is Rory's hand check HC-1, now N-9b. F-23's two cases are recorded in decision 0026. Findings from the build, the review, QA and F-16a's real-model run are backlog rows BUG-2 to BUG-12, F-35 and F-36 (BUG-10 was fixed in the sprint). Rory asked for a UX sprint next, before Performance II.
