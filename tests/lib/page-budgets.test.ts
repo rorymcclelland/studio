@@ -180,6 +180,8 @@ describe("U10-6 the budgets table", () => {
       // U10-3: the live campaign's Creative stage fits, with its checks folded and six ads shown (Rory's choices a and b).
       "campaign-live-creative",
       "campaign-live-launch",
+      // U10-4: the Performance page fits, with Needs action now first and seen alerts and older answers folded.
+      "performance",
       "campaign-two-audiences",
       // U10-3: the two-audience Creative stage fits with three ads a group (Rory, 9 November 2026).
       "campaign-two-audiences-creative",

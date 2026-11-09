@@ -278,7 +278,7 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
     expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
-    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "BUG-4", "BUG-11"]);
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "U10-4", "BUG-4", "BUG-11"]);
   });
 
   it("has every agreed U10-2 case, once each, in order, after U10-6's, checked as the refinement says", async () => {
@@ -368,6 +368,48 @@ describe("the case list", () => {
     expect(order.lastIndexOf("U10-2")).toBeLessThan(order.indexOf("U10-3"));
     expect(order.lastIndexOf("U10-3")).toBeLessThan(order.indexOf("BUG-4"));
     expect(STORIES.find((s) => s.id === "U10-3")).toEqual({ sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" });
+  });
+
+  it("has every agreed U10-4 case, once each, in order, after U10-3's, checked as the refinement says", async () => {
+    const u104 = CASES.filter((c) => c.story === "U10-4");
+    expect(u104.map((c) => c.id)).toEqual(Array.from({ length: 7 }, (_, i) => `U10-4.${i + 1}`));
+    for (const c of u104) expect(c.sprint, c.id).toBe(10);
+    // The refinement: a browser test for every case; CI for 3 (health) and 4 (another launch unchanged, another workspace refused).
+    expect(u104.map(caseKind)).toEqual(Array(7).fill("browser"));
+    const SPEC = "performance-attention.spec.ts";
+    const LIB = "tests/lib/performance-attention.test.ts";
+    const FLOWS = "tests/flows/performance-attention.test.ts";
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    for (const c of u104) for (const x of c.checks.filter((y) => y.kind === "browser")) expect((x as { spec: string }).spec, c.id).toBe(SPEC);
+    // Recovery in the pure tests (3); Mark all as seen against plain Postgres (4: one launch only, who, the home count, rule 7).
+    expect(ciIn("U10-4.3", LIB)).toBe(true);
+    expect(ciIn("U10-4.4", FLOWS)).toBe(true);
+    expect(CASES.find((c) => c.id === "U10-4.4")!.checks.some((x) => x.kind === "ci" && "test" in x && /another workspace is refused/.test(x.test))).toBe(true);
+    expect(CASES.find((c) => c.id === "U10-4.4")!.checks.some((x) => x.kind === "ci" && "test" in x && /leaves every other launch's alerts as they were/.test(x.test))).toBe(true);
+    expect(u104.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
+    expect(u104.flatMap((c) => c.checks).some((x) => x.kind === "hand" || x.kind === "withdrawn")).toBe(false);
+    // The browser tests change no brand kit, so they run in the main project; none is marked as an expected failure.
+    const spec = read(`tests/e2e/${SPEC}`);
+    expect(spec).not.toMatch(/test\.fail\(|test\.fixme\(|test\.skip\(\s*true/);
+    for (const c of u104) {
+      for (const x of c.checks.filter((y) => y.kind === "browser")) {
+        const title = (x as { title: string }).title;
+        const at = declaredAt(spec, title);
+        expect(at, title).toBeGreaterThan(-1);
+        expect(spec.slice(at, spec.indexOf("async (", at)), c.id).not.toContain("@brand-kit");
+      }
+    }
+    // The builder's interface is at the top of the spec, with the exact words.
+    const head = spec.slice(0, spec.indexOf("import "));
+    expect(head).toContain("---------------------------------------------------------------- interface");
+    for (const words of ["Needs action now", "Mark all as seen", "Recovered on day 9", "No unseen alerts to mark.", "That campaign isn't in your workspace.", "No ad is below its threshold or tiring now (simulated)."]) expect(head, words).toContain(words);
+    // The Performance page's length budget stays U10-4's until the page fits; the builder removes the markers then.
+    const { budgetFor } = await import("../e2e/page-budgets");
+    expect(budgetFor("performance").mainAction).toMatchObject({ css: "[data-perf-attention]" });
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("U10-3")).toBeLessThan(order.indexOf("U10-4"));
+    expect(order.lastIndexOf("U10-4")).toBeLessThan(order.indexOf("BUG-4"));
+    expect(STORIES.find((s) => s.id === "U10-4")).toEqual({ sprint: 10, id: "U10-4", title: "Performance: what needs action first" });
   });
 
   it("has every agreed BUG-4 and BUG-11 case, once each, in order, after F-23's: CI with the mock model, and the real models in an eval run", () => {

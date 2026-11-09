@@ -1,8 +1,8 @@
 "use client";
 
-// P9-4: the Performance view's two controls. Mark as seen on an alert (the
-// only thing a person can do with one: alerts never act, rule 3), and the Ask
-// about this campaign box, which shows the cost before the click and starts
+// P9-4: the Performance view's controls. Mark as seen on an alert, and
+// U10-4's Mark all as seen (the only things a person can do with alerts: they
+// never act, rule 3), and the Ask about this campaign box, which shows the cost before the click and starts
 // the Monitor's run. The server checks everything again.
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -10,7 +10,8 @@ import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import { ActionError } from "../brief-actions";
 import { useBriefAction } from "../use-brief-action";
-import { askAboutCampaign, markAlertAsSeen } from "./actions";
+import { MARK_ALL_LABEL } from "@/lib/performance/attention";
+import { askAboutCampaign, markAlertAsSeen, markAllAlertsAsSeen } from "./actions";
 
 export function MarkSeenButton({ campaignId, alertId, describedBy }: { campaignId: string; alertId: string; describedBy: string }) {
   const { run, pending, error } = useBriefAction();
@@ -18,6 +19,19 @@ export function MarkSeenButton({ campaignId, alertId, describedBy }: { campaignI
     <div className="flex min-w-0 flex-col items-start gap-2">
       <Button type="button" size="sm" variant="quiet" disabled={pending} aria-describedby={describedBy} onClick={() => run(() => markAlertAsSeen(campaignId, alertId))}>
         Mark as seen
+      </Button>
+      <ActionError error={error} />
+    </div>
+  );
+}
+
+/** U10-4: marks every unseen alert of the launch shown as seen, in one go. */
+export function MarkAllSeenButton({ campaignId }: { campaignId: string }) {
+  const { run, pending, error } = useBriefAction();
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-2">
+      <Button type="button" size="sm" variant="quiet" disabled={pending} data-mark-all-seen="" onClick={() => run(() => markAllAlertsAsSeen(campaignId))}>
+        {MARK_ALL_LABEL}
       </Button>
       <ActionError error={error} />
     </div>

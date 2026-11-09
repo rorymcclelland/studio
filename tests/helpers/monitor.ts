@@ -159,5 +159,72 @@ export function seedWithTiring(
   throw new Error(`No seed in 1..${tries} has an ad tiring between days ${earliest} and ${latest}`);
 }
 
+// ---------------------------------------------------------------- U10-4: recovery, read independently
+//
+// U10-4 (Sprint 10): an alert whose ad has since recovered says "Recovered on
+// day N", worked out from stored simulated days, never stored. Read from the
+// refinement's case 3: a Below threshold alert raised on day A is recovered on
+// day N when days N - 1 and N are both after A and on both the ad's three-day
+// KPI meets the threshold and it isn't learning; N is the first such day (the
+// second of the two, as the alert is dated the second of its two missed days).
+
+/** Whether the ad's three-day KPI meets the threshold on `day`, not learning. */
+export function meetsOn(rows: SimRow[], variantId: string, threshold: { measure: Measure; value: number }, day: number): boolean {
+  if (!rows.some((r) => r.variantId === variantId && r.day === day)) return false;
+  return !isLearning(rows, variantId, day) && meets(threshold, kpiOver(rows, variantId, threshold.measure, Math.max(1, day - 2), day));
+}
+
+/** The day (up to `through`) an ad's Below threshold alert of `alertDay` is recovered on, or null. */
+export function referenceRecovery(rows: SimRow[], variantId: string, threshold: { measure: Measure; value: number }, alertDay: number, through: number): number | null {
+  for (let day = alertDay + 2; day <= through; day++) if (meetsOn(rows, variantId, threshold, day - 1) && meetsOn(rows, variantId, threshold, day)) return day;
+  return null;
+}
+
+/** Whether the ad is below its threshold on `day` (its status on the Performance page, every ad compliant). */
+export function belowOn(rows: SimRow[], variantId: string, threshold: { measure: Measure; value: number }, day: number): boolean {
+  if (!rows.some((r) => r.variantId === variantId && r.day === day)) return false;
+  return !isLearning(rows, variantId, day) && !meets(threshold, kpiOver(rows, variantId, threshold.measure, Math.max(1, day - 2), day));
+}
+
+export type RecoveryPlan = {
+  seed: string;
+  threshold: { measure: Measure; value: number };
+  /** The ad whose Below threshold alert recovers, its alert's day and the day it recovers on. */
+  recovered: { variantId: string; alertDay: number; day: number };
+  /** Another ad below its threshold on `through`, with its own Below threshold alert on another day. */
+  below: { variantId: string; alertDay: number };
+};
+
+/**
+ * U10-4: a seed and a cost-per-acquisition threshold for `ads` with which, by
+ * day `through` (14), one ad's Below threshold alert is raised on day 6 (as
+ * the audit's Ad 1's was; else on day 4, 5, 7 or 8) and recovers on day 8 to
+ * `through` - 1 (so the browser test reaches the day before it with Next week
+ * and Next day, and sees it change), and another ad is below the threshold on
+ * `through`, with its own alert on another day, worked out with the pure
+ * simulator. Variant ids are made by the database, so the browser test finds
+ * its terms once the ads exist.
+ */
+export function seedWithRecovery(base: Omit<SimLaunch, "seed">, through = 14, tries = 400): RecoveryPlan {
+  const values = [12, 14, 16, 18, 20, 22, 25, 28, 30, 35, 40];
+  const runs = Array.from({ length: tries }, (_, i) => String(i + 1)).map((seed) => ({ seed, rows: simulateDays({ ...base, seed }, 1, through, []) }));
+  for (const alertDays of [[6], [4, 5, 7, 8]]) {
+    for (const { seed, rows } of runs) {
+      for (const value of values) {
+        const threshold = { measure: "cpa" as Measure, value };
+        const alerts = base.ads.map((a) => ({ variantId: a.variantId, day: referenceBelow(rows, a.variantId, threshold, through) }));
+        for (const r of alerts) {
+          if (r.day === null || !alertDays.includes(r.day)) continue;
+          const day = referenceRecovery(rows, r.variantId, threshold, r.day, through - 1);
+          if (day === null || day < 8) continue;
+          const other = alerts.find((o) => o.variantId !== r.variantId && o.day !== null && o.day !== r.day && belowOn(rows, o.variantId, threshold, through));
+          if (other) return { seed, threshold, recovered: { variantId: r.variantId, alertDay: r.day, day }, below: { variantId: other.variantId, alertDay: other.day! } };
+        }
+      }
+    }
+  }
+  throw new Error(`No seed in 1..${tries} gives an ad that recovers from its Below threshold alert and another below the threshold on day ${through}`);
+}
+
 /** The demo's question (P9-4 #4), which the mock plans and answers offline. */
 export const MOCK_CPA_QUESTION = "Which ad had the lowest cost per acquisition last week?";

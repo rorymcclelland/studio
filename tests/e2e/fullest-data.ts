@@ -216,7 +216,8 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
     const unseen = page.locator("[data-perf-alerts] [data-perf-alert]").filter({ has: page.getByRole("button", { name: "Mark as seen" }) });
     await expect(unseen.first()).toBeVisible({ timeout: 30_000 });
     await unseen.first().getByRole("button", { name: "Mark as seen" }).click();
-    await expect(page.locator("[data-perf-alerts] [data-alert-seen]").first()).toBeVisible({ timeout: 30_000 });
+    // U10-4: a seen alert folds into one line, its "Seen by" inside it, so it is waited for as attached.
+    await expect(page.locator("[data-perf-alerts] [data-alert-seen]").first()).toBeAttached({ timeout: 30_000 });
     const box = page.locator("[data-ask]");
     for (const question of QUESTIONS) {
       await box.getByRole("textbox", { name: "Ask about this campaign" }).fill(question);

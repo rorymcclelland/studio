@@ -91,6 +91,7 @@ export const STORIES: Story[] = [
   { sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" },
   { sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" },
   { sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" },
+  { sprint: 10, id: "U10-4", title: "Performance: what needs action first" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
@@ -264,6 +265,15 @@ const GALLERY_LIB = "tests/lib/gallery-filter.test.ts";
 const GALLERY_FLOWS = "tests/flows/creative-lock.test.ts";
 const GALLERY_JOURNEY =
   "One Fernhollow campaign with the mock models: 12 ads, two paid-social ads picked, their compliance accepted and launched (approved in the inbox), a third picked after the launch so its compliance needs a decision; the launch is ended in case 3's test, which runs last.";
+
+// U10-4 Performance: what needs action first: the browser tests (one Fernhollow campaign launched and
+// moved to simulated day 14), the pure recovery, ordering and words, and Mark all as seen against plain
+// Postgres (outside tests/db, as U10-2's and U10-3's: U10-4 adds no table). The interface is at the top of the spec.
+const ATTENTION_SPEC = "performance-attention.spec.ts";
+const ATTENTION_LIB = "tests/lib/performance-attention.test.ts";
+const ATTENTION_FLOWS = "tests/flows/performance-attention.test.ts";
+const ATTENTION_JOURNEY =
+  "One Fernhollow campaign with the mock models: three paid-social ads picked, their don't rules accepted and launched (approved in the inbox) with a seed and a cost-per-acquisition threshold set while it waited, found with the pure simulator, so one ad's Below threshold alert is on day 6 and it recovers before day 14, and another ad is below the threshold on day 14. The audit's own campaign (the fullest data) has the same shape; it is measured by U10-6's \"performance\" page, whose main action is the needs-action list.";
 
 // BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
 // mock model (the unit and regression tests, and the evals in CI's first job); the real models
@@ -2156,6 +2166,119 @@ export const CASES: Case[] = [
         kind: "ci",
         file: GALLERY_LIB,
         test: "#10 with more than one audience group, each shows its first three under All (Rory, 9 November 2026); a filter still shows every ad",
+      },
+    ],
+  },
+  // U10-4 Performance: what needs action first
+  {
+    id: "U10-4.1",
+    sprint: 10,
+    story: "U10-4",
+    words: "On day 14 of the launch, the first screen at 375 px shows the healthy spend share and the below-threshold ad (in Needs action now, with the alert that flagged it).",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #1: on simulated day 14 the first screen at 375 px shows the healthy spend share and the ad below its threshold, with the alert that flagged it",
+        note: `${ATTENTION_JOURNEY} The case names the audit's launch; its campaign's ads and seed are random, so this test builds a launch of the same shape whose days are known. Also checks the page's order (share, needs action, the ads table, the chart and table, Ask) at 1440 px.`,
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #1 what needs action now: ads below the threshold today, then ads with a Tiring alert, each with the alerts that flagged it" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#1 nothing needs action: an empty list before day 1 and when every ad is healthy, and the line the page shows instead" },
+    ],
+  },
+  {
+    id: "U10-4.2",
+    sprint: 10,
+    story: "U10-4",
+    words: "Alerts are newest first; a seen alert is one line; an unseen one is in full.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #2: alerts are newest first; a seen alert is one line that opens in place, and an unseen one is in full",
+        note: "The oldest alert is marked as seen; its line is measured as one line at 1440 px, and it opens in place, by keyboard, to its facts and who saw it.",
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #2 alerts newest first: by day, then the launch's ad order, then kind" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#2 a seen alert's one line: the ad, the kind and the simulated day" },
+    ],
+  },
+  {
+    id: "U10-4.3",
+    sprint: 10,
+    story: "U10-4",
+    words: "An ad's day-6 alert shows \"Recovered on day N\" once the ad has been at or above its threshold for two days, worked out from the stored simulated days.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #3: an ad's day-6 alert says Recovered on day N once the ad has been at or above its threshold two days in a row, worked out from the stored days",
+        note: "The case names the audit's Ad 1; here it is whichever ad the terms found have alerted on day 6. Seen the day before (no line) and on the day (the line), and on day 14 every alert against the independent reading of the stored rows. N is the second of the two days, as an alert is dated the second of its two missed days.",
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #3 recovered on day N: the second of two days in a row at or above the threshold after the alert's day, not learning" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#3 the alert's own day and the days before it don't count, nor do learning days" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#3 only a Below threshold alert recovers: Tiring and Not compliant never say Recovered" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#3 worked out from stored days alone: on the demo launch's month, every Below threshold alert recovers on the day the independent reading says" },
+    ],
+  },
+  {
+    id: "U10-4.4",
+    sprint: 10,
+    story: "U10-4",
+    words: "Mark all as seen marks every unseen alert of this launch only, records who, and the home line updates; another launch's alerts are unchanged and another workspace is refused.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #4: Mark all as seen marks every unseen alert of this launch, records who, updates the home line, and a stale tab's second press marks nothing again",
+        note: "Other specs' launches may raise alerts at the same time, so the home line is read against the database's count at the same moment. Another launch's alerts and another workspace are the CI tests.",
+      },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "U10-4 #4 Mark all as seen marks every unseen alert of the launch the Performance page shows, records who, and leaves every other launch's alerts as they were" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 the home count goes down by exactly the alerts marked; another workspace's count is its own" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 one guarded statement: two at once, or again, mark nothing twice and keep the first who and when" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 another workspace is refused: B can't mark A's alerts, and a missing or malformed campaign is the same refusal" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 the server action says how many were marked, or refuses another workspace's campaign" },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #4 the words after Mark all as seen" },
+    ],
+  },
+  {
+    id: "U10-4.5",
+    sprint: 10,
+    story: "U10-4",
+    words: "An alert's link scrolls to and highlights its ad's row.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #5: an alert's link scrolls to its ad's row in the table and highlights it",
+        note: "At 375 px, where the table is screens below the alerts; the row is the fragment's target and looks different from another row. By click and by Enter.",
+      },
+    ],
+  },
+  {
+    id: "U10-4.6",
+    sprint: 10,
+    story: "U10-4",
+    words: "Only the latest answer is open; opening an older one shows its answer and table.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #6: only the latest answer is open; opening an older question shows its answer and its table",
+        note: "Two questions with the mock model: the cost-per-acquisition question (answered with a table), then \"What did our rivals spend?\" (the fixed reply, no table), so the older one has the table.",
+      },
+    ],
+  },
+  {
+    id: "U10-4.7",
+    sprint: 10,
+    story: "U10-4",
+    words: "The chart and table tabs work by keyboard and keep the table alternative for screen readers.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #7: the chart and table tabs work by keyboard, and the chart keeps its table alternative for screen readers",
+        note: "The tabs pattern: arrows (wrapping), Home and End select, Tab reaches the panel; the chart stays described by the day-by-day table while Chart is selected; axe finds nothing with either tab selected.",
       },
     ],
   },

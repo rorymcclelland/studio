@@ -193,3 +193,24 @@ export function healthSeries(input: HealthInput, through: number): DayHealth[] {
   }
   return out;
 }
+
+/**
+ * U10-4: the day an ad recovered from its Below threshold alert, worked out
+ * from the stored simulated days, never stored. N is the first day such that
+ * days N - 1 and N are both after the alert's day, both in `series`, and on
+ * both the ad has a row, isn't learning and meets the threshold; N is the
+ * second of the two. Only a Below threshold alert recovers: null for Tiring
+ * and Not compliant, and null when the series has no such pair yet.
+ */
+export function recoveredOn(series: DayHealth[], alert: { variantId: string; kind: string; day: number }): number | null {
+  if (alert.kind !== "below_threshold") return null;
+  const good = new Set<number>();
+  for (const d of series) {
+    if (d.day <= alert.day) continue;
+    const ad = d.ads.find((a) => a.variantId === alert.variantId);
+    if (ad && !ad.learning && ad.meets) good.add(d.day);
+  }
+  const days = [...good].sort((x, y) => x - y);
+  for (const day of days) if (good.has(day - 1)) return day;
+  return null;
+}

@@ -3,7 +3,8 @@
 // its own single axis (never a dual axis): spend per ad per day, and the KPI
 // over each ad's last three simulated days with the launch's threshold. Days
 // with events are shaded and marked. Everything is simulated and says so
-// (rule 1), and a table version of every day is the chart's text alternative.
+// (rule 1), and a table version of every day is the chart's text alternative
+// (PerformanceTable; U10-4 shows it in its own tab).
 //
 // It stays legible on a phone: the outer SVG has no viewBox, so its text and
 // markers are drawn at their real size, with x in per cent of the width and y
@@ -297,69 +298,71 @@ export function PerformanceChart({ series, ads, threshold, days }: { series: Day
           </span>
         )}
       </p>
+    </div>
+  );
+}
 
-      <details className="group text-sm">
-        <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
-          <span aria-hidden className="inline-block transition-transform group-open:rotate-90 motion-reduce:transition-none">
-            ›
-          </span>
-          Show the chart as a table
-        </summary>
-        <div className="mt-3 max-h-112 overflow-auto rounded-field bg-bg" tabIndex={0} role="region" aria-labelledby={`${TABLE_ID}-caption`}>
-          <table data-perf-chart-table="" id={TABLE_ID} className="w-full text-left">
-            <caption id={`${TABLE_ID}-caption`} className="sr-only">
-              {`Spend and ${short.toLowerCase()} over the last three days for each ad, with the healthy spend share and events, by simulated day (simulated)`}
-            </caption>
-            <thead className="text-ink-2">
-              <tr>
-                <th scope="col" className="px-3 py-2 font-semibold whitespace-nowrap">
-                  Day
-                </th>
-                {ads.map((a) => [
-                  <th key={`${a.variantId}-spend`} scope="col" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                    {`${adName(a)} spend`}
-                  </th>,
-                  <th key={`${a.variantId}-kpi`} scope="col" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                    {`${adName(a)} ${short.toLowerCase()}`}
-                  </th>,
-                ])}
-                <th scope="col" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                  Healthy spend share
-                </th>
-                <th scope="col" className="px-3 py-2 font-semibold whitespace-nowrap">
-                  Events
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {series.map((d) => (
-                <tr key={d.day} data-perf-chart-row={String(d.day)} className="border-t border-line">
-                  <th scope="row" className="px-3 py-1.5 font-medium whitespace-nowrap">
-                    {`Day ${d.day}, ${dayDate(d.date)}`}
-                  </th>
-                  {ads.map((a) => {
-                    const h = d.ads.find((x) => x.variantId === a.variantId);
-                    return [
-                      <td key={`${a.variantId}-spend`} data-perf-cell-spend={a.variantId} className="px-3 py-1.5 text-right tabular-nums">
-                        {h ? formatPrice(h.spendPence) : "No row"}
-                      </td>,
-                      <td key={`${a.variantId}-kpi`} data-perf-cell-kpi={a.variantId} className="px-3 py-1.5 text-right tabular-nums">
-                        {h ? h.kpi.shown : "No row"}
-                      </td>,
-                    ];
-                  })}
-                  <td data-perf-cell-share="" className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
-                    {d.shareShown}
-                  </td>
-                  <td data-perf-cell-events="" className="px-3 py-1.5">
-                    {d.events.join(", ")}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </details>
+/**
+ * U10-4: the chart's table, every simulated day: the chart's text alternative
+ * (the chart's aria-describedby points at it), shown in the Table tab and kept
+ * in the page while the Chart tab is selected.
+ */
+export function PerformanceTable({ series, ads, measure }: { series: DayHealth[]; ads: ChartAd[]; measure: KpiMeasure }) {
+  const short = MEASURE_SHORT[measure];
+  return (
+    <div className="max-h-112 overflow-auto rounded-field bg-bg text-sm" tabIndex={0} role="region" aria-labelledby={`${TABLE_ID}-caption`}>
+      <table data-perf-chart-table="" id={TABLE_ID} className="w-full text-left">
+        <caption id={`${TABLE_ID}-caption`} className="sr-only">
+          {`Spend and ${short.toLowerCase()} over the last three days for each ad, with the healthy spend share and events, by simulated day (simulated)`}
+        </caption>
+        <thead className="text-ink-2">
+          <tr>
+            <th scope="col" className="px-3 py-2 font-semibold whitespace-nowrap">
+              Day
+            </th>
+            {ads.map((a) => [
+              <th key={`${a.variantId}-spend`} scope="col" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                {`${adName(a)} spend`}
+              </th>,
+              <th key={`${a.variantId}-kpi`} scope="col" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                {`${adName(a)} ${short.toLowerCase()}`}
+              </th>,
+            ])}
+            <th scope="col" className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+              Healthy spend share
+            </th>
+            <th scope="col" className="px-3 py-2 font-semibold whitespace-nowrap">
+              Events
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {series.map((d) => (
+            <tr key={d.day} data-perf-chart-row={String(d.day)} className="border-t border-line">
+              <th scope="row" className="px-3 py-1.5 font-medium whitespace-nowrap">
+                {`Day ${d.day}, ${dayDate(d.date)}`}
+              </th>
+              {ads.map((a) => {
+                const h = d.ads.find((x) => x.variantId === a.variantId);
+                return [
+                  <td key={`${a.variantId}-spend`} data-perf-cell-spend={a.variantId} className="px-3 py-1.5 text-right tabular-nums">
+                    {h ? formatPrice(h.spendPence) : "No row"}
+                  </td>,
+                  <td key={`${a.variantId}-kpi`} data-perf-cell-kpi={a.variantId} className="px-3 py-1.5 text-right tabular-nums">
+                    {h ? h.kpi.shown : "No row"}
+                  </td>,
+                ];
+              })}
+              <td data-perf-cell-share="" className="px-3 py-1.5 text-right tabular-nums whitespace-nowrap">
+                {d.shareShown}
+              </td>
+              <td data-perf-cell-events="" className="px-3 py-1.5">
+                {d.events.join(", ")}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

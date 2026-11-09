@@ -198,8 +198,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.live}/performance`,
     signedIn: true,
     mainAction: { css: "[data-perf-attention]", what: "the ads below threshold or tiring now" },
-    lengthUntil: { story: "U10-4", why: "alerts in full, the chart, then the table, then every answer in full (audit: 7.6 screens at 375 px, 5.0 at 1440 px)" },
-    mainActionUntil: { story: "U10-4", why: "the ads below threshold are in the table, 4.2 screens down" },
   },
   {
     key: "campaign-two-audiences",

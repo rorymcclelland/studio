@@ -736,6 +736,13 @@ test.describe("U10-2 campaigns in each state, written to the database", () => {
             expect(cb.x + cb.width, `${name}: the current stage is cut off at the bar's right edge`).toBeLessThanOrEqual(box.x + box.width + 0.5);
             await expectNoHorizontalScroll(page, `${name} at 375px, with the current stage brought into the bar's view`);
           }
+          // U10-4 (a U10-3 regression): on the Brief page the bar opens at its start, so the first stage is wholly in view.
+          if (p.endsWith("/brief")) {
+            const first = (await stageLink(page, "brief").boundingBox())!;
+            expect(first.x, `${name}: the first stage starts left of the bar's view`).toBeGreaterThanOrEqual(box.x - 0.5);
+            expect(first.x + first.width, `${name}: the first stage is cut off at the bar's right edge`).toBeLessThanOrEqual(box.x + box.width + 0.5);
+            expect(await b.evaluate((el) => el.scrollLeft), `${name}: the bar is scrolled away from its start`).toBe(0);
+          }
           // When its stages don't fit, the bar scrolls inside itself, and every stage can be reached.
           const scroll = await b.evaluate((el) => {
             const scroller = [el, ...Array.from(el.querySelectorAll("*"))].find((x) => x.scrollWidth > x.clientWidth + 1) ?? null;
