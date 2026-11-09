@@ -89,6 +89,38 @@ export function quantityInWords(text: string): string | null {
   return NUMBER_WORD.exec(text)?.[0] ?? QUANTITY_CLAIM.exec(plain)?.[0] ?? null;
 }
 
+// BUG-4: the check refuses loose quantities about people (F-14, agreed in
+// Sprint 4: "most of our lapsed customers" says how many, and nothing can hold
+// it to the data), but the Brief agent's prompt named only "half of" and "one
+// in four", so the real model kept writing "Many people" and "most of" and was
+// refused twice (F-16a, 6 and 7 Nov). The prompt now shows the model these
+// phrases and the way round them, from this one list, and a test holds every
+// phrase to the check, so the prompt and the check can't drift apart again.
+/** Phrases the check refuses, each with a sentence that uses it (the sentence is what the test checks). */
+export const LOOSE_QUANTITIES: { phrase: string; sentence: string }[] = [
+  { phrase: "most of", sentence: "Most of our lapsed customers stopped after one order." },
+  { phrase: "many people", sentence: "Many people look at their money again in January." },
+  { phrase: "many of", sentence: "Many of them still have the app installed." },
+  { phrase: "a good share of", sentence: "A good share of younger customers budget on their phones." },
+  { phrase: "plenty of customers", sentence: "Plenty of customers save a little each month." },
+  { phrase: "the majority of", sentence: "The majority of savers use round-ups." },
+  { phrase: "few customers", sentence: "Few customers use the Premium plan." },
+  { phrase: "nearly all", sentence: "Nearly all of them signed up on the app." },
+  { phrase: "half of", sentence: "Half of our walkers come back each winter." },
+  { phrase: "one in four", sentence: "One in four customers buys a fleece." },
+];
+
+/** How to say it instead, as the prompt and the problem message put it. Each example passes the check. */
+export const QUANTITY_INSTEAD = {
+  advice: "name the group without saying how much of it there is, or use a figure from the context written as it is there",
+  examples: ["Lapsed customers who stopped after one order", "People who look at their money again in January", "Customers aged 25 to 34 who budget on their phones"],
+};
+
+/** The problem a quantity in words raises, for the model's one repair. */
+export function quantityProblem(where: string, found: string): string {
+  return `${where} says "${found.trim()}"; quantities in words can't be checked, so ${QUANTITY_INSTEAD.advice} (for example "${QUANTITY_INSTEAD.examples[0]}")`;
+}
+
 type Field = { where: string; section: BriefSection; text: string; cites?: string[] };
 
 function textFields(b: BriefCore): Field[] {
@@ -172,7 +204,7 @@ export function evidenceProblems(
     }
     for (const f of fields) {
       const m = quantityInWords(f.text);
-      if (m) problems.push(`${f.where} says "${m}"; quantities in words can't be checked, so use only figures from the context`);
+      if (m) problems.push(quantityProblem(f.where, m));
     }
   }
 

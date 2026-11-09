@@ -14,6 +14,9 @@ import {
   imageryOutput,
   IMAGE_COUNT,
   promptProblems,
+  brandNameIn,
+  forImageModel,
+  withoutBrandName,
   type ImageryInput,
   type ImageryOutput,
   VISION_QUESTION,
@@ -668,5 +671,94 @@ describe("S5-1 Imagery agent", () => {
     const answer = imageryAgent.output.parse(JSON.parse(imageryAgent.mockAnswer!(prompt)!));
     expect(checkImagery(input, answer)).toEqual([]);
     expect(imageryAgent.mockAnswer!("something else")).toBeNull();
+  });
+
+  describe("BUG-11 the brand's name never reaches the image-prompt model", () => {
+    const fern = (over: Partial<ImageryInput> = {}): ImageryInput => ({
+      brief: { title: "Fernhollow's winter range", story: "Fernhollow Outfitters asks walkers back.", audiences: ["Lapsed customers: they know Fernhollow kit"], channels: ["email: Fernhollow’s plain note"] },
+      palette: [{ name: "Fernhollow moss", hex: "#3F5B3A", words: "deep sage green" }],
+      toneWords: ["warm"],
+      doRules: ["Show Fernhollow's repair service where it is true"],
+      dontRules: ["Put the FERNHOLLOW name on anything"],
+      finance: false,
+      brandName: "Fernhollow Outfitters",
+      realNames: ["Cairnwick Outdoor"],
+      places: [],
+      ...over,
+    });
+
+    it("takes out the whole name, its first word and their possessives, in any case, and keeps the sentence's sense", () => {
+      const name = "Fernhollow Outfitters";
+      expect(withoutBrandName("Fernhollow Outfitters asks walkers back.", name)).toBe("the company asks walkers back.");
+      expect(withoutBrandName("fernhollow-outfitters kit", name)).toBe("the company kit");
+      expect(withoutBrandName("Fernhollow's winter range", name)).toBe("the company's winter range");
+      expect(withoutBrandName("Fernhollow’s winter range", name)).toBe("the company's winter range");
+      expect(withoutBrandName("Fernhollow Outfitters' range", name)).toBe("the company's range");
+      expect(withoutBrandName("FERNHOLLOW and fernhollow kit", name)).toBe("the company and the company kit");
+      // Words that only contain it, and other words, are left.
+      expect(withoutBrandName("Fernhollows Road, the fernhollowing wind, outfitters' tents", name)).toBe("Fernhollows Road, the fernhollowing wind, outfitters' tents");
+      // A short first word is not taken on its own; the whole name still is.
+      expect(withoutBrandName("The Oak Co sells oak tables", "The Oak Co")).toBe("the company sells oak tables");
+      // A first word that is one of the palette's colour words is ordinary in lower case, and the name with a capital.
+      expect(withoutBrandName("Blue skies over Blue's harbour, deep navy blue water", "Blue Harbour", "deep navy blue")).toBe("the company skies over the company's harbour, deep navy blue water");
+    });
+
+    it("finds the name in a prompt the same way", () => {
+      const name = "Fernhollow Outfitters";
+      for (const t of ["a fernhollow jacket", "a FERNHOLLOW jacket", "Fernhollow's layers", "fernhollow outfitters kit", "a Fernhollow Outfitters bag"]) expect(brandNameIn(t, name), t).not.toBeNull();
+      for (const t of ["a jacket on a ridge", "a fernhollowing wind", "deep sage green"]) expect(brandNameIn(t, name), t).toBeNull();
+      expect(brandNameIn("deep navy blue water", "Blue Harbour", "deep navy blue")).toBeNull();
+      expect(brandNameIn("Blue Harbour's boats", "Blue Harbour", "deep navy blue")).toBe("Blue Harbour's");
+    });
+
+    it("forImageModel cleans every text the model is given: the brief, the palette's names, the tone and the do and don't rules, and the market notes' names", () => {
+      const raw = fern({ brief: { ...fern().brief, story: "Fernhollow Outfitters asks walkers back, unlike Cairnwick Outdoor." } });
+      const sent = imageryAgent.buildPrompt(raw);
+      expect(sent).not.toMatch(/fernhollow|cairnwick/i);
+      expect(sent).toContain("the company's winter range");
+      expect(sent).toContain("a named company");
+      const clean = forImageModel(raw);
+      expect(clean.palette[0]).toEqual({ name: "the company moss", hex: "#3F5B3A", words: "deep sage green" });
+      expect(clean.doRules[0]).toBe("Show the company's repair service where it is true");
+      expect(clean.dontRules[0]).toBe("Put the the company name on anything");
+      // Kept for the checks only, never in the prompt.
+      expect(clean.brandName).toBe("Fernhollow Outfitters");
+      // Idempotent, and within the input's limits however long the text.
+      expect(forImageModel(clean)).toEqual(clean);
+      const long = forImageModel(fern({ brief: { ...fern().brief, audiences: [`Fernhollow's ${"x".repeat(387)}`] } }));
+      expect(imageryAgent.input.safeParse(long).success).toBe(true);
+    });
+
+    it("the prompt checks refuse a prompt with the name in any form, and say which words", () => {
+      const input = fern({ palette: [{ name: "Moss", hex: "#3F5B3A", words: "deep sage green" }] });
+      const base = "a lone walker on a frosted ridge, deep sage green tones, wide plain sky, photographic";
+      const one = (prompt: string) => checkImagery(input, { prompts: [{ idea: "A ridge walk", prompt, aspect: "1:1" }, ...goodPrompts().prompts.slice(1)] }).filter((x) => x.startsWith("prompt 1 "));
+      expect(one(`A lone walker in a fernhollow jacket, ${base}.`).join()).toMatch(/names the brand \("fernhollow"\)/);
+      expect(one(`A lone walker in a FERNHOLLOW jacket, ${base}.`).join()).toMatch(/names the brand \("FERNHOLLOW"\)/);
+      expect(one(`Fernhollow's layers: ${base}.`).join()).toMatch(/names the brand \("Fernhollow's"\)/);
+      expect(one(`A calm view: ${base}.`)).toEqual([]);
+    });
+
+    it("a signed-off Fernhollow brief that names the brand, with a don't rule that does too, reaches the model with no form of the name", async () => {
+      const fernId = (await listBrands(a.userId)).find((x) => x.slug === "fernhollow")!.id;
+      const [before] = await asUser(a.userId, (tx) => tx`select dont_rules from public.brands where id = ${fernId}`);
+      await asUser(a.userId, (tx) => tx`update public.brands set dont_rules = ${[...(before.dont_rules as string[]), "Show Fernhollow's name on kit"]} where id = ${fernId}`);
+      try {
+        const id = await createCampaign(a, fernId, "Launch the winter range to lapsed customers", noSend);
+        await executeRun("brief", { runId: (await getCampaign(a.userId, id))!.run!.id, ...a }, inline);
+        const c = (await getCampaign(a.userId, id))!;
+        const { summary, insights, audiences, channels, kpi } = c.brief!;
+        await saveBriefEdit(a, id, c.currentVersion, { title: "Fernhollow's winter range", summary, story: "Fernhollow Outfitters asks walkers back for FERNHOLLOW winter kit, the fernhollow way.", insights, audiences, channels, kpi });
+        await signOff(id);
+        const { status, run } = await runImagery(id);
+        expect(status, run.error ?? "").toBe("completed");
+        const sent = (run.steps.find((s) => s.name === "Write the image prompts")!.input as { prompt: string }).prompt;
+        expect(sent).not.toMatch(/fernhollow/i);
+        expect(sent).toContain("the company's winter range");
+        expect(sent).toContain("Show the company's name on kit");
+      } finally {
+        await asUser(a.userId, (tx) => tx`update public.brands set dont_rules = ${before.dont_rules as string[]} where id = ${fernId}`);
+      }
+    });
   });
 });

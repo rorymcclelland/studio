@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { evidenceProblems, proseOf } from "@/lib/brief/checks";
+import { evidenceProblems, LOOSE_QUANTITIES, proseOf, QUANTITY_INSTEAD } from "@/lib/brief/checks";
 import { BRIEF_SECTIONS, briefCore, CHANNELS, KPI_METRICS, type BriefCore } from "@/lib/brief/schema";
 import { defineAgent } from "./contract";
 
@@ -90,7 +90,8 @@ export const briefAgent = defineAgent({
     "Evidence rules:",
     "- Every insight cites the context items it rests on, by tag. Never cite a tag you were not given.",
     "- Choose one to three audiences, each by the tag of a segment item. If no segment items are given, choose none.",
-    "- Use a number only if it appears in the item you cite (for insights) or in the context, written as it is there, with the same unit (%, £, months, customers). Never estimate or invent figures, prices, dates or percentages, and never write quantities in words (\"half of\", \"one in four\").",
+    "- Use a number only if it appears in the item you cite (for insights) or in the context, written as it is there, with the same unit (%, £, months, customers). Never estimate or invent figures, prices, dates or percentages.",
+    `- Never say how many or how much in words, exactly or loosely, anywhere in the brief, the story and title included. Code can't check these against the data, so it refuses them: ${LOOSE_QUANTITIES.map((q) => JSON.stringify(q.phrase)).join(", ")}, and the like. Instead, ${QUANTITY_INSTEAD.advice}: ${QUANTITY_INSTEAD.examples.map((e) => JSON.stringify(e)).join(", ")}.`,
     "- Never use the brand's banned terms, and never make a claim on its list of claims that need evidence.",
     "- Follow the brand's do and don't rules and its tone of voice.",
     "- Do not mention real companies, competitors or trademarks.",

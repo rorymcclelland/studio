@@ -278,7 +278,37 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
     expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
-    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6"]);
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "BUG-4", "BUG-11"]);
+  });
+
+  it("has every agreed BUG-4 and BUG-11 case, once each, in order, after F-23's: CI with the mock model, and the real models in an eval run", () => {
+    const bugs = CASES.filter((c) => c.story === "BUG-4" || c.story === "BUG-11");
+    expect(bugs.map((c) => c.id)).toEqual(["BUG-4.1", "BUG-4.2", "BUG-4.3", "BUG-11.1", "BUG-11.2", "BUG-11.3"]);
+    for (const c of bugs) {
+      expect(c.sprint, c.id).toBe(10);
+      // CI and the eval run: no browser test (they touch no page), and the only hand check is the real-model eval run.
+      expect(caseKind(c), c.id).toBe("ci");
+      for (const x of c.checks.filter((y) => y.kind === "hand")) expect(x, c.id).toMatchObject({ why: expect.stringMatching(/real-model eval run of .*e2e-results\/evals\/sprint-10/) });
+      expect(c.checks.every((x) => x.kind === "ci" || x.kind === "hand"), c.id).toBe(true);
+    }
+    const ciFiles = (id: string) => CASES.find((c) => c.id === id)!.checks.flatMap((x) => (x.kind === "ci" && "file" in x ? [x.file] : []));
+    // The check and the prompt in the unit tests, the 6-7 Nov phrases in the regression tests.
+    for (const id of ["BUG-4.1", "BUG-4.2"]) expect(ciFiles(id), id).toEqual(expect.arrayContaining(["tests/lib/brief-checks.test.ts", "tests/evals/regression.test.ts"]));
+    for (const id of ["BUG-11.1", "BUG-11.2"]) expect(ciFiles(id), id).toEqual(expect.arrayContaining(["tests/agents/imagery.test.ts", "tests/evals/regression.test.ts"]));
+    // The eval cases: the regression case in each eval file, run with the mock model in CI's first job, and the real-model run by hand.
+    for (const id of ["BUG-4.3", "BUG-11.3"]) {
+      const checks = CASES.find((c) => c.id === id)!.checks;
+      expect(checks.some((x) => x.kind === "ci" && "job" in x && x.job === "Typecheck, lint, unit and database tests, build"), id).toBe(true);
+      expect(checks.some((x) => x.kind === "hand"), id).toBe(true);
+    }
+    expect(read("tests/evals/brief.eval.ts")).toContain('"Regression, 6-7 Nov: loose quantities (Quillmoor sign-ups)"');
+    expect(read("tests/evals/imagery.eval.ts")).toContain(`"Regression, 7 Nov: the brand's name in the brief (Fernhollow)"`);
+    expect(CASES.find((c) => c.id === "BUG-4.3")!.checks.find((x) => x.kind === "hand")).toMatchObject({ why: expect.stringContaining("brief, copy, persona, testPlan and imagery") });
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("F-23")).toBeLessThan(order.indexOf("BUG-4"));
+    expect(order.lastIndexOf("BUG-4")).toBeLessThan(order.indexOf("BUG-11"));
+    expect(STORIES.find((s) => s.id === "BUG-4")).toEqual({ sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" });
+    expect(STORIES.find((s) => s.id === "BUG-11")).toEqual({ sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" });
   });
 
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {

@@ -9,8 +9,20 @@ import { asUser } from "@/lib/db/scoped";
 import type { EvalModule } from "@/lib/evals/types";
 import { REAL_BRANDS } from "./real-brands";
 
-type In = { brand: "fernhollow" | "quillmoor"; objective: string };
-type Ctx = { objective: string; context: EvidenceItem[]; kit: KitLists; noExclamations: boolean };
+type In = { brand: "fernhollow" | "quillmoor"; objective: string; regression?: "loose-quantities" };
+type Ctx = {
+  objective: string;
+  context: EvidenceItem[];
+  kit: KitLists;
+  noExclamations: boolean;
+  /** Each attempt's problems, from the step's trail (BUG-4: a quantity in words sent back counts against the regression case). */
+  attempts?: string[][];
+};
+
+/** BUG-4: the attempts sent back over a quantity in words (the check's message names them). */
+export function quantityAttempts(attempts: string[][]): string[] {
+  return attempts.flat().filter((p) => /quantities in words/.test(p));
+}
 
 const mod: EvalModule<In, StoredBrief, Ctx> = {
   agent: "brief",
@@ -26,6 +38,13 @@ const mod: EvalModule<In, StoredBrief, Ctx> = {
     // the count in the brand's words, so the model is likely to write one; the objective itself has no figure,
     // so the figure must come from the segment. Fixture and source: tests/evals/fixtures/brief/brand-name-figure.json.
     { name: "Regression, 26 Oct: the brand name beside a figure", input: { brand: "quillmoor", objective: "Win back lapsed Quillmoor Money customers, saying how many Quillmoor Money customers have lapsed" } },
+    // BUG-4 regression (F-16a, 6 and 7 Nov): the Quillmoor briefs said "Many people", "most of", "many of", "a good share of"
+    // and "Plenty of customers", and were refused on both attempts. The objective invites a loose quantity; the case fails if
+    // any attempt is sent back for one, so the prompt has to prevent it, not the repair. Fixture: tests/evals/fixtures/brief/loose-quantities.json.
+    {
+      name: "Regression, 6-7 Nov: loose quantities (Quillmoor sign-ups)",
+      input: { brand: "quillmoor", objective: "Grow Plus sign-ups among customers aged 25 to 34, saying how common money worries are among them", regression: "loose-quantities" },
+    },
   ],
   async execute(env, input) {
     const brandId = env.brands[input.brand];
@@ -44,7 +63,8 @@ const mod: EvalModule<In, StoredBrief, Ctx> = {
         noExclamations: /no exclamation marks/i.test(b.voice_notes),
       };
     });
-    return { runId: run.id, output: done.brief, context: ctx };
+    const attempts = run.steps.filter((st) => st.kind === "model").flatMap((st) => st.attempt_log.map((a) => a.problems));
+    return { runId: run.id, output: done.brief, context: { ...ctx, attempts } };
   },
   grade(input, b, ctx) {
     const problems = [...evidenceProblems(b, ctx.context, ctx.kit, { objective: ctx.objective }), ...kitListProblems(b, ctx.kit)];
@@ -56,6 +76,10 @@ const mod: EvalModule<In, StoredBrief, Ctx> = {
       if (!titles.some((t) => /lapsed|win/i.test(t))) problems.push("the objective names lapsed customers, but no lapsed segment was chosen");
     }
     if (/guarantee/i.test(prose)) problems.push("mentions a guarantee");
+    if (input.regression === "loose-quantities") {
+      const sentBack = quantityAttempts(ctx.attempts ?? []);
+      if (sentBack.length) problems.push(`an attempt was sent back for a quantity in words: ${sentBack.join("; ")}`);
+    }
     return { pass: problems.length === 0, notes: problems.join("; ") || `${b.insights.length} cited insights, ${b.audiences.length} audiences, every figure sourced.` };
   },
 };

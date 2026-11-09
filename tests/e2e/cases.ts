@@ -89,6 +89,8 @@ export const STORIES: Story[] = [
   { sprint: 9, id: "F-23", title: "Production deploys wait for the checks" },
   { sprint: 10, id: "U10-1", title: "Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save" },
   { sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" },
+  { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
+  { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -229,6 +231,13 @@ const BUDGET_PAGES = [
   "invites",
   "not-found-app",
 ];
+// BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
+// mock model (the unit and regression tests, and the evals in CI's first job); the real models
+// only in a real-model eval run of the affected agents, which needs the keys only Actions has.
+const BRIEF_CHECKS = "tests/lib/brief-checks.test.ts";
+const CI_FIRST_JOB = "Typecheck, lint, unit and database tests, build";
+const EVAL_RUN_10 = (agents: string) =>
+  `CI has no real keys, so the real model is checked by a real-model eval run of ${agents}, which Claude starts in .github/workflows/evals.yml with Rory's approval, each run capped at £1 (the estimate, up to about £3.14 in all, splits it into brief, persona and testPlan; copy; and imagery in three parts). Rory reads the reports at the demo, on the branch e2e-results/evals/sprint-10-bugs (the runs used the fixes' own branch, 9 Nov: £2.23 in all).`;
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -1813,6 +1822,83 @@ export const CASES: Case[] = [
         note: "The spec's own check, run against a deliberately long fixture page (10,000 px, its button 9,000 px down), set as the page's content.",
       },
       { kind: "ci", file: PAGE_BUDGETS_LIB, test: "U10-6 #3 a page over budget fails with its measured height and the budget" },
+    ],
+  },
+  // BUG-4 The brief's quantities-in-words check and its prompt agree
+  {
+    id: "BUG-4.1",
+    sprint: 10,
+    story: "BUG-4",
+    words: 'The Brief agent\'s prompt names every loose quantity the check refuses ("most of", "many people", "many of", "a good share of", "plenty of customers" and the rest) and how to write round them; the check refuses each, and each rewrite passes.',
+    checks: [
+      { kind: "ci", file: BRIEF_CHECKS, test: "BUG-4 the Brief agent's prompt and the quantity check agree" },
+      { kind: "ci", file: REGRESSION, test: "the check refuses every phrase the reports quote, in the sentence written around it, and passes each rewrite" },
+      { kind: "ci", file: REGRESSION, test: "the Brief agent's prompt before the fix named none of them; now it names each one and the way round it" },
+    ],
+  },
+  {
+    id: "BUG-4.2",
+    sprint: 10,
+    story: "BUG-4",
+    words: "A brief refused for a quantity in words is told how to rewrite it (name the group, or use a figure from the context), for its one repair.",
+    checks: [
+      { kind: "ci", file: BRIEF_CHECKS, test: "a refusal tells the model how to rewrite it, for the one repair" },
+      { kind: "ci", file: REGRESSION, test: "the brief eval's grader fails the reconstructed reply and passes it rewritten; the message says how to rewrite it" },
+    ],
+  },
+  {
+    id: "BUG-4.3",
+    sprint: 10,
+    story: "BUG-4",
+    words: "The brief eval's regression case fails any run with an attempt sent back for a quantity in words; brief, copy, persona, testPlan and imagery pass their evals without one.",
+    checks: [
+      { kind: "ci", file: REGRESSION, test: "the regression case fails a run whose first attempt was sent back for a quantity, even when the repair passed" },
+      {
+        kind: "ci",
+        job: CI_FIRST_JOB,
+        note: "Its step \"Agent evals against the mock model\" runs the brief eval's new regression case (\"Regression, 6-7 Nov: loose quantities (Quillmoor sign-ups)\") with the mock model. The fixture is a reconstruction around the words the reports quote, labelled with its sources.",
+      },
+      { kind: "hand", why: EVAL_RUN_10("brief, copy, persona, testPlan and imagery (whose cases make a brief first)") },
+    ],
+  },
+  // BUG-11 The brand name never reaches the image-prompt model
+  {
+    id: "BUG-11.1",
+    sprint: 10,
+    story: "BUG-11",
+    words: "Every text the image-prompt model is given (the brief, the palette's names, the tone and the do and don't rules) has the brand's whole name, its first word and their possessives taken out, however the input was built.",
+    checks: [
+      { kind: "ci", file: IMAGERY_CI, test: "takes out the whole name, its first word and their possessives, in any case, and keeps the sentence's sense" },
+      { kind: "ci", file: IMAGERY_CI, test: "forImageModel cleans every text the model is given: the brief, the palette's names, the tone and the do and don't rules, and the market notes' names" },
+      { kind: "ci", file: IMAGERY_CI, test: "a signed-off Fernhollow brief that names the brand, with a don't rule that does too, reaches the model with no form of the name" },
+      { kind: "ci", file: REGRESSION, test: "now no line the model is sent names the brand, whoever builds the input; the possessive keeps its sense" },
+    ],
+  },
+  {
+    id: "BUG-11.2",
+    sprint: 10,
+    story: "BUG-11",
+    words: "A picture prompt that names the brand in any form (lower case, capitals, possessive, the whole name) is refused, with the words named.",
+    checks: [
+      { kind: "ci", file: IMAGERY_CI, test: "finds the name in a prompt the same way" },
+      { kind: "ci", file: IMAGERY_CI, test: "the prompt checks refuse a prompt with the name in any form, and say which words" },
+      { kind: "ci", file: REGRESSION, test: "the prompt checks refuse the brand's name in every form; the check before the fix let lower case and capitals through" },
+    ],
+  },
+  {
+    id: "BUG-11.3",
+    sprint: 10,
+    story: "BUG-11",
+    words: "The imagery eval reads every line the model was given for the brand's name, and its regression case (the 7 Nov Fernhollow brief) fails a prompt that names the brand and passes the fix.",
+    checks: [
+      { kind: "ci", file: REGRESSION, test: "the clean-up before the fix left the short and possessive forms in the brief, and the eval's grader fails that prompt" },
+      { kind: "ci", file: REGRESSION, test: "the eval's regression case passes the fixed reply through the step, and fails a reply that names the brand" },
+      {
+        kind: "ci",
+        job: CI_FIRST_JOB,
+        note: "Its step \"Agent evals against the mock model\" runs the imagery eval's new regression case (\"Regression, 7 Nov: the brand's name in the brief (Fernhollow)\") with the mock model. The fixture is a reconstruction around the report's finding, labelled with its sources.",
+      },
+      { kind: "hand", why: EVAL_RUN_10("imagery") },
     ],
   },
 ];

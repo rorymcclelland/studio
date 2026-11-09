@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { containsTerm } from "@/lib/brief/checks";
+import { withoutNames } from "@/lib/brief/gather";
 import type { ImageInput } from "@/lib/models/generate";
 import { mockBehaviour } from "@/lib/models/mock";
 import { defineAgent } from "./contract";
@@ -102,6 +103,87 @@ export function isFinanceCategory(category: string): boolean {
   return /financ|money|bank|saving|budget|insur|invest|loan|credit|pension|mortgage|lend|payment|fintech/i.test(category);
 }
 
+// BUG-11 (F-16a imagery, 7 Nov, "Fernhollow winter range"): the brief reached
+// the image-prompt model as "Fernhollow's winter range". Code took out only the
+// whole name ("Fernhollow Outfitters"), and a name in a picture prompt invites
+// the picture model to draw it (rule 8). Now one function cleans every text the
+// model is given, the brief and the kit's words alike, of the whole name, its
+// first word and their possessives; buildPrompt applies it too, so no caller
+// can send the name. The prompt check below uses the same matcher.
+const escapeRe = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const POSSESSIVE = "((?:['’]s)|(?<=s)['’])?";
+
+/** The brand's name as a pattern: the whole name in any case, and its first word (at least four letters) on its own. */
+function namePatterns(brandName: string): { full: RegExp; first: RegExp | null } | null {
+  const words = brandName.trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return null;
+  const edge = (core: string) => new RegExp(`(?<![\\w'’])(${core})${POSSESSIVE}(?![\\w])`, "gi");
+  return { full: edge(words.map(escapeRe).join("[\\s-]+")), first: words.length > 1 && words[0].length >= 4 ? edge(escapeRe(words[0])) : null };
+}
+
+const capitalised = (w: string) => w[0] !== w[0].toLowerCase();
+
+/**
+ * Whether a match of the name's first word is the brand's name. With a capital
+ * it always is. In lower case it is too, unless `ordinary` (the palette's colour
+ * words, which code makes) uses the word: "blue" for a brand called Blue Harbour
+ * whose palette has "deep navy blue". A coined name ("fernhollow") never is ordinary.
+ */
+function isTheName(word: string, first: RegExp, ordinary: string): boolean {
+  if (capitalised(word)) return true;
+  return ![...ordinary.matchAll(first)].length;
+}
+
+/**
+ * The brand's name taken out of a text: the whole name in any case, and its
+ * first word (see isTheName), each with or without a possessive
+ * ("Fernhollow's" becomes "the company's").
+ */
+export function withoutBrandName(text: string, brandName: string, ordinary = ""): string {
+  const p = namePatterns(brandName);
+  if (!p) return text;
+  const swap = (possessive?: string) => (possessive ? "the company's" : "the company");
+  const out = text.replace(p.full, (_m, _name: string, possessive?: string) => swap(possessive));
+  if (!p.first) return out;
+  const first = p.first;
+  return out.replace(first, (m, name: string, possessive?: string) => (isTheName(name, first, ordinary) ? swap(possessive) : m));
+}
+
+/** Where a text names the brand (as withoutBrandName finds it), or null. */
+export function brandNameIn(text: string, brandName: string, ordinary = ""): string | null {
+  const p = namePatterns(brandName);
+  if (!p) return null;
+  const full = new RegExp(p.full.source, "i").exec(text);
+  if (full) return full[0];
+  if (!p.first) return null;
+  for (const m of text.matchAll(p.first)) if (isTheName(m[1], p.first, ordinary)) return m[0];
+  return null;
+}
+
+/** The palette's colour words, made by code (colourWords): the only words that make a lower-case first word ordinary. */
+const colourWordsOf = (input: Pick<ImageryInput, "palette">) => input.palette.map((c) => c.words).join(" \n ");
+
+/** Every text that goes to the image-prompt model, with the brand's and the market notes' names taken out. */
+export function forImageModel(input: ImageryInput): ImageryInput {
+  const ordinary = colourWordsOf(input);
+  // Cut to the input's limits after the swap, which can lengthen a text by a few characters.
+  const clean = (max: number) => (t: string) => withoutNames(withoutBrandName(t, input.brandName, ordinary), input.realNames).slice(0, max);
+  return {
+    ...input,
+    brief: {
+      title: clean(200)(input.brief.title),
+      story: clean(2000)(input.brief.story),
+      audiences: input.brief.audiences.map(clean(400)),
+      channels: input.brief.channels.map(clean(250)),
+    },
+    // The colour words are code's own (colourWords); the colour's name is the brand's.
+    palette: input.palette.map((c) => ({ ...c, name: clean(40)(c.name) })),
+    toneWords: input.toneWords.map(clean(30)),
+    doRules: input.doRules.map(clean(300)),
+    dontRules: input.dontRules.map(clean(300)),
+  };
+}
+
 function quoted(text: string): string | null {
   const dbl = /["“”„«»]([^"“”„«»]{0,80})["“”„«»]?/.exec(text);
   if (dbl) return dbl[1] || dbl[0];
@@ -121,10 +203,8 @@ export function promptProblems(input: ImageryInput, p: ImageryOutput["prompts"][
   for (const name of input.realNames) {
     if (name.trim().length >= 2 && containsTerm(both, name)) problems.push(`${where} names "${name}", a real company from the market notes`);
   }
-  const first = input.brandName.trim().split(/\s+/)[0] ?? "";
-  if (input.brandName.trim() && (containsTerm(both, input.brandName) || (first.length >= 4 && new RegExp(`\\b${first.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`).test(both)))) {
-    problems.push(`${where} names the brand; a picture never shows the brand's name`);
-  }
+  const brand = input.brandName.trim() ? (brandNameIn(both, input.brandName, colourWordsOf(input)) ?? (containsTerm(both, input.brandName) ? input.brandName : null)) : null;
+  if (brand) problems.push(`${where} names the brand ("${brand}"); a picture never shows the brand's name, so leave it out`);
   for (const name of undeclaredNames(both, [], { brandName: "", category: "", products: [], places: input.places })) {
     if (input.realNames.some((r) => r.toLowerCase() === name.toLowerCase())) continue;
     problems.push(`${where} names "${name}"; write no names of people, companies, products or brands, and no capitalised words except at a sentence start`);
@@ -195,8 +275,10 @@ export const imageryAgent = defineAgent({
     "If the brand is a finance brand, show no faces and no portraits: people appear only from behind, at a distance, or as hands.",
     'Reply with JSON only: {"prompts": [{"idea": "a one-line idea", "prompt": "the full image prompt", "aspect": "1:1"}]}, with exactly four prompts.',
   ].join("\n"),
-  buildPrompt: (input) =>
-    [
+  // BUG-11: whatever the caller passes, the names are taken out here, the one way to the model.
+  buildPrompt: (raw) => {
+    const input = forImageModel(raw);
+    return [
       MARKER,
       `Brief: ${JSON.stringify(input.brief)}`,
       `Palette: ${JSON.stringify(input.palette.map((c) => ({ name: c.name, words: c.words })))}`,
@@ -204,7 +286,8 @@ export const imageryAgent = defineAgent({
       `Do: ${JSON.stringify(input.doRules)}`,
       `Don't: ${JSON.stringify(input.dontRules)}`,
       `Finance brand: ${JSON.stringify(input.finance)}`,
-    ].join("\n"),
+    ].join("\n");
+  },
   label: (input) => `${input.brief.title}: pictures`,
   summarise: (output) => output.prompts.map((p, i) => `${i + 1}. ${p.idea}`).join("\n"),
   check: checkImagery,

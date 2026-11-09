@@ -1,0 +1,47 @@
+{
+  "case": "Imagery: the brand's name reached the image-prompt model (BUG-11)",
+  "source": "docs/refinement/sprint-10.md, \"Proposed to join: BUG-4 and BUG-11\", and docs/BACKLOG.md row BUG-11; the F-16a real-model report evals/reports/imagery-2026-11-07-part-3-of-3.md on the branch e2e-results/evals/sprint-9 (commit 376ba4a), case \"Fernhollow winter range\": \"3 of 4 pictures kept; the brief reached the model with the brand's name in it\"",
+  "provenance": "reconstructed",
+  "provenanceNote": "From the 6-7 Nov real-model run (F-16a imagery part 3, 7 Nov). The report quotes only the grader's finding, not the brief: the real reply and prompt are in that run's eval database and were never copied into the repository, so the brief here is a reconstruction. What is known: the brand is Fernhollow Outfitters (fictional demo brand), the objective was \"Launch the winter range to lapsed customers\", and code then took out only the whole name, so a shorter form (\"Fernhollow\", \"Fernhollow's\") went through. The brief's words are written around those forms; the palette, tone and rules are the demo kit's, with the palette words as colourWords() makes them. Simulated data: the brand and its customers are generated.",
+  "fixedIn": "code",
+  "input": {
+    "brief": {
+      "title": "Fernhollow's winter range, for the walks still ahead",
+      "story": "Winter is when the hills are quietest. Fernhollow Outfitters asks lapsed walkers back for Fernhollow's winter range: warm layers that are made to be mended, for short days on ridges and coast paths.",
+      "audiences": ["Lapsed customers (no order in 12 months): they know Fernhollow kit already and need a plain reason to come back before the cold weekends."],
+      "channels": ["paid social: one calm winter picture with plain space for a short line", "email: the same picture above the words"]
+    },
+    "palette": [
+      { "name": "Moss", "hex": "#3F5B3A", "words": "deep sage green" },
+      { "name": "Bracken", "hex": "#B5653A", "words": "burnt orange" },
+      { "name": "Fog", "hex": "#E8EBE4", "words": "warm off-white" },
+      { "name": "Peat", "hex": "#2B2A26", "words": "charcoal grey" },
+      { "name": "Loch", "hex": "#4F7A8C", "words": "muted petrol blue" }
+    ],
+    "toneWords": ["warm", "plain-spoken", "unhurried", "practical"],
+    "doRules": ["Lead with where the kit takes you, then what it is made of", "Mention repair and long life where it is true"],
+    "dontRules": ["Promise safety or survival in any conditions", "Use fear (storms, danger) to sell"],
+    "finance": false,
+    "brandName": "Fernhollow Outfitters",
+    "realNames": [],
+    "places": []
+  },
+  "leakedForms": ["Fernhollow's", "Fernhollow kit"],
+  "fixedReply": {
+    "prompts": [
+      { "idea": "A ridge walk at first light", "prompt": "A lone walker seen from behind on a frosted ridge at first light, wrapped in a deep sage green jacket, low winter sun, wide plain sky above the hills, unhurried and warm mood, photographic, soft natural light.", "aspect": "1:1" },
+      { "idea": "Mended layers by a bothy fire", "prompt": "A still life of a folded wool layer with a neat patch, a pair of leather boots and a tin mug beside a small stove, burnt orange glow, charcoal grey stone wall, calm plain space above, photographic.", "aspect": "1:1" },
+      { "idea": "A coast path in winter", "prompt": "Two walkers far away on a winding coast path above a grey sea in winter, muted petrol blue water and warm off-white sky, open space at the top, gentle and practical mood, photographic.", "aspect": "1:1" },
+      { "idea": "Short days, long views", "prompt": "An abstract view of layered hills fading into mist at dusk, deep sage green, burnt orange and warm off-white bands, smooth gradients, quiet and unhurried, painterly style.", "aspect": "1:1" }
+    ]
+  },
+  "stillRefused": {
+    "why": "A prompt that names the brand in any of its forms is still refused after the fix; the check before it let the lower-case and capitals forms through.",
+    "prompts": [
+      "A lone walker on a frosted ridge in a fernhollow jacket, deep sage green tones, wide plain sky, photographic.",
+      "A lone walker on a frosted ridge in a FERNHOLLOW jacket, deep sage green tones, wide plain sky, photographic.",
+      "Fernhollow's winter layers on a frosted ridge, deep sage green tones, wide plain sky, photographic.",
+      "A lone walker on a frosted ridge, fernhollow outfitters kit, deep sage green tones, wide plain sky, photographic."
+    ]
+  }
+}

@@ -152,3 +152,50 @@ describe("production check: a brand name between a figure and its unit", async (
     expect(figuresIn("45 Per cent")[0].unit).toBe("%");
   });
 });
+
+describe("BUG-4 the Brief agent's prompt and the quantity check agree", () => {
+  it("every loose quantity the prompt names is refused by the check, in a sentence that uses it", async () => {
+    const { LOOSE_QUANTITIES, quantityInWords } = await import("@/lib/brief/checks");
+    for (const q of LOOSE_QUANTITIES) {
+      expect(q.sentence.toLowerCase(), q.phrase).toContain(q.phrase);
+      expect(quantityInWords(q.sentence), q.sentence).not.toBeNull();
+    }
+  });
+
+  it("the prompt names each of them, and the way round them, and every way round passes the check", async () => {
+    const { LOOSE_QUANTITIES, QUANTITY_INSTEAD, quantityInWords } = await import("@/lib/brief/checks");
+    const { briefAgent } = await import("@/lib/agents/brief");
+    for (const q of LOOSE_QUANTITIES) expect(briefAgent.instructions, q.phrase).toContain(JSON.stringify(q.phrase));
+    // The phrases the 6-7 Nov real-model run was refused for (F-16a reports), by name.
+    for (const p of ["most of", "many people", "many of", "a good share of", "plenty of customers"]) expect(LOOSE_QUANTITIES.map((q) => q.phrase), p).toContain(p);
+    expect(briefAgent.instructions).toContain(QUANTITY_INSTEAD.advice);
+    for (const e of QUANTITY_INSTEAD.examples) {
+      expect(briefAgent.instructions, e).toContain(JSON.stringify(e));
+      expect(quantityInWords(e), e).toBeNull();
+    }
+    // The prompt no longer says only "half of" and "one in four", which let the model think "many" was fine.
+    expect(briefAgent.instructions).not.toContain('never write quantities in words ("half of", "one in four")');
+  });
+
+  it("a refusal tells the model how to rewrite it, for the one repair", () => {
+    const got = problems(brief({ story: "Many people look at their money again in January." }));
+    expect(got).toEqual([
+      'the story says "Many people"; quantities in words can\'t be checked, so name the group without saying how much of it there is, or use a figure from the context written as it is there (for example "Lapsed customers who stopped after one order")',
+    ]);
+  });
+
+  it("the phrases from the real-model run are refused wherever the brief has them; the rewrites pass", () => {
+    const refused: [Partial<BriefCore>, string][] = [
+      [{ story: "Many people look at their money again in January." }, 'the story says "Many people"'],
+      [{ story: "A good share of customers aged 25 to 34 budget on their phones." }, 'the story says "A good share of"'],
+      [{ story: "Plenty of customers put a little aside each month." }, 'the story says "Plenty of customers"'],
+      [{ insights: [{ text: "Most of the lapsed customers left after one month.", cites: ["C1"] }, ...brief().insights.slice(1)] }, 'insight 1 says "Most of"'],
+      [{ insights: [{ text: "Lapsed walkers know us, and many of them still walk.", cites: ["C1"] }, ...brief().insights.slice(1)] }, 'insight 1 says "many of"'],
+      [{ title: "Many people walk in winter" }, 'the title says "Many people"'],
+    ];
+    for (const [over, says] of refused) expect(problems(brief(over)).join("; "), says).toContain(says);
+    for (const story of ["People who look at their money again in January want to start small.", "Customers who put a little aside each month like not having to think about it.", "Many walks start at the coast, and most of the season is wet."]) {
+      expect(problems(brief({ story })), story).toEqual([]);
+    }
+  });
+});
