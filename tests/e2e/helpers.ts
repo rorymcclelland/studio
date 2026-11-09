@@ -340,7 +340,7 @@ export async function makeCreative(page: Page, count: number) {
   await page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ }).click();
   await expect(page.locator("[data-creative]").getByRole("button", { name: /^Making creative/ })).toBeVisible({ timeout: 30_000 });
   await untilShown(page, () => expect(page.locator("[data-gallery] > li")).toHaveCount(count, { timeout: 10_000 }));
-  // U10-3: every ad shown, as the specs that follow work on any of them (each group shows six until Show all).
+  // U10-3: every ad shown, as the specs that follow work on any of them (a group shows six until Show all, or three each with several audiences).
   await showAllAds(page);
 }
 
@@ -420,9 +420,9 @@ export async function adTool(card: Locator, tool: AdToolName): Promise<Locator> 
 // ---------------------------------------------------------------- U10-3: the Creative stage's length (Rory's choices a and b)
 // The checks on the picked ads (compliance, languages, pre-test, picture
 // checks, the launch pack) fold into one <details data-picked-checks>, and
-// each audience shows its first six ads until "Show all N ads"
-// ([data-show-all-ads]). Specs that use what is folded or past the sixth ad
-// open it here first (tests/e2e/creative-gallery.spec.ts has the interface).
+// each audience shows its first six ads (three each with several audiences)
+// until "Show all N ads" ([data-show-all-ads]). Specs that use what is folded
+// or past the first few ads open it here first (tests/e2e/creative-gallery.spec.ts has the interface).
 
 /** Opens the checks on the picked ads on the Creative stage (a no-op when they are open). */
 export async function openPickedChecks(page: Page) {

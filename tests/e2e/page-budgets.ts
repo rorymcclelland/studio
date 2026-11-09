@@ -214,10 +214,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.twoAudiences}/creative`,
     signedIn: true,
     mainAction: { css: "[data-gallery-filter]", what: "the gallery's filters" },
-    lengthUntil: {
-      story: "U10-3",
-      why: "two audiences of six compact cards each, with the checks folded and Show all for the rest (Rory's choices a and b, 9 November 2026): 6,062 px at 375 px (7.5 screens) and 3,590 px at 1440 px (within) on 9 November; twelve cards at about 290 px each on a phone don't fit in six screens",
-    },
   },
   {
     key: "campaign-waiting",

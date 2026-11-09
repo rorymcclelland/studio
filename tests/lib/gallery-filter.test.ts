@@ -20,6 +20,7 @@ import {
   galleryHref,
   galleryOrder,
   GROUP_PREVIEW,
+  GROUP_PREVIEW_SEVERAL,
   pickedChecksLine,
   previewCount,
   showAllLabel,
@@ -270,13 +271,25 @@ describe("U10-3 #10 the gallery's order and how many ads a group shows (Rory's c
     expect(given.map((a) => a.id)).toEqual(["a1", "a2", "a3", "a4", "picture", "edited"]);
   });
 
-  it("#10 under All a group shows its first six, with Show all N ads; a filter shows every ad it matches", () => {
+  it("#10 under All one group shows its first six, with Show all N ads; a filter shows every ad it matches", () => {
     expect(GROUP_PREVIEW).toBe(6);
-    expect(previewCount("all", 12)).toBe(6);
-    expect(previewCount("all", 6)).toBe(6);
-    expect(previewCount("all", 4)).toBe(4);
-    for (const show of ["picked", "decide", "launched"] as const) expect(previewCount(show, 9), show).toBe(9);
+    expect(previewCount("all", 12, 1)).toBe(6);
+    expect(previewCount("all", 6, 1)).toBe(6);
+    expect(previewCount("all", 4, 1)).toBe(4);
+    for (const show of ["picked", "decide", "launched"] as const) expect(previewCount(show, 9, 1), show).toBe(9);
     expect(showAllLabel(12)).toBe("Show all 12 ads");
+  });
+
+  it("#10 with more than one audience group, each shows its first three under All (Rory, 9 November 2026); a filter still shows every ad", () => {
+    expect(GROUP_PREVIEW_SEVERAL).toBe(3);
+    for (const groups of [2, 3, 5]) {
+      expect(previewCount("all", 12, groups), `${groups} groups`).toBe(3);
+      expect(previewCount("all", 3, groups), `${groups} groups`).toBe(3);
+      expect(previewCount("all", 2, groups), `${groups} groups`).toBe(2);
+      for (const show of ["picked", "decide", "launched"] as const) expect(previewCount(show, 9, groups), `${show}, ${groups} groups`).toBe(9);
+    }
+    // One group (one audience, or one chosen with ?audience=) keeps six.
+    expect(previewCount("all", 12, 1)).toBe(6);
   });
 });
 

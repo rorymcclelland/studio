@@ -181,6 +181,8 @@ describe("U10-6 the budgets table", () => {
       "campaign-live-creative",
       "campaign-live-launch",
       "campaign-two-audiences",
+      // U10-3: the two-audience Creative stage fits with three ads a group (Rory, 9 November 2026).
+      "campaign-two-audiences-creative",
       "campaign-waiting",
       "campaign-waiting-brief",
       "campaign-early",

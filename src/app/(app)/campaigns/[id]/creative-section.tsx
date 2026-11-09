@@ -15,10 +15,11 @@
 // gallery, as they work on what was picked there.
 // U10-3, Rory's choices of 9 November 2026, so the page fits its length
 // budget: (a) those checks fold into one line with their state, open from the
-// start on ?show=decide or when a link points inside; (b) each audience shows
-// its first six ads (launched, then needing a decision, then picked, then the
-// rest, newest first), then "Show all N ads"; a filter shows every ad it
-// matches, and a link to an ad reveals its group in full.
+// start on ?show=decide or when a link points inside; (b) the gallery's one
+// group shows its first six ads, or each of several audience groups its first
+// three (launched, then needing a decision, then picked, then the rest, newest
+// first), then "Show all N ads"; a filter shows every ad it matches, and a
+// link to an ad reveals its group in full.
 import type { CopySetView } from "@/lib/creative/copy";
 import { fieldsOf, type AnyCopy, type CopyChannel } from "@/lib/creative/copy-rules";
 import type { Badge, CreativeRunView, CreativeView, VariantView } from "@/lib/creative/gallery";
@@ -304,6 +305,7 @@ export function CreativeSection({
                         level={4}
                         compliance={compliance}
                         show={gallery.show}
+                        groups={groups.length}
                       />
                     </details>
                   ))
@@ -318,6 +320,7 @@ export function CreativeSection({
                     level={3}
                     compliance={compliance}
                     show={gallery.show}
+                    groups={1}
                   />
                 )}
               </div>
@@ -439,6 +442,7 @@ function Gallery({
   level,
   compliance,
   show,
+  groups,
 }: {
   view: CreativeView;
   variants: VariantView[];
@@ -449,15 +453,17 @@ function Gallery({
   level: 3 | 4;
   compliance: ComplianceP;
   show: GalleryShow;
+  /** How many groups the gallery shows: more than one shows fewer ads in each before Show all. */
+  groups: number;
 }) {
   return (
     // Wider than the page column on large screens, so four ads sit side by side.
-    // Keyed by the filter, so going back to All starts at the first six again.
+    // Keyed by the filter, so going back to All starts at the first few again.
     <GalleryReveal
       key={show}
       label={label}
       total={variants.length}
-      preview={previewCount(show, variants.length)}
+      preview={previewCount(show, variants.length, groups)}
       showAllLabel={showAllLabel(variants.length)}
       wrapClassName="xl:mx-[calc(50%-min(50vw-3rem,38rem))]"
       className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"

@@ -23,7 +23,10 @@
 // 10. (Rory's choice b) Each audience shows its first six ads, launched, then
 //    needing a decision, then picked, then the rest; "Show all N ads" reveals
 //    the rest in place; a filter shows every ad it matches; a link to an ad, or
-//    a tool's way back, shows it.
+//    a tool's way back, shows it. (Rory, 9 November 2026) With more than one
+//    audience group, each shows its first three; one group keeps six. The
+//    two-audience check uses the fullest data's Quillmoor campaign
+//    (tests/e2e/fullest-data.ts), only looking, so U10-6 measures it unchanged.
 //
 // ---------------------------------------------------------------- interface
 // What the builder provides. The tests here, tests/lib/gallery-filter.test.ts and
@@ -136,7 +139,8 @@
 //     as #launch-pack-heading), as the page opens and when the fragment changes; the target is scrolled to.
 //   (b) Each audience group (or the one gallery) is in the order galleryOrder() gives: launched, needing a
 //     decision, picked, the rest, newest first within each (ads one run made together keep their order).
-//     Under All, the first GROUP_PREVIEW (6) show and the rest are hidden (not displayed), with a
+//     Under All, the first GROUP_PREVIEW (6) show, or GROUP_PREVIEW_SEVERAL (3) in each group when the
+//     gallery shows more than one audience group (previewCount(show, total, groups)), and the rest are hidden (not displayed), with a
 //     <button data-show-all-ads> "Show all N ads" after the group's list; pressing it shows them in place,
 //     with no navigation, removes the button and moves focus to the first ad it revealed (its picture link).
 //     Under a filter (picked, decide, launched) every matching ad shows, with no button. Each card is
@@ -146,6 +150,8 @@
 // ----------------------------------------------------------------------------
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
+import postgres from "postgres";
+import { buildTwoAudiences, TWO_AUDIENCES_OBJECTIVE } from "./fullest-data";
 import {
   acceptDontRulesForPicked,
   AD_TOOLS,
@@ -708,3 +714,78 @@ test.describe("U10-3 a Fernhollow campaign's gallery, from a live launch to its 
     },
   );
 });
+
+/**
+ * The fullest data's two-audience campaign (Quillmoor, 24 ads, 12 for each audience). The page-length-data
+ * project builds it beside this spec, so one it has started recently is waited for rather than built twice;
+ * with none, it is built here (buildTwoAudiences reuses a complete one).
+ */
+async function twoAudienceCampaign(page: Page, sql: postgres.Sql): Promise<string> {
+  const deadline = Date.now() + 600_000;
+  for (;;) {
+    const [c] = await sql`
+      select c.id, c.status, (select count(*)::int from public.ad_variants v where v.campaign_id = c.id) as ads
+      from public.campaigns c where c.objective = ${TWO_AUDIENCES_OBJECTIVE} and c.created_at > now() - interval '20 minutes'
+      order by c.created_at desc limit 1`;
+    if (c && c.status === "approved" && (c.ads as number) >= 24) return c.id as string;
+    if (!c || Date.now() > deadline) return buildTwoAudiences(page, sql);
+    await new Promise((r) => setTimeout(r, 5_000));
+  }
+}
+
+test(
+  "U10-3 #10: with two audiences, each group shows its first three ads and Show all 12 ads; Show all reveals that group only; one audience chosen shows six",
+  { annotation: [{ type: "case", description: "U10-3.10" }] },
+  async ({ page }) => {
+    test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to find the fullest data's two-audience campaign");
+    test.setTimeout(900_000);
+    const sql = postgres(process.env.DATABASE_URL!, { max: 1, onnotice: () => {} });
+    let id = "";
+    try {
+      id = await step(page, "The fullest data's Quillmoor campaign with two audiences and 24 ads", () => twoAudienceCampaign(page, sql));
+    } finally {
+      await sql.end();
+    }
+    const creative = stagePath(`/campaigns/${id}`, "creative");
+    const groups = () => visible(page, "details[data-audience-group]");
+    const shownIn = (group: Locator) => group.locator("[data-gallery] > li[data-ad]").filter({ visible: true });
+    const showAllIn = (group: Locator) => group.locator("button[data-show-all-ads]").filter({ visible: true });
+
+    await step(page, "U10-3.10: under All, each of the two groups shows its first three ads, then Show all 12 ads", async () => {
+      await page.goto(creative);
+      await settle(page);
+      await expect(groups()).toHaveCount(2);
+      for (const i of [0, 1]) {
+        const group = groups().nth(i);
+        await expect(group.locator("[data-audience-count]")).toHaveText("12");
+        await expect(shownIn(group)).toHaveCount(3);
+        await expect(group.locator("[data-gallery] > li[data-ad]")).toHaveCount(12);
+        await expect(showAllIn(group)).toHaveText("Show all 12 ads");
+      }
+      await expect(cards(page)).toHaveCount(6);
+    });
+
+    await step(page, "U10-3.10: Show all in the first group reveals its other nine in place and moves focus to the fourth; the second group still shows three", async () => {
+      const url = page.url();
+      const first = groups().nth(0);
+      await showAllIn(first).focus();
+      await page.keyboard.press("Enter");
+      await expect(shownIn(first)).toHaveCount(12);
+      await expect(showAllIn(first)).toHaveCount(0);
+      expect(page.url()).toBe(url);
+      await expect(shownIn(first).nth(3).locator("a[data-ad-full]")).toBeFocused();
+      await expect(shownIn(groups().nth(1))).toHaveCount(3);
+      await expect(showAllIn(groups().nth(1))).toHaveText("Show all 12 ads");
+      expect(await contrastViolations(page)).toEqual([]);
+    });
+
+    await step(page, "U10-3.10: one audience chosen is one group, so it shows six, then Show all 12 ads", async () => {
+      const ref = (await groups().nth(1).getAttribute("data-audience-group"))!;
+      await page.goto(`${creative}?audience=${encodeURIComponent(ref)}`);
+      await settle(page);
+      await expect(groups()).toHaveCount(1);
+      await expect(cards(page)).toHaveCount(6);
+      await expect(showAllIn(groups().nth(0))).toHaveText("Show all 12 ads");
+    });
+  },
+);

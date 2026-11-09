@@ -1946,7 +1946,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: PAGE_LENGTH_SPEC,
         title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px`,
-        note: "U10-6's measurement. The live campaign's Creative stage fits since U10-3 (its checks folded, six ads a group); the two-audience Creative stage is still over at 375 px and keeps its U10-3 marker, and the Performance page's waits for U10-4, by their markers in tests/e2e/page-budgets.ts.",
+        note: "U10-6's measurement. Both Creative stages fit since U10-3 (the checks folded; the live campaign's one group shows six ads, the two-audience campaign's groups three each); the Performance page's waits for U10-4, by its marker in tests/e2e/page-budgets.ts.",
       }),
     ),
   },
@@ -2135,17 +2135,28 @@ export const CASES: Case[] = [
     sprint: 10,
     story: "U10-3",
     words:
-      "(Rory's choice b, 9 November 2026) Each audience group shows its first 6 ads (launched, then needs a decision, then picked, then the rest, newest first within each), then \"Show all N ads\", which reveals the rest without reloading; a filter (picked, decide, launched) shows every matching ad, with no cut-off; an ad reached by a link (#ad-7, or a tool's return) is shown, its group revealed in full.",
+      "(Rory's choice b, 9 November 2026, and his follow-up that day) A gallery with one group shows its first 6 ads; with more than one audience group, each group shows its first 3 (launched, then needs a decision, then picked, then the rest, newest first within each, with Make creative's batches kept in their order), then \"Show all N ads\", which reveals the rest without reloading; a filter (picked, decide, launched) shows every matching ad, with no cut-off; an ad reached by a link (#ad-7, or a tool's return) is shown, its group revealed in full.",
     checks: [
       {
         kind: "browser",
         spec: GALLERY_SPEC,
         title: "U10-3 #10: each audience shows its first six ads, launched first, and Show all reveals the rest in place; a filter shows every ad; a link to an ad shows it",
-        note: "The journey's 12 ads in one group: six shown, the two launched first, then the one needing a decision; Show all 12 ads by keyboard shows the rest with no navigation and moves focus to the seventh; with seven picked, Picked shows all seven and no button (the four extra picks are undone); #ad-N for the twelfth ad, and Back to Creative from its Sizes page (#ad-<id>), show it in view. The order within a tier, and the cut-off for every filter, are checked in CI; the two-audience page's groups are measured by U10-6.",
+        note: "The journey's 12 ads in one group: six shown, the two launched first, then the one needing a decision; Show all 12 ads by keyboard shows the rest with no navigation and moves focus to the seventh; with seven picked, Picked shows all seven and no button (the four extra picks are undone); #ad-N for the twelfth ad, and Back to Creative from its Sizes page (#ad-<id>), show it in view. The order within a tier, and the cut-off for every filter and number of groups, are checked in CI.",
+      },
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #10: with two audiences, each group shows its first three ads and Show all 12 ads; Show all reveals that group only; one audience chosen shows six",
+        note: "The fullest data's two-audience Quillmoor campaign (24 ads, nothing picked), only looked at: each group shows 3 of its 12 with Show all 12 ads; Show all in the first, by keyboard, shows its 12 in place and moves focus to the fourth, while the second still shows 3; ?audience= for one of them is one group, so it shows 6. Nothing is picked there, so the filters' every-match rule with two groups is checked in CI.",
       },
       { kind: "ci", file: GALLERY_LIB, test: "#10 launched, then needing a decision, then picked, then the rest" },
       { kind: "ci", file: GALLERY_LIB, test: "#10 newest first within each; ads one run made together keep the order they were given in" },
-      { kind: "ci", file: GALLERY_LIB, test: "#10 under All a group shows its first six, with Show all N ads; a filter shows every ad it matches" },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 under All one group shows its first six, with Show all N ads; a filter shows every ad it matches" },
+      {
+        kind: "ci",
+        file: GALLERY_LIB,
+        test: "#10 with more than one audience group, each shows its first three under All (Rory, 9 November 2026); a filter still shows every ad",
+      },
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

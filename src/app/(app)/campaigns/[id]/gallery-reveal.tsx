@@ -16,7 +16,17 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { buttonClass } from "@/components/ui/button";
 import { cx } from "@/components/ui/cx";
 
-const AD_BY_ID = /^ad-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
+/**
+ * The class that hides a collapsed list's ads past the preview, for each preview the gallery uses:
+ * GROUP_PREVIEW_SEVERAL (3) and GROUP_PREVIEW (6) in src/lib/creative/gallery-filter.ts. Written out in
+ * full, as Tailwind finds classes in the source and can't build one from a number at run time.
+ */
+const CUT_OFF: Partial<Record<number, string>> = {
+  3: "data-collapsed:[&>li:nth-child(n+4)]:hidden",
+  6: "data-collapsed:[&>li:nth-child(n+7)]:hidden",
+};
+
+const AD_BY_ID =/^ad-([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/;
 
 /** The element the address's fragment points at: an id, or an ad by its id (#ad-<uuid>). */
 function hashTarget(): HTMLElement | null {
@@ -93,7 +103,9 @@ export function GalleryReveal({
   const list = useRef<HTMLUListElement>(null);
   // Whether the person asked for every ad (or a link pointed past the first few); ads that arrive later follow the same cut-off.
   const [all, setAll] = useState(false);
-  const collapsed = !all && preview < total;
+  const cutOff = CUT_OFF[preview];
+  // A preview with no class of its own (it never happens) shows every ad rather than hide the wrong ones.
+  const collapsed = !all && preview < total && cutOff !== undefined;
   const reveal = useCallback(() => setAll(true), []);
   useRevealOnHash(list, reveal);
 
@@ -110,8 +122,7 @@ export function GalleryReveal({
         aria-label={label}
         data-gallery=""
         data-collapsed={collapsed ? "" : undefined}
-        // Six is GROUP_PREVIEW (src/lib/creative/gallery-filter.ts); a class can't be built from a number at run time.
-        className={cx(className, "data-collapsed:[&>li:nth-child(n+7)]:hidden")}
+        className={cx(className, cutOff)}
       >
         {children}
       </ul>

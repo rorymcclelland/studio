@@ -187,8 +187,10 @@ export function adTools({ picked, launch, olderKit, translate }: { picked: boole
 
 // ---------------------------------------------------------------- the gallery's order and length (U10-3, Rory's choice b)
 
-/** How many ads an audience group shows before "Show all N ads", under All. A filter shows every ad it matches. */
+/** How many ads the gallery's one group shows before "Show all N ads", under All. A filter shows every ad it matches. */
 export const GROUP_PREVIEW = 6;
+/** The same for each group when the gallery shows more than one audience group (Rory, 9 November 2026). */
+export const GROUP_PREVIEW_SEVERAL = 3;
 
 /** What the gallery's order needs to know about an ad: its facts, when it was made, and the run that made it. */
 export type OrderFacts = AdFacts & { createdAt: Date; runId: string | null };
@@ -218,9 +220,14 @@ export function galleryOrder<T extends OrderFacts>(ads: readonly T[]): T[] {
     .map((x) => x.a);
 }
 
-/** How many of a group's ads show before "Show all": every one under a filter, else GROUP_PREVIEW. */
-export function previewCount(show: GalleryShow, total: number): number {
-  return show === "all" ? Math.min(total, GROUP_PREVIEW) : total;
+/**
+ * How many of a group's ads show before "Show all": every one under a filter;
+ * under All, GROUP_PREVIEW when the gallery shows one group, GROUP_PREVIEW_SEVERAL
+ * each when it shows more than one (`groups`, the groups on the page).
+ */
+export function previewCount(show: GalleryShow, total: number, groups: number): number {
+  if (show !== "all") return total;
+  return Math.min(total, groups > 1 ? GROUP_PREVIEW_SEVERAL : GROUP_PREVIEW);
 }
 
 /** "Show all 12 ads" */
