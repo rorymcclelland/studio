@@ -18,7 +18,9 @@ It also refuses force pushes to `main` and its deletion. Every commit that reach
 - `after-deploy.yml`: starts when CI completes successfully on a push to `main` (`workflow_run`), not at the push.
 - `docs/hosting.md`, Vercel step 5: describes the ruleset and the emergency route.
 
-**Evidence (F-23 case 1).** With the Sprint 9 pull request open and its checks still running, GitHub refused to merge it. The refusal is recorded below once the pull request is open.
+**Evidence (F-23).**
+- Case 1, 7 November 2026: GitHub refused to merge pull request #3 (Sprint 9) twice while its checks ran. At 15:57 UTC: "3 of 3 required status checks have not succeeded" (HTTP 405). At 17:08 UTC, with the push run's Neon check still in progress: "Required status check "Migrations and database tests on a Neon branch" is in progress" (HTTP 405). It merged at 17:26:16 UTC, once all three had passed.
+- Case 2: production deployment `dpl_DiSieiSFpaQV7whHGTN9A5kzd8K5` was ready at 17:27:30 UTC, 74 seconds after the merge, and `/api/health` reported commit `94b9781`.
 
 **Emergency route.** Instant Rollback in Vercel to an earlier deployment. A fix still goes through a pull request.
 
