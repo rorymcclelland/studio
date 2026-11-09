@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "42686667200",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/studio/actions/runs/42686667200",
+  "repository": "rorymcclelland/studio",
+  "commit": "53bcac1c2645dc184854eebfd59a9f26767ea87a",
+  "branch": "ci-neon-timeout",
+  "date": "2026-11-09T20:08:38.135Z",
+  "checksJob": "success"
+}
