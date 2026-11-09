@@ -41,6 +41,7 @@ import {
   adTool,
   DEV_EMAIL,
   demoBrandId,
+  inboxCard,
   makeCreative,
   newCampaign,
   openAdMenu,
@@ -197,7 +198,7 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
     await setWaitingLaunchTerms(sql, launchId, { seed: found.seed });
     await page.goto("/approvals");
     await settle(page);
-    const card = page.locator("[data-inbox-item=launch]").filter({ has: page.locator(`a[href="${path}"]`) });
+    const card = inboxCard(page, "launch", path);
     await card.getByRole("button", { name: "Approve" }).click();
     await expect(card).toHaveCount(0, { timeout: 30_000 });
   });

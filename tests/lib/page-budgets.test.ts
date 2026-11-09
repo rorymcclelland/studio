@@ -165,13 +165,16 @@ describe("U10-6 the budgets table", () => {
       ...(b.lengthUntil?.story === "unassigned" ? [`${b.key}: length`] : []),
       ...(b.mainActionUntil?.story === "unassigned" ? [`${b.key}: main action`] : []),
     ]);
-    expect(unassigned).toEqual(["brand-kit-editor: length", "brand-languages: main action", "campaigns: length", "approvals: length", "approvals: main action"]);
+    // Answer B1 (9 November) gave the approvals inbox to U10-5.
+    expect(unassigned).toEqual(["brand-kit-editor: length", "brand-languages: main action", "campaigns: length"]);
   });
 
   it("the pages already within budget today carry no marker, so their tests must pass now", () => {
     const clean = PAGE_BUDGETS.filter((b) => !b.lengthUntil && !b.mainActionUntil).map((b) => b.key);
     expect(clean).toEqual([
       "welcome",
+      // U10-5: home leads with Needs you.
+      "home",
       "brands",
       // U10-2: the campaign's overview and its Brief, Audience and Launch stages fit their budgets.
       "campaign-live",

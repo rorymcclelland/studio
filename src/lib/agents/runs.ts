@@ -1,4 +1,5 @@
 import { asUser, type Tx } from "@/lib/db/scoped";
+import { campaignName, type CampaignRef } from "@/lib/home/needs";
 import { getAgent } from "./registry";
 
 export class StartRunError extends Error {}
@@ -190,18 +191,43 @@ export type RunSummary = {
   cost_pence: string;
   /** The part of it from the mock models (rule 1: shown as simulated). */
   simulated_pence: string;
+  /**
+   * U10-5: the campaign the run's input names (campaignId, else a question's
+   * launch), named by campaignName(); null when it names none, or an id that
+   * isn't a campaign in the reader's workspace (rule 7).
+   */
+  campaign: CampaignRef | null;
 };
+
+/** The id pattern Postgres's uuid accepts here, so a malformed id in a run's input is never cast. */
+const UUID_SQL = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
 export async function listRuns(userId: string, limit = 50, brandId?: string): Promise<RunSummary[]> {
   if (brandId !== undefined && !UUID.test(brandId)) return [];
-  return asUser(userId, (tx) => tx`
+  const rows = await asUser(userId, (tx) => tx`
     select r.id, r.agent, r.label, r.status, r.input, r.created_at,
       coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence,
-      coalesce((select sum(l.cost_pence) filter (where l.provider = 'mock') from public.usage_ledger l where l.run_id = r.id), 0)::text as simulated_pence
+      coalesce((select sum(l.cost_pence) filter (where l.provider = 'mock') from public.usage_ledger l where l.run_id = r.id), 0)::text as simulated_pence,
+      c.id as campaign_id, c.objective as campaign_objective, v.brief ->> 'title' as campaign_title
     from public.agent_runs r
+    left join lateral (
+      select coalesce(
+        case when r.input ->> 'campaignId' ~ ${UUID_SQL} then (r.input ->> 'campaignId')::uuid end,
+        case when r.input ->> 'questionId' ~ ${UUID_SQL} then (
+          select ql.campaign_id from public.performance_questions q join public.launches ql on ql.id = q.launch_id
+          where q.id = (r.input ->> 'questionId')::uuid
+        ) end
+      ) as id
+    ) named on true
+    left join public.campaigns c on c.id = named.id
+    left join public.brief_versions v on v.campaign_id = c.id and v.version = c.current_version
     where ${brandId === undefined ? tx`true` : tx`r.brand_id = ${brandId}`}
     order by r.created_at desc
-    limit ${limit}`) as unknown as Promise<RunSummary[]>;
+    limit ${limit}`);
+  return rows.map(({ campaign_id, campaign_objective, campaign_title, ...r }) => ({
+    ...(r as unknown as Omit<RunSummary, "campaign">),
+    campaign: campaign_id ? { id: campaign_id as string, name: campaignName({ title: campaign_title as string | null, objective: campaign_objective as string }) } : null,
+  }));
 }
 
 export type Decision =

@@ -35,6 +35,7 @@ import {
   contrastViolations,
   DEV_EMAIL,
   expectNoHorizontalScroll,
+  inboxCard,
   makeCreative,
   newCampaign,
   openLaunch,
@@ -174,7 +175,7 @@ test(
     await step(page, "P9-1.1: the inbox shows the request with its four ads, budget, length, threshold and that no real money is spent; Approve", async () => {
       await page.goto("/approvals");
       await settle(page);
-      const card = page.locator("[data-inbox-item=launch]").filter({ has: page.locator(`a[href="${path}"]`) });
+      const card = inboxCard(page, "launch", path);
       await expect(card).toHaveCount(1);
       await expect(card).toContainText("Simulated: no real money is spent");
       await expect(card.locator("[data-launch-ad]")).toHaveCount(4);

@@ -41,6 +41,7 @@ import {
   contrastViolations,
   DEV_EMAIL,
   expectNoHorizontalScroll,
+  inboxCard,
   makeCreative,
   newCampaign,
   openLaunch,
@@ -89,7 +90,7 @@ async function openPanel(page: Page, path: string) {
 async function approveInInbox(page: Page, path: string) {
   await page.goto("/approvals");
   await settle(page);
-  const card = page.locator("[data-inbox-item=launch]").filter({ has: page.locator(`a[href="${path}"]`) });
+  const card = inboxCard(page, "launch", path);
   await expect(card).toHaveCount(1);
   await card.getByRole("button", { name: "Approve" }).click();
   await expect(card).toHaveCount(0, { timeout: 30_000 });

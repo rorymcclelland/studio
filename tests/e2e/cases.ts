@@ -92,6 +92,7 @@ export const STORIES: Story[] = [
   { sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" },
   { sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" },
   { sprint: 10, id: "U10-4", title: "Performance: what needs action first" },
+  { sprint: 10, id: "U10-5", title: "Home leads with work" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
@@ -274,6 +275,16 @@ const ATTENTION_LIB = "tests/lib/performance-attention.test.ts";
 const ATTENTION_FLOWS = "tests/flows/performance-attention.test.ts";
 const ATTENTION_JOURNEY =
   "One Fernhollow campaign with the mock models: three paid-social ads picked, their don't rules accepted and launched (approved in the inbox) with a seed and a cost-per-acquisition threshold set while it waited, found with the pure simulator, so one ad's Below threshold alert is on day 6 and it recovers before day 14, and another ad is below the threshold on day 14. The audit's own campaign (the fullest data) has the same shape; it is measured by U10-6's \"performance\" page, whose main action is the needs-action list.";
+
+// U10-5 Home leads with work: the browser tests (a new invitee's own workspace, empty and then with its work
+// written to the database, and one real tagline run waiting for a choice), the pure list, words and links, and
+// the loader against plain Postgres (outside tests/db, as every Sprint 10 flow: U10-5 adds no table). Answer B1
+// (9 November) folds the approvals inbox in as cases 5 and 6. The interface is at the top of the spec.
+const HOME_SPEC = "home-work.spec.ts";
+const HOME_LIB = "tests/lib/home-work.test.ts";
+const HOME_FLOWS = "tests/flows/home-work.test.ts";
+const HOME_JOURNEY =
+  "A new invitee's own workspace (the owner invites them on /invites and they accept), so nothing other specs leave waiting in the dev workspace is on its home. Its work is written to the database as the app leaves it (tests/e2e/home-fixture.ts): a sign-off and a launch waiting, three live campaigns (two with unseen alerts) and one ended with an unseen alert; and a real tagline run, started from the demo card at the bottom of home, waits for a choice.";
 
 // BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
 // mock model (the unit and regression tests, and the evals in CI's first job); the real models
@@ -2279,6 +2290,107 @@ export const CASES: Case[] = [
         spec: ATTENTION_SPEC,
         title: "U10-4 #7: the chart and table tabs work by keyboard, and the chart keeps its table alternative for screen readers",
         note: "The tabs pattern: arrows (wrapping), Home and End select, Tab reaches the panel; the chart stays described by the day-by-day table while Chart is selected; axe finds nothing with either tab selected.",
+      },
+    ],
+  },
+  // U10-5 Home leads with work
+  {
+    id: "U10-5.1",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "With approvals and alerts waiting, home's first screen lists them, each linking to its place: a sign-off to the campaign's Brief stage, a launch to its card in Approvals, a run's choice to the run, and unseen alerts per campaign to that campaign's Performance page.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #1: with approvals and alerts waiting, home's first screen lists them at 375 px and 1440 px, each linking to its place",
+        note: `${HOME_JOURNEY} Every item is wholly within the first screen at both widths, in order (approvals newest first, then campaigns by their newest unseen alert); the sign-off, launch and run items are followed to their places. Also checks the live campaigns with their simulated day and share, and that the tagline demo is the last card (answer Q4).`,
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #1 what needs you on home: the approvals in the inbox's order, then unseen alerts per campaign, newest first" },
+      { kind: "ci", file: HOME_LIB, test: "#1 each item's words and where it links" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #1 homeNeedsFor() lists the approvals waiting and the unseen alerts per live campaign, each linked to its place" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 live campaigns on home: each with its simulated day and its own share" },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 live campaigns: each with its own share, labelled simulated (rule 1)" },
+    ],
+  },
+  {
+    id: "U10-5.2",
+    sprint: 10,
+    story: "U10-5",
+    words: "With nothing waiting, home says so (\"Nothing needs you right now.\").",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #2: with nothing waiting, home says Nothing needs you right now, and the tagline demo is a small card at the bottom",
+        note: "The invitee's workspace before anything is written to it, at 375 px and 1440 px. The dev workspace always has something waiting from other specs, so it can't show this.",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #2 nothing waiting: an empty list, and the words home shows instead" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #2 nothing waiting: an empty list" },
+    ],
+  },
+  {
+    id: "U10-5.3",
+    sprint: 10,
+    story: "U10-5",
+    words: "The alerts item links to the campaign's Performance page, not the campaigns list.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #3: the alerts item links to the campaign's Performance page, not the list, and marking them seen there removes it",
+        note: "Followed by keyboard to the Performance page, where Mark all as seen (U10-4) removes that campaign's item from home and leaves the other's. An ended launch's alerts never show.",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #3 an alerts item links to its campaign's Performance page, never the campaigns list" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #3 the alerts item links to the campaign's Performance page" },
+    ],
+  },
+  {
+    id: "U10-5.4",
+    sprint: 10,
+    story: "U10-5",
+    words: "Recent runs show their campaign (or \"No campaign\", as for the tagline demo); never another workspace's.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #4: recent runs show their campaign, or No campaign, and never another workspace's campaign",
+        note: "The failure path: a run whose input names the owner's campaign (another workspace) shows No campaign, and that campaign's name and id are nowhere on the page.",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #4 a run's campaign, or No campaign" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #4 listRuns() names each run's campaign" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 rule 7: another workspace sees none of A's approvals, alerts, live campaigns or runs" },
+    ],
+  },
+  {
+    id: "U10-5.5",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) A sign-off card in the approvals inbox shows a summary (version and title, brand, objective, when it closes, one line for its personas and test plan) with the personas and test plan on request, opening in place; the inbox's first Approve is within 1.5 screens at 375 px; Approve from the card works as before.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #5: a sign-off card in the inbox is a summary, with its personas and test plan on request, and Approve near the top",
+        note: "At 375 px, on the invitee's inbox (a run's choice, a launch and the sign-off): the card is at most one screen tall with its reviews closed (our reading of \"a summary\"), they open with Enter, and approving it removes the item from home. U10-6 measures the inbox with the fullest data (its \"approvals\" page).",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #5 the sign-off card's one line for its personas and test plan" },
+    ],
+  },
+  {
+    id: "U10-5.6",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "(B1, with U10-2's note) The approvals inbox links each card to the stage where its decision is made: a sign-off to the campaign's Brief stage, a launch to its Launch stage, not the campaign's overview.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #6: the approvals inbox links a sign-off to the campaign's Brief stage and a launch to its Launch stage",
+        note: "Each link is followed, and the stage bar marks that stage as the current one. The specs that found a card by its overview link now use inboxCard() in helpers.ts.",
       },
     ],
   },

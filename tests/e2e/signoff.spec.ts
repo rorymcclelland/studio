@@ -8,7 +8,7 @@
 // Other specs leave tagline approvals waiting while this runs, so the nav
 // count is checked against the inbox it heads, not against a fixed number.
 import { expect, test, type Page } from "@playwright/test";
-import { contrastViolations, expectNoHorizontalScroll, newCampaign, openStage, settle, signIn } from "./helpers";
+import { contrastViolations, expectNoHorizontalScroll, inboxCard as cardFor, newCampaign, openSignoffReviews, openStage, settle, signIn } from "./helpers";
 
 const OBJECTIVE = "Launch the winter range to lapsed customers";
 
@@ -32,9 +32,8 @@ async function newFernhollowCampaign(page: Page): Promise<string> {
   return newCampaign(page, "Fernhollow Outfitters", OBJECTIVE);
 }
 
-/** Our campaign's card in the inbox. */
-const inboxCard = (page: Page, path: string) =>
-  visible(page, "[data-inbox-item=brief_signoff]").filter({ has: page.locator(`a[href="${path}"]`) });
+/** Our campaign's card in the inbox (U10-5: found by its campaign, as its link now goes to the Brief stage). */
+const inboxCard = (page: Page, path: string) => cardFor(page, "brief_signoff", path);
 
 test.beforeEach(async ({ page }) => {
   await signIn(page);
@@ -77,6 +76,8 @@ test("S4-1 #1-#3, S4-2 and S4-4: sign-off through the inbox, with personas and a
   await expect(card).toContainText("Version 1: Fernhollow Outfitters: campaign brief");
   await expect(card).toContainText(OBJECTIVE);
   await expect(card).toContainText(/Closes \d{1,2} \w+ \d{4}/);
+  // U10-5 (answer B1): the personas and test plan are on request, in place.
+  await openSignoffReviews(card);
   await expect(card).toContainText("out of 5 overall");
   await expect(card.getByRole("list", { name: "Hypotheses" })).toBeVisible();
   const items = await visible(page, "[data-inbox-item]").count();

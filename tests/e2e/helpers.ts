@@ -270,6 +270,26 @@ export async function openStage(page: Page, stage: Stage, path?: string) {
   await settle(page);
 }
 
+// ---------------------------------------------------------------- U10-5: the approvals inbox
+// Each inbox card carries data-campaign (sign-offs and launches) and links to
+// the stage where its decision is made, not the overview; a sign-off card keeps
+// its personas and test plan in a closed <details data-signoff-reviews>
+// (tests/e2e/home-work.spec.ts has the interface). Specs find a campaign's card
+// and open its reviews here, so they change in one place.
+
+/** A campaign's card in the approvals inbox, by kind; `path` is any of the campaign's pages. */
+export function inboxCard(page: Page, kind: "brief_signoff" | "launch", path: string): Locator {
+  const id = overviewPath(path).split("/").pop()!;
+  return page.locator(`[data-inbox-item="${kind}"][data-campaign="${id}"]`).filter({ visible: true });
+}
+
+/** Opens a sign-off card's personas and test plan in place (a no-op when they are open). */
+export async function openSignoffReviews(card: Locator) {
+  const details = card.locator("details[data-signoff-reviews]");
+  if ((await details.getAttribute("open")) === null) await details.locator(":scope > summary").click();
+  await expect(details).toHaveAttribute("open", "");
+}
+
 /** Opens a collapsed history line in place (versions on Brief; discarded and runs on Creative), if it is closed. */
 export async function openHistory(page: Page, kind: "versions" | "discarded" | "runs") {
   const details = page.locator(`details[data-history="${kind}"]`).filter({ visible: true });

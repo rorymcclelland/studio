@@ -95,7 +95,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: () => "/",
     signedIn: true,
     mainAction: { css: "[data-needs-you]", what: "the Needs you list" },
-    mainActionUntil: { story: "U10-5", why: "home leads with the Sprint 1 tagline demo; U10-5 puts Needs you first" },
   },
   { key: "brands", name: "Brands list", path: () => "/brands", signedIn: true, mainAction: { css: 'main a[href^="/brands/"]', what: "the first brand" } },
   {
@@ -247,11 +246,13 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: () => "/approvals",
     signedIn: true,
     mainAction: { css: "[data-inbox-item] button", text: "Approve", what: "the first Approve" },
-    lengthUntil: {
-      story: "unassigned",
-      why: "2.4 screens with the audit's 2 items, but a sign-off card embeds its personas and test plan, and after the whole suite several are waiting; no Sprint 10 story shortens the inbox",
+    // Answer B1 (9 November): U10-5 takes the inbox; a sign-off card shows a summary, with its personas and test plan on
+    // request, and the inbox fits its length. The first Approve still comes after the tagline choices the suite leaves
+    // waiting, newest first (2,072 px at 375 px after the full suite, 9 November 2026).
+    mainActionUntil: {
+      story: "U10-5",
+      why: "the first Approve comes after every run choice waiting above it, newest first: 2.6 screens down at 375 px after the whole suite",
     },
-    mainActionUntil: { story: "unassigned", why: "a sign-off card embeds its personas and test plan, so Approve is 1.9 screens down at 375 px (audit), and no Sprint 10 story changes the inbox" },
   },
   {
     key: "runs",

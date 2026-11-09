@@ -278,7 +278,7 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
     expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
-    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "U10-4", "BUG-4", "BUG-11"]);
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "U10-4", "U10-5", "BUG-4", "BUG-11"]);
   });
 
   it("has every agreed U10-2 case, once each, in order, after U10-6's, checked as the refinement says", async () => {
@@ -410,6 +410,67 @@ describe("the case list", () => {
     expect(order.lastIndexOf("U10-3")).toBeLessThan(order.indexOf("U10-4"));
     expect(order.lastIndexOf("U10-4")).toBeLessThan(order.indexOf("BUG-4"));
     expect(STORIES.find((s) => s.id === "U10-4")).toEqual({ sprint: 10, id: "U10-4", title: "Performance: what needs action first" });
+  });
+
+  it("has every agreed U10-5 case, once each, in order, after U10-4's, checked as the refinement says, with the inbox's cases from answer B1", async () => {
+    const u105 = CASES.filter((c) => c.story === "U10-5");
+    // 1 to 4 as refined; 5 and 6 are answer B1 (9 November 2026), which folds the approvals inbox into U10-5.
+    expect(u105.map((c) => c.id)).toEqual(Array.from({ length: 6 }, (_, i) => `U10-5.${i + 1}`));
+    for (const c of u105) expect(c.sprint, c.id).toBe(10);
+    for (const id of ["U10-5.5", "U10-5.6"]) expect(CASES.find((c) => c.id === id)!.words, id).toMatch(/^\(B1, /);
+    // The refinement: a browser test for every case; the pure list and words (1 to 5) and the loader (1 to 4) in CI.
+    expect(u105.map(caseKind)).toEqual(Array(6).fill("browser"));
+    const SPEC = "home-work.spec.ts";
+    const LIB = "tests/lib/home-work.test.ts";
+    const FLOWS = "tests/flows/home-work.test.ts";
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    for (const c of u105) for (const x of c.checks.filter((y) => y.kind === "browser")) expect((x as { spec: string }).spec, c.id).toBe(SPEC);
+    for (const id of ["U10-5.1", "U10-5.2", "U10-5.3", "U10-5.4", "U10-5.5"]) expect(ciIn(id, LIB), id).toBe(true);
+    for (const id of ["U10-5.1", "U10-5.2", "U10-5.3", "U10-5.4"]) expect(ciIn(id, FLOWS), id).toBe(true);
+    // Rule 7: home reads data, so another workspace is checked against the database.
+    expect(CASES.find((c) => c.id === "U10-5.4")!.checks.some((x) => x.kind === "ci" && "test" in x && /another workspace sees none/.test(x.test))).toBe(true);
+    expect(u105.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
+    expect(u105.flatMap((c) => c.checks).some((x) => x.kind === "hand" || x.kind === "withdrawn")).toBe(false);
+    // The browser tests change no brand kit, so they run in the main project; none is marked as an expected failure.
+    const spec = read(`tests/e2e/${SPEC}`);
+    expect(spec).not.toMatch(/test\.fail\(|test\.fixme\(|test\.skip\(\s*true/);
+    for (const c of u105) {
+      for (const x of c.checks.filter((y) => y.kind === "browser")) {
+        const title = (x as { title: string }).title;
+        const at = declaredAt(spec, title);
+        expect(at, title).toBeGreaterThan(-1);
+        expect(spec.slice(at, spec.indexOf("async (", at)), c.id).not.toContain("@brand-kit");
+      }
+    }
+    // The builder's interface is at the top of the spec, with the exact words.
+    const head = spec.slice(0, spec.indexOf("import "));
+    expect(head).toContain("---------------------------------------------------------------- interface");
+    for (const words of [
+      "Nothing needs you right now.",
+      "No campaign",
+      "Decide the sign-off of version 2: <name>",
+      "Approve or refuse the launch (simulated): <name>",
+      "Choose on the run: <runLabel trimmed, else question>",
+      "3 unseen alerts (simulated): <name>",
+      "Healthy spend share: 84% (simulated)",
+      "Personas and test plan",
+      "3 synthetic personas and a test plan",
+      "Read the brief on the campaign",
+      "See the launch on the campaign",
+    ]) {
+      expect(head, words).toContain(words);
+    }
+    // The specs that find an inbox card by its campaign go through one helper, now the cards link to stages.
+    const helpers = read("tests/e2e/helpers.ts");
+    for (const fn of ["inboxCard", "openSignoffReviews"]) expect(helpers, fn).toMatch(new RegExp(`export (async )?function ${fn}\\(`));
+    for (const f of ["launch", "monitor", "performance", "simulation", "signoff"]) expect(read(`tests/e2e/${f}.spec.ts`), f).not.toMatch(/data-inbox-item=[a-z_]+\]"\)\.filter\(\{ has: page\.locator\(`a\[href="\$\{path\}"\]`\)/);
+    // Home's place in the length budgets: its main action is the Needs you list.
+    const { budgetFor } = await import("../e2e/page-budgets");
+    expect(budgetFor("home").mainAction).toMatchObject({ css: "[data-needs-you]" });
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("U10-4")).toBeLessThan(order.indexOf("U10-5"));
+    expect(order.lastIndexOf("U10-5")).toBeLessThan(order.indexOf("BUG-4"));
+    expect(STORIES.find((s) => s.id === "U10-5")).toEqual({ sprint: 10, id: "U10-5", title: "Home leads with work" });
   });
 
   it("has every agreed BUG-4 and BUG-11 case, once each, in order, after F-23's: CI with the mock model, and the real models in an eval run", () => {
