@@ -68,8 +68,11 @@ export async function retryDraft(member: Member, campaignId: string, send: SendE
 export type CampaignSummary = {
   id: string;
   objective: string;
-  status: "drafting" | "draft";
+  /** campaigns.status as stored; a value this code doesn't know shows as Draft (campaignStatusLabel). */
+  status: string;
   currentVersion: number;
+  /** Every launch of the campaign, any order, for the status in lists (U10-1, BUG-13). */
+  launches: { status: string; simDay: number }[];
   brand: { id: string; name: string };
   title: string | null;
   updatedAt: Date;
@@ -79,13 +82,16 @@ export async function listCampaigns(userId: string, brandId?: string): Promise<C
   if (brandId !== undefined && !UUID.test(brandId)) return [];
   const rows = await asUser(userId, (tx) => tx`
     select c.id, c.objective, c.status, c.current_version, c.updated_at, b.id as brand_id, b.name as brand_name,
-      (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title
+      (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title,
+      coalesce((select jsonb_agg(jsonb_build_object('status', l.status, 'simDay', l.sim_day))
+                from public.launches l where l.campaign_id = c.id), '[]'::jsonb) as launches
     from public.campaigns c join public.brands b on b.id = c.brand_id
     where ${brandId === undefined ? tx`true` : tx`c.brand_id = ${brandId}`}
     order by c.updated_at desc
     limit 100`);
   return rows.map((r) => ({
     id: r.id, objective: r.objective, status: r.status, currentVersion: r.current_version,
+    launches: (r.launches as { status: string; simDay: number | string }[]).map((l) => ({ status: l.status, simDay: Number(l.simDay) })),
     brand: { id: r.brand_id, name: r.brand_name }, title: r.title, updatedAt: r.updated_at,
   }));
 }

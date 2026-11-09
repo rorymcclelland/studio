@@ -87,6 +87,8 @@ export const STORIES: Story[] = [
   { sprint: 9, id: "P9-4", title: "The Monitor agent: alerts and ask-your-data" },
   { sprint: 9, id: "F-16a", title: "The first real-model eval run, with regression cases" },
   { sprint: 9, id: "F-23", title: "Production deploys wait for the checks" },
+  { sprint: 10, id: "U10-1", title: "Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save" },
+  { sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -182,6 +184,51 @@ const EVAL_WORKFLOW = "tests/lib/workflow-files.test.ts";
 const EVAL_RUNNER = "tests/agents/eval-runner.test.ts";
 const REGRESSION = "tests/evals/regression.test.ts";
 const HAND_PACK_9 = "docs/testing/sprint-9-test-pack.md";
+
+// U10-1 Quick fixes (F-36, BUG-13, BUG-14, the kit editor's Save)
+const QUICK_FIXES_SPEC = "quick-fixes.spec.ts";
+const METER_LIB = "tests/lib/spend-meter.test.ts";
+const STATUS_LIB = "tests/lib/campaign-status.test.ts";
+const STATUS_FLOWS = "tests/flows/campaign-status.test.ts";
+const BUILT_COPY = "tests/lib/built-copy.test.ts";
+
+// U10-6 Length budgets: one browser test per page and case, titled with the page's key in
+// tests/e2e/page-budgets.ts (tests/lib/page-budgets.test.ts checks the spec has them all, and
+// tests/lib/cases.test.ts that this list matches the table).
+const PAGE_LENGTH_SPEC = "page-length.spec.ts";
+const PAGE_BUDGETS_LIB = "tests/lib/page-budgets.test.ts";
+const BUDGET_PAGES = [
+  "welcome",
+  "home",
+  "brands",
+  "brand-fernhollow",
+  "brand-quillmoor",
+  "brand-quillmoor-audience",
+  "brand-quillmoor-voice",
+  "brand-quillmoor-legal",
+  "brand-quillmoor-products",
+  "brand-kit-editor",
+  "brand-languages",
+  "campaigns",
+  "campaign-live",
+  "campaign-live-brief",
+  "campaign-live-audience",
+  "campaign-live-creative",
+  "campaign-live-launch",
+  "performance",
+  "campaign-two-audiences",
+  "campaign-two-audiences-creative",
+  "campaign-waiting",
+  "campaign-waiting-brief",
+  "campaign-early",
+  "campaign-early-brief",
+  "approvals",
+  "runs",
+  "run-trail",
+  "run-awaiting",
+  "invites",
+  "not-found-app",
+];
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -1653,6 +1700,119 @@ export const CASES: Case[] = [
         kind: "hand",
         why: "Only a real merge to main shows it: Claude records the time from merge to live at the Sprint 9 deploy, after sign-off. With the ruleset, CI's wait (about 40 minutes) comes before the merge, so the time from merge to live is Vercel's build, a few minutes.",
       },
+    ],
+  },
+  // U10-1 Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save
+  {
+    id: "U10-1.1",
+    sprint: 10,
+    story: "U10-1",
+    words: "With a spend reservation in the database, every signed-in page at 375 px has no sideways scroll (F-36, made deterministic).",
+    checks: [
+      {
+        kind: "browser",
+        spec: QUICK_FIXES_SPEC,
+        title: "U10-1 #1: with a spend reservation in the database, every signed-in page at 375 px has no sideways scroll",
+        note: "A 5p reservation is written to the dev workspace for the test, so a call is in flight on every page. The campaign pages are one per status (written to the database); the Performance page isn't among them, as it needs a launch with simulated days. The design-system spec's own checks at 375 px stay as they are.",
+      },
+    ],
+  },
+  {
+    id: "U10-1.2",
+    sprint: 10,
+    story: "U10-1",
+    words: "While a call is in flight, the meter's text says a call is running (\"Simulated\" and \"1 call running\") and states no amount as real spend.",
+    checks: [
+      {
+        kind: "browser",
+        spec: QUICK_FIXES_SPEC,
+        title: "U10-1 #2: while a call is in flight, the spend meter says a call is running and states no amount as real spend",
+        note: "Other specs' calls may be in flight at the same moment, so the browser checks the words' form (\"<n> call(s) running\"); the exact words for one call, and that they go when none is running, are the component test.",
+      },
+      { kind: "ci", file: METER_LIB, test: "U10-1 #2 the spend meter's words" },
+      { kind: "ci", file: METER_LIB, test: "U10-1 #2 the spend meter as rendered" },
+    ],
+  },
+  {
+    id: "U10-1.3",
+    sprint: 10,
+    story: "U10-1",
+    words: "Each campaign status shows correctly in /campaigns and on the brand page, one campaign per state: Writing the brief, Draft, Waiting for sign-off, Signed off, Launch waiting, Live (simulated day N), Ended.",
+    checks: [
+      {
+        kind: "browser",
+        spec: QUICK_FIXES_SPEC,
+        title: "U10-1 #3: each campaign status shows on /campaigns and on the brand page, one campaign per state",
+        note: "The seven campaigns are written to the database as the app leaves them (status-fixture.ts); building a live one through the UI takes minutes and the list reads only these rows. The queries behind the list are the flows test.",
+      },
+      { kind: "ci", file: STATUS_LIB, test: "U10-1 #3 the status a campaign shows in lists" },
+      { kind: "ci", file: STATUS_FLOWS, test: "U10-1 #3 listCampaigns() reads each campaign's status facts" },
+    ],
+  },
+  {
+    id: "U10-1.4",
+    sprint: 10,
+    story: "U10-1",
+    words: "A status the code doesn't know (a future campaign state) shows \"Draft\", not an error.",
+    checks: [{ kind: "ci", file: STATUS_LIB, test: "U10-1 #4 a status the code doesn't know" }],
+  },
+  {
+    id: "U10-1.5",
+    sprint: 10,
+    story: "U10-1",
+    words: "The welcome page and the test plan no longer say built features are coming (BUG-14).",
+    checks: [
+      {
+        kind: "ci",
+        file: BUILT_COPY,
+        test: "U10-1 #5 copy says what is built",
+        note: "A text check against a list of features built by the end of Sprint 9: no sentence about the future, and nothing under a Coming next heading, names one. The welcome page is rendered as a visitor gets it; the test plan's note is PLAN_NOTE, shown on the campaign page and in the inbox.",
+      },
+    ],
+  },
+  {
+    id: "U10-1.6",
+    sprint: 10,
+    story: "U10-1",
+    words: "At 375 px, Save brand kit is on screen at the top and the bottom of the kit editor.",
+    checks: [{ kind: "browser", spec: QUICK_FIXES_SPEC, title: "U10-1 #6: at 375 px, Save brand kit is on screen at the top and the bottom of the kit editor" }],
+  },
+  // U10-6 Length budgets, checked in CI
+  {
+    id: "U10-6.1",
+    sprint: 10,
+    story: "U10-6",
+    words: "Every page is within its budget at both widths with the audit's fullest data: at most 6 screens at 375 px and 4 at 1440 px (Q7).",
+    checks: [
+      ...BUDGET_PAGES.map((key): Check => ({ kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px` })),
+      {
+        kind: "ci",
+        file: PAGE_BUDGETS_LIB,
+        test: "U10-6 the budgets table",
+        note: "A page that a later Sprint 10 story makes fit is skipped, with its numbers, until that story is built, so this case shows as not run, never passed, until every page fits.",
+      },
+    ],
+  },
+  {
+    id: "U10-6.2",
+    sprint: 10,
+    story: "U10-6",
+    words: "Each page's main action is within its first 1.5 screens at 375 px.",
+    checks: BUDGET_PAGES.filter((key) => key !== "not-found-app").map((key): Check => ({ kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #2: the main action of ${key} is within 1.5 screens at 375 px` })),
+  },
+  {
+    id: "U10-6.3",
+    sprint: 10,
+    story: "U10-6",
+    words: "A page over budget fails with its measured height and the budget in the message.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PAGE_LENGTH_SPEC,
+        title: "U10-6 #3: a page over its budget fails with its measured height and the budget in the message",
+        note: "The spec's own check, run against a deliberately long fixture page (10,000 px, its button 9,000 px down), set as the page's content.",
+      },
+      { kind: "ci", file: PAGE_BUDGETS_LIB, test: "U10-6 #3 a page over budget fails with its measured height and the budget" },
     ],
   },
 ];

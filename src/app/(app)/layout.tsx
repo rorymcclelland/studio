@@ -48,7 +48,7 @@ async function Shell({ children }: { children: React.ReactNode }) {
         <header className="mx-auto flex max-w-5xl flex-wrap items-center gap-x-3 gap-y-3 px-4 pt-5 pb-2 sm:px-8 lg:gap-x-2">
           <Wordmark className="order-1" />
           <SegmentedNav items={nav(waiting)} label="Main" className="order-3 lg:order-2 lg:ml-1" />
-          <div className="order-4 lg:order-3 lg:ml-auto">
+          <div className="order-4 max-w-full min-w-0 lg:order-3 lg:ml-auto">
             <SpendMeter userId={member.userId} workspaceId={member.workspaceId} />
           </div>
           <div className="order-2 ml-auto lg:order-4 lg:ml-0">

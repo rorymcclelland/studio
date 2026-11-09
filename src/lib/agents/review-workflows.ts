@@ -195,7 +195,7 @@ export async function executeTestPlanRun(ctx: StepContext, step: StepTools): Pro
         insight: insight(h.insightRef)?.text ?? null,
         audience: audience(h.audienceRef) ? { segmentRef: audience(h.audienceRef)!.segmentRef, title: l.items[audience(h.audienceRef)!.segmentRef]?.title ?? null } : null,
       })),
-      note: "Sample sizes and run lengths come from the campaign simulator (Sprint 8).",
+      note: "No sample sizes or run lengths: a launch in the campaign simulator has its own daily budget and length in days, which a person approves.",
     };
     await asUser(ctx.userId, (tx) => tx`
       insert into public.test_plans (workspace_id, campaign_id, brief_version, run_id, plan, created_by)

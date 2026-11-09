@@ -30,9 +30,9 @@ async function EditBrandContent(props: PageProps<"/brands/[id]/edit">) {
           {brand.name}. Agents read this kit before they write or design anything, so changes apply to their next run.
         </p>
       </div>
-      <LogoUpload brandId={brand.id} brandName={brand.name} initial={{ svg: brand.logoSvg, pngSrc: brand.logoPngSrc }} />
       <BrandEditor
         brandId={brand.id}
+        lead={<LogoUpload brandId={brand.id} brandName={brand.name} initial={{ svg: brand.logoSvg, pngSrc: brand.logoPngSrc }} />}
         initial={{
           name: brand.name,
           slug: brand.slug,

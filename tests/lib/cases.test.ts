@@ -221,6 +221,66 @@ describe("the case list", () => {
     expect(STORIES.filter((s) => s.sprint === 9).map((s) => s.id)).toEqual(["P9-1", "P9-2", "P9-3", "P9-4", "F-16a", "F-23"]);
   });
 
+  it("has every agreed U10-1 case, once each, in order, checked as the refinement says", () => {
+    const u101 = CASES.filter((c) => c.story === "U10-1");
+    expect(u101.map((c) => c.id)).toEqual(Array.from({ length: 6 }, (_, i) => `U10-1.${i + 1}`));
+    for (const c of u101) expect(c.sprint, c.id).toBe(10);
+    // Browser for 1, 2, 3 and 6; CI for 4 (the unknown status) and 5 (the text check); nothing by hand.
+    expect(u101.map(caseKind)).toEqual(["browser", "browser", "browser", "ci", "ci", "browser"]);
+    for (const c of u101.filter((x) => caseKind(x) === "browser")) expect(c.checks[0], c.id).toMatchObject({ kind: "browser", spec: "quick-fixes.spec.ts" });
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    // Case 2 is CI (the component) and browser; case 3's state function and its query are CI too.
+    expect(ciIn("U10-1.2", "tests/lib/spend-meter.test.ts")).toBe(true);
+    expect(ciIn("U10-1.3", "tests/lib/campaign-status.test.ts")).toBe(true);
+    expect(ciIn("U10-1.4", "tests/lib/campaign-status.test.ts")).toBe(true);
+    expect(ciIn("U10-1.5", "tests/lib/built-copy.test.ts")).toBe(true);
+    // The query's flows test builds launches (about a hundred statements), so it is outside tests/db: CI's Neon job
+    // runs tests/db from a US runner at about 100 ms a query.
+    expect(ciIn("U10-1.3", "tests/flows/campaign-status.test.ts")).toBe(true);
+    expect(CASES.filter((c) => c.sprint === 10).flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
+    // The browser tests change no brand kit, so they run in the main project.
+    const spec = read("tests/e2e/quick-fixes.spec.ts");
+    for (const c of u101.filter((x) => caseKind(x) === "browser")) {
+      const title = (c.checks[0] as { title: string }).title;
+      const at = declaredAt(spec, title);
+      expect(spec.slice(at, spec.indexOf("async (", at)), c.id).not.toContain("@brand-kit");
+    }
+    // The builder's interface is written at the top of the spec.
+    expect(spec.slice(0, spec.indexOf("import "))).toContain("---------------------------------------------------------------- interface");
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("F-23")).toBeLessThan(order.indexOf("U10-1"));
+    expect(STORIES.find((s) => s.id === "U10-1")).toEqual({ sprint: 10, id: "U10-1", title: "Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save" });
+  });
+
+  it("has every agreed U10-6 case, once each, in order, after U10-1's, with a test for every page in the budgets table", async () => {
+    const u106 = CASES.filter((c) => c.story === "U10-6");
+    expect(u106.map((c) => c.id)).toEqual(["U10-6.1", "U10-6.2", "U10-6.3"]);
+    for (const c of u106) expect(c.sprint, c.id).toBe(10);
+    expect(u106.map(caseKind)).toEqual(["browser", "browser", "browser"]);
+    // Every page in tests/e2e/page-budgets.ts has its case 1 test, and every page with a main action its case 2 test,
+    // and the case list names no page the table doesn't have.
+    const { PAGE_BUDGETS } = await import("../e2e/page-budgets");
+    const titles = (id: string) => CASES.find((c) => c.id === id)!.checks.filter((x) => x.kind === "browser").map((x) => (x as { title: string }).title);
+    expect(titles("U10-6.1")).toEqual(PAGE_BUDGETS.map((b) => `U10-6 #1: ${b.key} is within its length budget at 375 px and 1440 px`));
+    expect(titles("U10-6.2")).toEqual(PAGE_BUDGETS.filter((b) => b.mainAction).map((b) => `U10-6 #2: the main action of ${b.key} is within 1.5 screens at 375 px`));
+    for (const c of u106) for (const x of c.checks) if (x.kind === "browser") expect(x.spec, c.id).toBe("page-length.spec.ts");
+    // Case 3 is the spec's own check on a fixture page, and in CI on a fixture measurement.
+    expect(CASES.find((c) => c.id === "U10-6.3")!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === "tests/lib/page-budgets.test.ts")).toBe(true);
+    // A page waiting on a later story is skipped by story id, never marked as an expected failure: Playwright counts an
+    // expected failure as passed, and the demo page would then show the case as Passed.
+    const spec = read("tests/e2e/page-length.spec.ts");
+    expect(spec).not.toMatch(/test\.fail\(|test\.fixme\(/);
+    // The spec runs after every other spec, in its own project; its data is built beside them.
+    const config = read("playwright.config.ts");
+    expect(config).toMatch(/name: "page-length",\s*testMatch: \/page-length\\\.spec\\\.ts\/[\s\S]*?dependencies: \["brand-kit"\]/);
+    expect(config).toMatch(/name: "page-length-data",\s*testMatch: \/page-length-data\\\.setup\\\.ts\//);
+    expect(config).toMatch(/name: "chromium",[\s\S]*?testIgnore: \/page-length\\\.spec\\\.ts\//);
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
+    expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6"]);
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);
