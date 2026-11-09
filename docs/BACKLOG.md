@@ -238,27 +238,42 @@ F-16a's first real-model runs (6 and 7 November; reports on `e2e-results/evals/s
 | BUG-11 | Imagery, Fernhollow winter range: the brief reached the image-prompt model with the brand's name in it, which invites the picture model to draw it as text (rule 8) | F-16a imagery part 3 | Backlog, from F-16a's run |
 | BUG-12 | Imagery, Fernhollow winter range: 3 of 4 pictures kept; one was dropped | F-16a imagery part 3 | Backlog, from F-16a's run |
 | BUG-10 | The monitor's answer check rounded half-way figures differently from the table (£8.335 shown as £8.34, checked as £8.33), so about 3.6% of correct answers were refused; it made P9-4.4's browser test flaky | Sprint 9 demo CI run (passed on a retry) | Done, Sprint 9: the check also accepts the figure exactly as the table shows it |
-| F-36 | Every signed-in page scrolls sideways at 375 px while any model call is in flight: the header's spend meter (`src/components/spend-meter.tsx`) is one row that doesn't wrap, with 1 px to spare, and a spend reservation turns its pill from "Simulated" to "42.62p simulated" (387 px). That is why the design-system browser test failed on `main` after pull requests #2 and #3 and passed on a re-run: another spec's run has to be in flight at that moment (found by the UX audit, 8 Nov). It happens on production too | Sprint 9 deploy; UX audit | Backlog, from Sprint 9 review (fold into the UX sprint) |
-| BUG-13 | Every campaign reads "Draft vN" on /campaigns and the brand page, whether it is live, signed off or waiting (`campaignStatus()` in `src/app/(app)/campaigns/campaign-list.tsx`) | UX audit, 8 Nov | Backlog, from Sprint 9 review |
-| BUG-14 | Out-of-date copy, against rule 1: the welcome page's "Coming next" lists compliance and Performance, which are built, and the test plan says the simulator "is not built yet" (campaign page and inbox) | UX audit, 8 Nov | Backlog, from Sprint 9 review |
+| F-36 | Every signed-in page scrolls sideways at 375 px while any model call is in flight: the header's spend meter (`src/components/spend-meter.tsx`) is one row that doesn't wrap, with 1 px to spare, and a spend reservation turns its pill from "Simulated" to "42.62p simulated" (387 px). That is why the design-system browser test failed on `main` after pull requests #2 and #3 and passed on a re-run: another spec's run has to be in flight at that moment (found by the UX audit, 8 Nov). It happens on production too | Sprint 9 deploy; UX audit | Folded into U10-1, Sprint 10 |
+| BUG-13 | Every campaign reads "Draft vN" on /campaigns and the brand page, whether it is live, signed off or waiting (`campaignStatus()` in `src/app/(app)/campaigns/campaign-list.tsx`) | UX audit, 8 Nov | Folded into U10-1, Sprint 10 |
+| BUG-14 | Out-of-date copy, against rule 1: the welcome page's "Coming next" lists compliance and Performance, which are built, and the test plan says the simulator "is not built yet" (campaign page and inbox) | UX audit, 8 Nov | Folded into U10-1, Sprint 10 |
 | F-35 | The monitor workflow's plan and answer steps catch every error, so a transient database or Inngest error becomes a permanent "AI unreached" refusal instead of a retry | BUG-10 investigation | Backlog, from Sprint 9 |
+
+## Sprint 10: UX, shorter pages with the same look (refined and confirmed 9 November 2026)
+
+Every page puts what needs a person at the top, in Studio's existing design. From the UX audit of 8 November (the live campaign page was 29 screens on a phone). Detail: `docs/refinement/sprint-10.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| U10-1 | Quick fixes: the spend meter at 375 px (F-36), campaign status in lists (BUG-13), out-of-date copy (BUG-14), the kit editor's Save on a phone | S | Ready, Sprint 10 |
+| U10-6 | Length budgets checked in CI: 6 screens at 375 px, 4 at 1440 px, the main action within 1.5 screens on a phone | S | Ready, Sprint 10 |
+| U10-2 | The campaign in stages: an overview with "Needs you", a stage bar, and Brief, Audience, Creative, Launch and Performance pages | L | Ready, Sprint 10 |
+| U10-3 | Ad cards follow the ad's state, launched ads locked (also on the server), a filterable gallery | M | Ready, Sprint 10 |
+| U10-4 | Performance: what needs action first, alerts newest first with recovery shown, Mark all as seen, the latest answer open | M | Ready, Sprint 10 |
+| U10-5 | Home leads with work; the tagline demo becomes a small card at the bottom | S | Ready, Sprint 10 |
+| U10-7 | The brand page: campaigns first, reference data in tabs | M | Ready, Sprint 10 |
+| U10-8 | The runs list: filters, the campaign, paging past 50; trail steps numbered without gaps | M | Ready, Sprint 10 |
+| BUG-4 | The brief's quantities-in-words check and its prompt agree | S | Ready, Sprint 10 |
+| BUG-11 | The brand name never reaches the image-prompt model | S | Ready, Sprint 10 |
 
 ## Not yet in a sprint (ranked)
 
-Re-ranked at the Sprint 9 close (8 November). Rory asked for a UX sprint next, before Performance II: the pages work but are too long. Its refinement starts with an audit of every page's length at 375 and 1440 px.
+Re-ranked at the Sprint 9 close (8 November); Sprint 10 (UX) is above, with F-36, BUG-13, BUG-14, BUG-4 and BUG-11 folded in.
 
-1. Sprint 10 (proposed): UX revisit, keeping the look and feel, with F-36 (the spend meter overflows at 375 px), BUG-13 (campaign status in lists) and BUG-14 (out-of-date copy). Stories come from the audit (8 Nov): the live campaign page is 29 screens on a phone and 12 at 1440 px.
-2. BUG-4: the brief's quantities-in-words check and its prompt disagree; it fails cases in five agents (S). A candidate to join Sprint 10, as it touches no pages.
-3. BUG-11: the brand name reaches the image-prompt model (rule 8) (S). Also a Sprint 10 candidate.
-4. BUG-2 and BUG-3: Audience and Persona on Haiku fail every case (M). May need a model change; refine with BUG-4's fix in place.
-5. F-30 with F-31: don't swallow database errors inside transactions; try `postgres` 4.0.0 (S).
-6. F-35: monitor steps retry transient errors instead of refusing (S).
-7. BUG-5, BUG-6, BUG-7, BUG-8, BUG-12: the other eval findings (S each).
-8. F-32: keep the results branch small (S).
-9. BUG-9: eval reports undercount errored cases (S).
-10. F-20, F-19, F-25, F-24, F-26, F-27, F-10 (S each), then F-9, the dark theme.
-11. Sprint 11, Performance II (fatigue forecasts, swaps, diagnostics, budget, the test plan's sample sizes), and Sprint 12, the flywheel, demo mode and launch: each moves back one sprint.
-12. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
+1. BUG-2 and BUG-3: Audience and Persona on Haiku fail every case (M). May need a model change; refine with BUG-4's fix in place.
+2. F-30 with F-31: don't swallow database errors inside transactions; try `postgres` 4.0.0 (S).
+3. F-35: monitor steps retry transient errors instead of refusing (S).
+4. BUG-5, BUG-6, BUG-7, BUG-8, BUG-12: the other eval findings (S each).
+5. F-32: keep the results branch small (S).
+6. BUG-9: eval reports undercount errored cases (S).
+7. F-20, F-19, F-25, F-24, F-26, F-27, F-10 (S each), then F-9, the dark theme.
+8. The 1440 px header on one row (from the UX audit) (S).
+9. Sprint 11, Performance II (fatigue forecasts, swaps, diagnostics, budget, the test plan's sample sizes), and Sprint 12, the flywheel, demo mode and launch: each moves back one sprint.
+10. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
 
 ## Decisions
 
@@ -289,3 +304,4 @@ Re-ranked at the Sprint 9 close (8 November). Rory asked for a UX sprint next, b
 | 6 Nov 2026 | Repository made public and renamed `studio`. A ruleset on `main` now requires a pull request whose three CI checks pass on the latest code (F-23 done) |
 | 7 Nov 2026 | Sprint 9 signed off from the demo page (CI run 42297709001) and deployed with Rory's approval: three migrations applied to a trial branch, production and preview (each matches a fresh build in all 11 fingerprint parts), then pull request #3 merged to `main` as `94b9781` once its checks passed; GitHub refused the merge twice while checks were running (F-23 case 1); live 74 s after the merge (F-23 case 2); health OK, no runtime errors |
 | 8 Nov 2026 | Sprint 9 closed: F-23, P9-1 to P9-4, F-16a, F-28a and N-9a done (P9-4's real-model answers are Rory's hand check, N-9b); N-7a returned (12 Nov); new rows BUG-2 to BUG-12 from F-16a, BUG-13 and BUG-14 from the UX audit, F-35, F-36 and N-9b. Rory asked for a UX sprint next, before Performance II; its refinement starts with a page-length audit |
+| 9 Nov 2026 | Sprint 10 (UX: shorter pages with the same look) refined from the UX audit and confirmed: stage pages with a stage bar, opening on an overview; ad tools by state with launched ads locked; the tagline demo to a small card; BUG-4 and BUG-11 join; the brand page and runs list join; length budgets of 6 screens at 375 px and 4 at 1440 px; no mock-up first |
