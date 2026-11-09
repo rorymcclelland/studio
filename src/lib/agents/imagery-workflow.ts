@@ -1,5 +1,5 @@
 import { discardIn, insertImage, toWebp } from "@/lib/assets/store";
-import { realNamesFor, withoutNames } from "@/lib/brief/gather";
+import { realNamesFor } from "@/lib/brief/gather";
 import { storedBrief } from "@/lib/brief/schema";
 import { paletteWords } from "@/lib/creative/colour-words";
 import { NOT_SIGNED_OFF } from "@/lib/creative/imagery";
@@ -7,7 +7,7 @@ import { asUser } from "@/lib/db/scoped";
 import { CapExceededError, generateImage } from "@/lib/models/generate";
 import { dontKey } from "@/lib/compliance/rules";
 import { fitVision, META_MARGIN_BYTES, META_MAX_BYTES, VISION_MAX_BYTES, type VisionRecord } from "@/lib/compliance/vision";
-import { IMAGE_COUNT, imageCheckAgent, imageryAgent, imageryStart, isFinanceCategory, MAX_DONT_RULES, type ImageryInput, type ImageryOutput } from "./imagery";
+import { forImageModel, IMAGE_COUNT, imageCheckAgent, imageryAgent, imageryStart, isFinanceCategory, MAX_DONT_RULES, type ImageryInput, type ImageryOutput } from "./imagery";
 import { runModelStep, type StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
 
@@ -56,12 +56,6 @@ const SAVE_SEQ = 3 + IMAGE_COUNT * 4;
 const errorText = (err: unknown) => (err instanceof Error ? err.message : String(err));
 const reasonOf = (err: unknown): "cap" | "error" => (err instanceof CapExceededError ? "cap" : "error");
 
-function scrub(text: string, brandName: string, realNames: string[]): string {
-  const name = brandName.trim();
-  const own = name ? text.replace(new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "the brand") : text;
-  return withoutNames(own, realNames);
-}
-
 async function readBrief(ctx: StepContext): Promise<Prepared> {
   const started = Date.now();
   const res = await asUser(ctx.userId, async (tx): Promise<{ result: Prepared; raw: unknown; summary: unknown }> => {
@@ -88,13 +82,14 @@ async function readBrief(ctx: StepContext): Promise<Prepared> {
     const segs = segIds.length ? await tx`select id, title from public.context_items where id = any(${segIds}::uuid[])` : [];
     const segTitle = new Map(segs.map((s) => [s.id as string, s.title as string]));
     const places = await tx`select distinct region from public.customers where brand_id = ${c.brand_id} and region <> '' limit 30`;
-    const clean = (t: string) => scrub(t, c.name, realNames);
-    const input: ImageryInput = {
+    // BUG-11: every text the model is given (the brief and the kit's words) goes through
+    // forImageModel, which takes out the brand's name, its first word and their possessives.
+    const input: ImageryInput = forImageModel({
       brief: {
-        title: clean(brief.title),
-        story: clean(brief.story),
-        audiences: brief.audiences.map((a) => clean(`${segTitle.get(a.segmentRef) ?? "An audience"}: ${a.why}`).slice(0, 400)),
-        channels: brief.channels.map((ch) => clean(`${ch.channel}: ${ch.role}`).slice(0, 250)),
+        title: brief.title,
+        story: brief.story,
+        audiences: brief.audiences.map((a) => `${segTitle.get(a.segmentRef) ?? "An audience"}: ${a.why}`.slice(0, 400)),
+        channels: brief.channels.map((ch) => `${ch.channel}: ${ch.role}`.slice(0, 250)),
       },
       palette: paletteWords(palette),
       toneWords: c.tone_words as string[],
@@ -104,7 +99,7 @@ async function readBrief(ctx: StepContext): Promise<Prepared> {
       brandName: c.name as string,
       realNames,
       places: places.map((p) => p.region as string),
-    };
+    });
     return {
       result: { ok: true, campaignId: c.id, version: start.data.version, brandId: c.brand_id, paletteHex: palette.map((p) => p.hex), input },
       raw: start.data,

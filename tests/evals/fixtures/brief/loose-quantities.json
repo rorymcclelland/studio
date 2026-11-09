@@ -1,0 +1,43 @@
+{
+  "case": "Brief: loose quantities in words, refused on both attempts (BUG-4)",
+  "source": "docs/refinement/sprint-10.md, \"Proposed to join: BUG-4 and BUG-11\", and docs/BACKLOG.md row BUG-4; the F-16a real-model reports on the branch e2e-results/evals/sprint-9 (commit 376ba4a): evals/reports/brief-2026-11-06.md, copy-2026-11-06.md, persona-2026-11-06.md, testPlan-2026-11-06.md and imagery-2026-11-07-part-2-of-3.md",
+  "provenance": "reconstructed",
+  "provenanceNote": "From the 6-7 Nov real-model run (F-16a). The reports quote each refusal's field and the matched words (for example: the story says \"Many people\"; insight 5 says \"most of \"), not the whole sentence: the replies are in that run's eval database and were never copied into the repository. So each sentence below is a reconstruction written around the quoted words, and the reply is built around the first of them so that only the quantity check is in question. The objective is the eval's Quillmoor sign-ups one, where four of the six refusals happened. Simulated data: the demo brand and its customers are generated.",
+  "fixedIn": "prompt",
+  "failures": [
+    { "report": "brief-2026-11-06.md", "case": "Hostile objective", "where": "insight 2", "quoted": "most of ", "sentence": "Most of our lapsed customers left after one month on Plus.", "instead": "Lapsed customers who left after one month on Plus have tried budgeting with us already." },
+    { "report": "copy-2026-11-06.md", "case": "Quillmoor sign-ups, email and app push", "where": "the story", "quoted": "Many people", "sentence": "Many people in their late twenties start to take their money seriously.", "instead": "People in their late twenties who start to take their money seriously want a plain first step." },
+    { "report": "copy-2026-11-06.md", "case": "Quillmoor sign-ups, email and app push", "where": "insight 5", "quoted": "most of ", "sentence": "Most of the younger customers sign up on the app.", "instead": "Younger customers who sign up on the app find the budgets first." },
+    { "report": "persona-2026-11-06.md", "case": "Quillmoor win-back brief", "where": "the story", "quoted": "Many people", "sentence": "Many people look at their money again in January.", "instead": "People who look at their money again in January want to start small." },
+    { "report": "persona-2026-11-06.md", "case": "Quillmoor win-back brief", "where": "insight 1", "quoted": "many of ", "sentence": "Lapsed customers know the app, and many of them still have it installed.", "instead": "Lapsed customers know the app, and those who still have it installed can come back in a tap." },
+    { "report": "persona-2026-11-06.md", "case": "Quillmoor sign-ups", "where": "the story", "quoted": "a good share of ", "sentence": "A good share of customers aged 25 to 34 budget on their phones.", "instead": "Customers aged 25 to 34 who budget on their phones want everything in one place." },
+    { "report": "testPlan-2026-11-06.md", "case": "Quillmoor sign-ups", "where": "the story", "quoted": "Plenty of customers", "sentence": "Plenty of customers put a little aside each month without thinking about it.", "instead": "Customers who put a little aside each month like not having to think about it." },
+    { "report": "imagery-2026-11-07-part-2-of-3.md", "case": "Quillmoor sign-ups", "where": "the story", "quoted": "Many people", "sentence": "Many people feel unsure where their money goes each month.", "instead": "People who feel unsure where their money goes each month want to see it plainly." }
+  ],
+  "objective": "Grow Plus sign-ups among customers aged 25 to 34",
+  "context": [
+    { "ref": "C1", "kind": "brand_voice", "title": "Voice", "text": "Clear, calm, encouraging and honest. No exclamation marks." },
+    { "ref": "C2", "kind": "segment", "title": "Customers aged 25 to 34", "text": "612 of 2,000 customers are aged 25 to 34. Simulated data." },
+    { "ref": "C3", "kind": "segment", "title": "Lapsed customers (no order in 12 months)", "text": "533 of 2,000 customers (26.6%) have not ordered in the 12 months to the data date. Simulated data." },
+    { "ref": "C4", "kind": "product", "title": "Plus plan", "text": "Budgets, savings pots and round-ups in one plan. £4.99 a month." }
+  ],
+  "kit": { "legalLines": [], "bannedTerms": ["guaranteed returns"], "dontRules": [], "evidenceClaims": [] },
+  "reply": {
+    "title": "Plus, from the first payday",
+    "summary": "A calm invitation to the Plus plan for customers aged 25 to 34, built on budgets, savings pots and round-ups in one place.",
+    "story": "Many people in their late twenties start to take their money seriously. We show customers aged 25 to 34 one plan that puts budgets, pots and round-ups together, and one clear first step.",
+    "insights": [
+      { "text": "612 of 2,000 customers are aged 25 to 34.", "cites": ["C2"] },
+      { "text": "The Plus plan costs £4.99 a month and holds budgets, savings pots and round-ups together.", "cites": ["C4"] },
+      { "text": "Customers who budget on their phones want everything in one place.", "cites": ["C2"] }
+    ],
+    "audiences": [{ "segmentRef": "C2", "why": "The objective names them, and the store sizes them." }],
+    "channels": [
+      { "channel": "email", "role": "A plain note on what Plus holds, for those who agreed to marketing." },
+      { "channel": "app push", "role": "One gentle nudge after payday." }
+    ],
+    "kpi": { "metric": "sign-ups" },
+    "mustInclude": [],
+    "avoid": ["guaranteed returns"]
+  }
+}

@@ -12,17 +12,23 @@
 // 9's refinement were the Market agent's (docs/refinement/sprint-4.md), so
 // their fixtures are under market. P9-4 has not reached production, so its
 // fixtures are the bad replies its agreed cases name.
+//
+// Sprint 10 adds BUG-4 and BUG-11, from F-16a's own real-model run (6 and 7
+// Nov): the brief's loose quantities, and the brand's name reaching the
+// image-prompt model. Their fixtures are reconstructed around what the reports
+// quote, the same way.
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { z } from "zod";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { AGENT_MODELS } from "@/config/agents";
-import { checkImagery, imageryAgent, imageryOutput, type ImageryOutput } from "@/lib/agents/imagery";
+import { briefAgent } from "@/lib/agents/brief";
+import { brandNameIn, checkImagery, forImageModel, imageryAgent, imageryOutput, type ImageryInput, type ImageryOutput } from "@/lib/agents/imagery";
 import { checkMarket, marketAgent, marketOutput, undeclaredNames, type MarketInput, type MarketOutput } from "@/lib/agents/market";
 import { AgentOutputError, extractJson, repairPrompt, runModelStep } from "@/lib/agents/model-step";
 import { createWorkflowRun, getRun, type Member } from "@/lib/agents/runs";
 import type { EvidenceItem, KitLists } from "@/lib/brief/checks";
-import { figuresIn, figureSupported } from "@/lib/brief/checks";
+import { evidenceProblems, figuresIn, figureSupported, quantityInWords } from "@/lib/brief/checks";
 import type { StoredBrief } from "@/lib/brief/schema";
 import { colourWords } from "@/lib/creative/colour-words";
 import { closeSql } from "@/lib/db/client";
@@ -31,8 +37,8 @@ import { resultFrom } from "@/lib/performance/ask-rules";
 import { pageReader } from "@/lib/web/page-text";
 import { createMember, truncateAll } from "../helpers/db";
 import { DEMO_VIEWS, demoRows } from "../helpers/monitor";
-import briefEval from "./brief.eval";
-import imageryEval, { REGRESSION_INPUT, regressionProblems } from "./imagery.eval";
+import briefEval, { quantityAttempts } from "./brief.eval";
+import imageryEval, { BRAND_NAME_INPUT, linesNamingTheBrand, REGRESSION_INPUT, regressionProblems } from "./imagery.eval";
 import marketEval from "./market.eval";
 import answerEval, { ANSWER_CASES } from "./monitorAnswer.eval";
 import { EVAL_CAMPAIGN, gradePlan, type PlanExpectation } from "./monitorPlan.eval";
@@ -68,7 +74,9 @@ describe("F-16a the regression fixtures", () => {
     const files = readdirSync(DIR, { recursive: true, encoding: "utf8" }).filter((f) => f.endsWith(".json") && !f.endsWith("quillmoor-input.json"));
     expect(files.sort()).toEqual([
       "brief/brand-name-figure.json",
+      "brief/loose-quantities.json",
       "imagery/aspect-wording.json",
+      "imagery/brand-name.json",
       "imagery/cut-off-reply.json",
       "imagery/ruled-out-face.json",
       "market/long-note.json",
@@ -82,7 +90,7 @@ describe("F-16a the regression fixtures", () => {
       // Rule 1: a fixture is either reconstructed from the record, with what was written around it, or quoted from the refinement.
       expect(["reconstructed", "from the refinement"], f).toContain(x.provenance);
       expect(x.provenanceNote.length, f).toBeGreaterThan(80);
-      expect(x.source, f).toMatch(/docs\/refinement\/sprint-\d\.md/);
+      expect(x.source, f).toMatch(/docs\/refinement\/sprint-\d+\.md/);
       if (x.provenance === "reconstructed") {
         expect(x.provenanceNote, f).toContain("never copied into the repository");
         expect(x.source, f).toMatch(/commits? [0-9a-f]{7}/);
@@ -91,14 +99,15 @@ describe("F-16a the regression fixtures", () => {
   });
 
   it("the Imagery input's palette words are the demo palette's, as code makes them", () => {
-    for (const c of REGRESSION_INPUT.palette) expect(colourWords(c.hex), c.name).toBe(c.words);
+    for (const c of [...REGRESSION_INPUT.palette, ...BRAND_NAME_INPUT.palette]) expect(colourWords(c.hex), c.name).toBe(c.words);
   });
 
   it("the regression eval cases are in the eval files, and the prompt-only ones draw no pictures", () => {
     expect(briefEval.cases.map((c) => c.name)).toContain("Regression, 26 Oct: the brand name beside a figure");
+    expect(briefEval.cases.map((c) => c.name)).toContain("Regression, 6-7 Nov: loose quantities (Quillmoor sign-ups)");
     expect(marketEval.cases.map((c) => c.name)).toContain("Quillmoor (personal finance app, UK), as the 26 Oct production runs");
     const reg = imageryEval.cases.filter((c) => c.input.regression);
-    expect(reg.map((c) => c.input.regression)).toEqual(["cut-off", "face", "aspect"]);
+    expect(reg.map((c) => c.input.regression)).toEqual(["cut-off", "face", "aspect", "brand-name"]);
     for (const c of reg) expect(c.extraPence, c.name).toBe(0);
   });
 });
@@ -256,12 +265,13 @@ describe("F-16a market: the possessive names (26 Oct, second and third runs)", (
   });
 });
 
-/** The Imagery eval's grade for a prompt-only regression case. */
-function gradeImagery(kind: "cut-off" | "face" | "aspect", r: Awaited<ReturnType<typeof step<unknown, ImageryOutput>>>) {
+/** The Imagery eval's grade for a prompt-only regression case (`sent`: the prompt's data lines, when the test has them). */
+function gradeImagery(kind: "cut-off" | "face" | "aspect" | "brand-name", r: Awaited<ReturnType<typeof step<unknown, ImageryOutput>>>, sent?: string) {
   const output = r.ok
     ? { prompts: r.output.prompts, status: "completed", kept: r.output.prompts.length, simulated: false, error: null, promptsOnly: true, attempts: r.attempts, leftOut: r.leftOut }
     : { prompts: [], status: "failed", kept: 0, simulated: false, error: r.message, promptsOnly: true, attempts: r.attempts, leftOut: [] };
-  return imageryEval.grade({ brand: "quillmoor", objective: "", regression: kind }, output, { input: REGRESSION_INPUT });
+  const input = kind === "brand-name" ? BRAND_NAME_INPUT : REGRESSION_INPUT;
+  return imageryEval.grade({ brand: kind === "brand-name" ? "fernhollow" : "quillmoor", objective: "", regression: kind }, output, { input, sent });
 }
 
 describe("F-16a imagery: the cut-off reply (27 Oct, first Make creative)", () => {
@@ -372,5 +382,114 @@ describe("F-16a monitor (P9-4 cases 5 to 7, not yet in production)", () => {
       const ok = gradePlan(input, c.good, expectation);
       expect(ok.pass, `good: ${c.question}: ${ok.notes}`).toBe(true);
     }
+  });
+});
+
+describe("BUG-4 brief: loose quantities, refused on both attempts (6-7 Nov real-model run)", () => {
+  const f = fixture("brief/loose-quantities.json");
+  const ctx = { objective: f.objective as string, context: f.context as EvidenceItem[], kit: f.kit as KitLists, noExclamations: true };
+  const input = { brand: "quillmoor" as const, objective: f.objective as string, regression: "loose-quantities" as const };
+  const failures = f.failures as { report: string; case: string; where: string; quoted: string; sentence: string; instead: string }[];
+
+  it("the check refuses every phrase the reports quote, in the sentence written around it, and passes each rewrite", () => {
+    expect(failures).toHaveLength(8);
+    for (const x of failures) {
+      expect(x.sentence.toLowerCase(), x.report).toContain(x.quoted.trim().toLowerCase());
+      expect(quantityInWords(x.sentence)?.trim().toLowerCase(), x.sentence).toBe(x.quoted.trim().toLowerCase());
+      expect(quantityInWords(x.instead), x.instead).toBeNull();
+    }
+  });
+
+  it("the Brief agent's prompt before the fix named none of them; now it names each one and the way round it", () => {
+    // The evidence rule as it was before BUG-4 (f22e0d5).
+    const BEFORE = 'never write quantities in words ("half of", "one in four").';
+    for (const x of failures) expect(BEFORE.toLowerCase(), x.quoted).not.toContain(x.quoted.trim().toLowerCase());
+    const now = briefAgent.instructions.toLowerCase();
+    for (const x of failures) expect(now, x.quoted).toContain(`"${x.quoted.trim().toLowerCase()}"`);
+    expect(briefAgent.instructions).toContain("name the group without saying how much of it there is");
+  });
+
+  it("the brief eval's grader fails the reconstructed reply and passes it rewritten; the message says how to rewrite it", async () => {
+    const bad = await briefEval.grade(input, f.reply as StoredBrief, { ...ctx, attempts: [[]] });
+    expect(bad.pass).toBe(false);
+    expect(bad.notes).toContain('the story says "Many people"');
+    expect(bad.notes).toContain("name the group without saying how much of it there is");
+    const fixed = structuredClone(f.reply) as StoredBrief;
+    fixed.story = fixed.story.replace(failures[1].sentence, failures[1].instead);
+    expect(evidenceProblems(fixed, ctx.context, ctx.kit, { objective: ctx.objective })).toEqual([]);
+    const ok = await briefEval.grade(input, fixed, { ...ctx, attempts: [[]] });
+    expect(ok, ok.notes).toMatchObject({ pass: true });
+  });
+
+  it("the regression case fails a run whose first attempt was sent back for a quantity, even when the repair passed", async () => {
+    const fixed = structuredClone(f.reply) as StoredBrief;
+    fixed.story = fixed.story.replace(failures[1].sentence, failures[1].instead);
+    const sentBack = [[`the story says "Many people"; quantities in words can't be checked, so use only figures from the context`], []];
+    expect(quantityAttempts(sentBack)).toHaveLength(1);
+    const g = await briefEval.grade(input, fixed, { ...ctx, attempts: sentBack });
+    expect(g.pass).toBe(false);
+    expect(g.notes).toMatch(/an attempt was sent back for a quantity in words/);
+    // The other brief cases don't hold a repaired quantity against the run.
+    expect((await briefEval.grade({ ...input, regression: undefined }, fixed, { ...ctx, attempts: sentBack })).pass).toBe(true);
+  });
+});
+
+describe("BUG-11 imagery: the brand's name reached the image-prompt model (7 Nov real-model run)", () => {
+  const f = fixture("imagery/brand-name.json");
+  const raw = f.input as ImageryInput;
+  // The workflow's clean-up as it was before BUG-11 (f22e0d5): the whole name only, swapped for "the brand".
+  const before = (t: string) => t.replace(new RegExp(raw.brandName, "gi"), "the brand");
+  const promptOf = (input: ImageryInput) => imageryAgent.buildPrompt(input).split("\n").slice(1).join("\n");
+
+  it("the clean-up before the fix left the short and possessive forms in the brief, and the eval's grader fails that prompt", () => {
+    const old: ImageryInput = { ...raw, brief: { title: before(raw.brief.title), story: before(raw.brief.story), audiences: raw.brief.audiences.map(before), channels: raw.brief.channels.map(before) } };
+    const sentBefore = ["Brief: " + JSON.stringify(old.brief)].join("\n");
+    for (const form of f.leakedForms as string[]) expect(sentBefore, form).toContain(form);
+    expect(sentBefore).not.toContain(raw.brandName);
+    expect(linesNamingTheBrand(sentBefore)).toEqual(["Brief"]);
+  });
+
+  it("now no line the model is sent names the brand, whoever builds the input; the possessive keeps its sense", () => {
+    const sent = promptOf(raw);
+    expect(sent).not.toMatch(/fernhollow/i);
+    expect(linesNamingTheBrand(sent)).toEqual([]);
+    expect(sent).toContain("the company's winter range");
+    // forImageModel is what the workflow sends, and buildPrompt applies it again: the same prompt either way.
+    expect(promptOf(forImageModel(raw))).toBe(sent);
+    // Only brandName itself, kept for the checks and never put in the prompt, still holds the name.
+    expect(JSON.stringify({ ...forImageModel(raw), brandName: "" })).not.toMatch(/fernhollow/i);
+  });
+
+  it("the prompt checks refuse the brand's name in every form; the check before the fix let lower case and capitals through", () => {
+    const first = raw.brandName.split(" ")[0];
+    const BEFORE = (t: string) => new RegExp(`\\b${first}\\b`).test(t);
+    const stillRefused = f.stillRefused.prompts as string[];
+    expect(BEFORE(stillRefused[0])).toBe(false);
+    expect(BEFORE(stillRefused[1])).toBe(false);
+    for (const prompt of stillRefused) {
+      const out = { prompts: [{ idea: "A ridge walk", prompt, aspect: "1:1" as const }, ...imageryOutput.parse(f.fixedReply).prompts.slice(1)] };
+      expect(checkImagery(raw, out).join("; "), prompt).toMatch(/prompt 1 names the brand/);
+    }
+    expect(brandNameIn("Fernhollow's winter layers", raw.brandName)).toBe("Fernhollow's");
+    expect(checkImagery(raw, imageryOutput.parse(f.fixedReply))).toEqual([]);
+  });
+
+  it("the eval's regression case passes the fixed reply through the step, and fails a reply that names the brand", async () => {
+    mockBehaviour.next(said({ text: JSON.stringify(f.fixedReply) }));
+    const r = await step(imageryAgent, raw, "Write the image prompts");
+    expect(r.ok && r.attempts).toEqual([[]]);
+    expect(mockBehaviour.lastPlainPrompt).not.toMatch(/fernhollow/i);
+    expect(await gradeImagery("brand-name", r, promptOf(raw))).toMatchObject({ pass: true });
+
+    const bad = structuredClone(f.fixedReply);
+    bad.prompts[0].prompt = f.stillRefused.prompts[0];
+    mockBehaviour.next(said({ text: JSON.stringify(bad) }));
+    mockBehaviour.next(said({ text: JSON.stringify(f.fixedReply) }));
+    const named = await step(imageryAgent, raw, "Write the image prompts");
+    const g = await gradeImagery("brand-name", named, promptOf(raw));
+    expect(g.pass).toBe(false);
+    expect(g.notes).toMatch(/a prompt named the brand, which the model was not given/);
+    // And the grader fails a prompt that reached the model with the name in it.
+    expect((await gradeImagery("brand-name", r, `Brief: ${JSON.stringify(raw.brief)}`)).notes).toMatch(/the brief reached the model with the brand's name in it/);
   });
 });
