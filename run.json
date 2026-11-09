@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "42707103799",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/studio/actions/runs/42707103799",
+  "repository": "rorymcclelland/studio",
+  "commit": "348e6cee2018afb7dd0fb270b939d51d34355e13",
+  "branch": "neon-retrospective",
+  "date": "2026-11-09T22:21:34.235Z",
+  "checksJob": "success"
+}
