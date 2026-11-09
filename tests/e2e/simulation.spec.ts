@@ -26,6 +26,7 @@ import {
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openLaunch,
   saveShot,
   settle,
   signIn,
@@ -61,11 +62,9 @@ async function pickSocial(page: Page, i: number) {
   await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
 }
 
+/** The campaign's Launch stage (U10-2), through the stage bar, with its Launch (simulated) panel. */
 async function openPanel(page: Page, path: string) {
-  await page.goto(path);
-  await settle(page);
-  await expect(panel(page).getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
-  await panel(page).scrollIntoViewIfNeeded();
+  await openLaunch(page, path);
 }
 
 /** Every figure the panel shows is labelled simulated: the clock says "Simulated day", the summary "(simulated)". */

@@ -31,18 +31,19 @@ import { strFromU8, unzipSync } from "fflate";
 import postgres from "postgres";
 import {
   contrastViolations,
-  DEV_EMAIL,
   demoBrandId,
+  DEV_EMAIL,
+  drawInLayout,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openStage,
   saveShot,
   settle,
   signIn,
   signOffVersion,
   step,
   untilShown,
-  drawInLayout,
 } from "./helpers";
 
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -165,8 +166,7 @@ test(
       viewRules = await page
         .locator('[data-compliance-lang="en-GB"] [data-compliance-size="1080x1080"] [data-rule]')
         .evaluateAll((rows) => rows.map((r) => [r.getAttribute("data-rule")!, r.getAttribute("data-status")!]));
-      await page.goto(campaignPath);
-      await settle(page);
+      await openStage(page, "creative", campaignPath);
       await expect(ads(page).first().locator("[data-compliance-pill]")).toHaveText("Passes");
       await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText(`${rules} to review`);
       await expect(page.locator("[data-compliance-summary]")).toHaveText(new RegExp(`^Compliance of the picked ads: ${files} ads pass, \\d+ to review, 0 fail, over every size and language\\.`));
@@ -208,8 +208,7 @@ test(
     });
 
     await step(page, "C8-1.8: on the campaign, Accept for every picked ad accepts each don't rule for ad 2, with its own decision", async () => {
-      await page.goto(campaignPath);
-      await settle(page);
+      await openStage(page, "creative", campaignPath);
       const bulk = page.locator("[data-bulk-dont-rule]");
       await expect(bulk).toHaveCount(rules);
       for (let i = 0; i < rules; i++) {
@@ -238,8 +237,7 @@ test(
     });
 
     await step(page, "C8-1.8: drawing ad 1 in another layout redraws it, and its don't rules are Review again", async () => {
-      await page.goto(campaignPath);
-      await settle(page);
+      await openStage(page, "creative", campaignPath);
       const own = await ads(page).first().locator('button[aria-pressed="true"]').getAttribute("aria-label");
       await drawInLayout(page, 1, own?.startsWith("Split") ? "Card" : "Split");
       await page.goto(`${campaignPath}/ads/${first}/compliance`);

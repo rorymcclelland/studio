@@ -8,7 +8,7 @@
 // is in tests/agents/creative.test.ts. Each page at 375 px and 1440 px: nothing
 // scrolls sideways, AA contrast. The pictures and words are the mock model's.
 import { expect, test, type Page } from "@playwright/test";
-import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
+import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, openStage, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
 
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
 const groups = (page: Page) => page.locator("[data-audience-group]");
@@ -43,22 +43,24 @@ test(
     test.setTimeout(600_000);
     let titles: string[] = [];
     let oneAudienceCost = "";
+    let path = "";
     const makeButton = () => page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ });
 
     await step(page, "Write a Quillmoor brief with the mock Brief agent (one audience)", async () => {
-      await newCampaign(page, "Quillmoor Money", "Bring lapsed savers and new savers to the Plus plan this spring");
+      path = await newCampaign(page, "Quillmoor Money", "Bring lapsed savers and new savers to the Plus plan this spring");
       await expect(page.locator("[data-section=audiences]").filter({ visible: true }).locator("[data-audience]")).toHaveCount(1);
     });
 
     await step(page, "F-27.4: sign version 1 off and note the cost on Make creative with one audience", async () => {
       await signOffVersion(page, 1);
-      await page.reload();
-      await settle(page);
+      // Make creative and its cost are on the Creative stage (U10-2).
+      await openStage(page, "creative", path);
       oneAudienceCost = ((await makeButton().textContent()) ?? "").replace(/\s+/g, " ").trim();
       expect(oneAudienceCost).toMatch(/^Make creative ?\((about \d+p|under 1p), at most \d+p\)$/);
     });
 
     await step(page, "Add a second audience to the brief and sign version 2 off", async () => {
+      await openStage(page, "brief", path);
       await page.getByRole("button", { name: "Edit the audiences" }).click();
       const section = page.locator("[data-section=audiences]").filter({ visible: true });
       await section.getByRole("button", { name: "Add an audience" }).click();
@@ -78,8 +80,7 @@ test(
     });
 
     await step(page, "F-27.4: with two audiences, the cost on Make creative is unchanged (pictures are shared, the words are one Copy run)", async () => {
-      await page.reload();
-      await settle(page);
+      await openStage(page, "creative", path);
       const twoAudienceCost = ((await makeButton().textContent()) ?? "").replace(/\s+/g, " ").trim();
       expect(twoAudienceCost).toBe(oneAudienceCost);
     });

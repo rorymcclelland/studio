@@ -14,6 +14,7 @@ import {
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  overviewPath,
   saveShot,
   settle,
   signIn,
@@ -105,7 +106,8 @@ test(
   async ({ page }) => {
     test.setTimeout(600_000);
     await campaignWithDisplay(page, "Fernhollow Outfitters", "Bring lapsed customers back for the winter range in every size");
-    const campaignPath = new URL(page.url()).pathname;
+    // The ads are on the Creative stage; their pages are under the campaign's overview path (U10-2).
+    const campaignPath = overviewPath(page.url());
     const socialId = (await ads(page, "paid social").first().getAttribute("data-ad"))!;
     const displayId = (await ads(page, "display").first().getAttribute("data-ad"))!;
 
@@ -156,7 +158,8 @@ test(
   async ({ page }) => {
     test.setTimeout(540_000);
     await campaignWithDisplay(page, "Quillmoor Money", "Bring lapsed savers back to the Plus plan on every site they read");
-    const campaignPath = new URL(page.url()).pathname;
+    // The ads are on the Creative stage; their pages are under the campaign's overview path (U10-2).
+    const campaignPath = overviewPath(page.url());
     const displayId = (await ads(page, "display").first().getAttribute("data-ad"))!;
 
     await step(page, "C7-1.4: Sizes on a Quillmoor display ad: its three legal lines don't fit the 728 × 90 leaderboard, so it is left out with the reason", async () => {

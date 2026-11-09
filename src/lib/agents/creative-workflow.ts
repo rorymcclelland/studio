@@ -229,7 +229,7 @@ async function executeMake(ctx: StepContext, step: StepTools): Promise<string> {
       children: { imagery, copy },
       campaignId: prepared.campaignId,
       briefVersion: prepared.version,
-      href: `/campaigns/${prepared.campaignId}#creative`,
+      href: `/campaigns/${prepared.campaignId}/creative`,
       hrefLabel: "See the ads",
     };
     const problems = `${childLine("Pictures", imagery)}${childLine("Copy", copy)}`.trim();
@@ -382,7 +382,7 @@ async function executePicture(ctx: StepContext, step: StepTools): Promise<string
       return { ok: true as const, id: id as string, layout: rendered.layout, oldImageDiscarded: using.n === 0 };
     });
     await systemStep(ctx, 4, "Save the new ad", outcome.ok, { variantId: p.variantId, image: drawn.assetId }, outcome.ok ? outcome : null, outcome.ok ? null : outcome.message, t);
-    const href = `/campaigns/${p.campaignId}#creative`;
+    const href = `/campaigns/${p.campaignId}/creative`;
     if (!outcome.ok) {
       await setRun(ctx, "failed", { output: { variantId: p.variantId, imageAssetId: drawn.assetId, href, hrefLabel: "See the ads" }, error: outcome.message });
       return "failed";

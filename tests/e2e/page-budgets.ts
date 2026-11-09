@@ -86,7 +86,6 @@ export type PageBudget = {
   notFoundPage?: boolean;
 };
 
-const U10_2 = (why: string): Until => ({ story: "U10-2", why });
 
 export const PAGE_BUDGETS: PageBudget[] = [
   { key: "welcome", name: "Welcome (signed out)", path: () => "/", signedIn: false, mainAction: { css: 'header a[href="/signin"]', what: "Sign in" } },
@@ -164,8 +163,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.live}`,
     signedIn: true,
     mainAction: { css: "[data-needs-you]", what: "Needs you" },
-    lengthUntil: U10_2("one page holds every stage (audit: 29.1 screens at 375 px)"),
-    mainActionUntil: U10_2("there is no overview yet; the live state is 12.7 screens down"),
   },
   {
     key: "campaign-live-brief",
@@ -173,8 +170,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.live}/brief`,
     signedIn: true,
     mainAction: { css: "[data-signoff-panel]", what: "the sign-off panel" },
-    lengthUntil: U10_2("the brief stage page doesn't exist yet"),
-    mainActionUntil: U10_2("the brief stage page doesn't exist yet"),
   },
   {
     key: "campaign-live-audience",
@@ -182,8 +177,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.live}/audience`,
     signedIn: true,
     mainAction: { css: "[data-persona-review]", what: "the persona review" },
-    lengthUntil: U10_2("the audience stage page doesn't exist yet"),
-    mainActionUntil: U10_2("the audience stage page doesn't exist yet"),
   },
   {
     key: "campaign-live-creative",
@@ -200,8 +193,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.live}/launch`,
     signedIn: true,
     mainAction: { css: "[data-launch-panel]", what: "the launch panel and clock" },
-    lengthUntil: U10_2("the launch stage page doesn't exist yet"),
-    mainActionUntil: U10_2("the launch stage page doesn't exist yet"),
   },
   {
     key: "performance",
@@ -218,8 +209,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.twoAudiences}`,
     signedIn: true,
     mainAction: { css: "[data-needs-you]", what: "Needs you" },
-    lengthUntil: U10_2("one page holds every stage and 24 ads (audit: 42.9 screens at 375 px)"),
-    mainActionUntil: U10_2("there is no overview yet"),
   },
   {
     key: "campaign-two-audiences-creative",
@@ -236,8 +225,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.waiting}`,
     signedIn: true,
     mainAction: { css: "[data-needs-you]", what: "Needs you" },
-    lengthUntil: U10_2("personas and the test plan are shown in full below the brief (audit: 11.1 screens at 375 px)"),
-    mainActionUntil: U10_2("there is no overview yet"),
   },
   {
     key: "campaign-waiting-brief",
@@ -245,8 +232,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.waiting}/brief`,
     signedIn: true,
     mainAction: { css: "[data-signoff-panel] button", text: "Approve version", what: "Approve version 1" },
-    lengthUntil: U10_2("the brief stage page doesn't exist yet"),
-    mainActionUntil: U10_2("the brief stage page doesn't exist yet"),
   },
   {
     key: "campaign-early",
@@ -254,8 +239,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.early}`,
     signedIn: true,
     mainAction: { css: "[data-needs-you]", what: "Needs you" },
-    lengthUntil: U10_2("four empty-state cards follow the brief (audit: 6.6 screens at 375 px, 4.5 at 1440 px)"),
-    mainActionUntil: U10_2("there is no overview yet"),
   },
   {
     key: "campaign-early-brief",
@@ -263,8 +246,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/campaigns/${d.early}/brief`,
     signedIn: true,
     mainAction: { css: "[data-signoff-panel] button", text: "for sign-off", what: "Send version 1 for sign-off" },
-    lengthUntil: U10_2("the brief stage page doesn't exist yet"),
-    mainActionUntil: U10_2("the brief stage page doesn't exist yet"),
   },
   {
     key: "approvals",

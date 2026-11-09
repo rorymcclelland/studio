@@ -223,7 +223,73 @@ export async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
-/** Writes a brief for a demo brand from /campaigns (mock Brief agent) and waits for version 1. Returns the campaign's path. */
+// ---------------------------------------------------------------- U10-2: the campaign in stages
+// A campaign is an overview (/campaigns/<id>) and five stage pages, reached
+// through the stage bar ([data-stage-bar], tests/e2e/campaign-stages.spec.ts
+// has the interface). The helpers below take a campaign's path (the overview's,
+// as newCampaign returns it, or any of its stage pages') and go through the bar,
+// so the specs that walk a campaign change here, in one place.
+
+export type Stage = "brief" | "audience" | "creative" | "launch" | "performance";
+
+const CAMPAIGN_PATH = /^\/campaigns\/([0-9a-f-]{36})(?:\/(brief|audience|creative|launch|performance))?\/?$/;
+
+/** The campaign's overview path from any of its pages' paths or URLs (query and fragment dropped). */
+export function overviewPath(pathOrUrl: string): string {
+  const path = new URL(pathOrUrl, "http://x").pathname;
+  const m = CAMPAIGN_PATH.exec(path);
+  if (!m) throw new Error(`${pathOrUrl} isn't a campaign's page`);
+  return `/campaigns/${m[1]}`;
+}
+
+/** A stage page's path: /campaigns/<id>/<stage>. */
+export function stagePath(path: string, stage: Stage): string {
+  return `${overviewPath(path)}/${stage}`;
+}
+
+/**
+ * Opens a stage of a campaign through the stage bar, as a person does: from the
+ * page that is open when it is one of the campaign's, else from its overview
+ * (`path` names the campaign; without it, the open page must be one of its).
+ * Always a fresh load of the stage, so its controls are current.
+ */
+export async function openStage(page: Page, stage: Stage, path?: string) {
+  const open = new URL(page.url()).pathname;
+  const target = stagePath(path ?? open, stage);
+  if (open === target) {
+    await page.reload();
+    await settle(page);
+    return;
+  }
+  if (!CAMPAIGN_PATH.test(open) || overviewPath(open) !== overviewPath(target)) {
+    await page.goto(overviewPath(target));
+    await settle(page);
+  }
+  await page.locator("[data-stage-bar]").filter({ visible: true }).locator(`a[data-stage="${stage}"]`).click();
+  await page.waitForURL((u) => u.pathname === target);
+  await settle(page);
+}
+
+/** Opens a collapsed history line in place (versions on Brief; discarded and runs on Creative), if it is closed. */
+export async function openHistory(page: Page, kind: "versions" | "discarded" | "runs") {
+  const details = page.locator(`details[data-history="${kind}"]`).filter({ visible: true });
+  if ((await details.getAttribute("open")) === null) await details.locator("summary").click();
+  await expect(details).toHaveAttribute("open", "");
+}
+
+/** Opens a campaign's Launch stage and waits for its Launch (simulated) panel. */
+export async function openLaunch(page: Page, path?: string) {
+  await openStage(page, "launch", path);
+  const panel = page.locator("[data-launch-panel]");
+  await expect(panel.getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
+  await panel.scrollIntoViewIfNeeded();
+}
+
+/**
+ * Writes a brief for a demo brand from /campaigns (mock Brief agent) and waits
+ * for version 1 on the Brief stage. Returns the campaign's overview path
+ * (/campaigns/<id>); the page is left on its Brief stage.
+ */
 export async function newCampaign(page: Page, brand: "Fernhollow Outfitters" | "Quillmoor Money", objective: string): Promise<string> {
   await demoBrandId(page, brand);
   await page.goto("/campaigns");
@@ -231,13 +297,17 @@ export async function newCampaign(page: Page, brand: "Fernhollow Outfitters" | "
   await page.getByLabel("Brand").selectOption({ label: brand });
   await page.getByLabel("Objective").fill(objective);
   await page.getByRole("button", { name: "Write the brief" }).click();
+  // A new campaign opens on its overview (U10-2, answer Q2).
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
-  return new URL(page.url()).pathname;
+  const path = new URL(page.url()).pathname;
+  await openStage(page, "brief", path);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
+  return path;
 }
 
-/** Sends a brief version for sign-off and approves it, as the owner, from the campaign page. */
+/** Sends a brief version for sign-off and approves it, as the owner, from the campaign's Brief stage. */
 export async function signOffVersion(page: Page, version: number) {
+  if (!/\/campaigns\/[0-9a-f-]{36}\/brief$/.test(new URL(page.url()).pathname)) await openStage(page, "brief");
   const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
   await panel.getByRole("button", { name: `Send version ${version} for sign-off` }).click();
   await expect(page.locator("[data-toast]").filter({ hasText: "Sent for sign-off" })).toBeVisible();
@@ -263,22 +333,22 @@ export async function untilShown(page: Page, check: () => Promise<void>, timeout
   }).toPass({ timeout, intervals: [5_000, 10_000, 15_000] });
 }
 
-/** Presses Make creative on a signed-off brief and waits for the gallery to hold `count` ads. */
+/** Presses Make creative on a signed-off brief's Creative stage and waits for the gallery to hold `count` ads. */
 export async function makeCreative(page: Page, count: number) {
-  // Read the signed-off page afresh, so the Make creative button is the current one.
-  await page.reload();
-  await settle(page);
+  // Open the Creative stage afresh, so the Make creative button is the current one.
+  await openStage(page, "creative");
   await page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ }).click();
   await expect(page.locator("[data-creative]").getByRole("button", { name: /^Making creative/ })).toBeVisible({ timeout: 30_000 });
   await untilShown(page, () => expect(page.locator("[data-gallery] > li")).toHaveCount(count, { timeout: 10_000 }));
 }
 
 /**
- * C8-1: on a campaign's page, accepts each of the brand's don't rules for
- * every picked ad ("Accept for every picked ad"), one rule at a time as a
- * person does, waiting for each to show as decided.
+ * C8-1: on a campaign's Creative stage, accepts each of the brand's don't
+ * rules for every picked ad ("Accept for every picked ad"), one rule at a time
+ * as a person does, waiting for each to show as decided.
  */
 export async function acceptDontRulesForPicked(page: Page) {
+  if (!/\/campaigns\/[0-9a-f-]{36}\/creative$/.test(new URL(page.url()).pathname)) await openStage(page, "creative");
   await settle(page);
   await expect(page.locator("[data-bulk-dont-rule]").first()).toBeVisible({ timeout: 60_000 });
   const open = page.locator('[data-bulk-dont-rule]:not([data-open="0"])');

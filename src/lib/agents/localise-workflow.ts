@@ -369,7 +369,7 @@ export async function executeLocaliseRun(ctx: StepContext, step: StepTools): Pro
       ],
       campaignId: prepared.campaignId,
       briefVersion: prepared.version,
-      href: `/campaigns/${prepared.campaignId}#creative`,
+      href: `/campaigns/${prepared.campaignId}/creative`,
       hrefLabel: "See the ads",
     };
     if (capped) {

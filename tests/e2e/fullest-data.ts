@@ -25,13 +25,17 @@
 // which tests/e2e/page-length.spec.ts runs after every other spec, so it never
 // races audience.spec.ts or market.spec.ts.
 //
-// U10-2 and U10-3 move the controls these steps press (the stage pages, the ad
-// cards' menus): update the steps here with the shared helpers.
+// U10-2 split the campaign page into stages: these steps reach each one
+// through the shared helpers (openStage, openLaunch in ./helpers), so the
+// creative steps run on the Creative stage, the launch and the clock on the
+// Launch stage, and the personas are waited for on the Audience stage. U10-3
+// moves the ad cards' controls into a menu: update the pick and translate
+// steps here with it.
 import { expect, type Page } from "@playwright/test";
 import type postgres from "postgres";
 import type { LaunchAd } from "@/lib/performance/launch";
 import { MOCK_CPA_QUESTION, seedWithTiring } from "../helpers/monitor";
-import { acceptDontRulesForPicked, DEV_EMAIL, demoBrandId, makeCreative, newCampaign, settle, signOffVersion, startRunAwaitingApproval, step, untilShown } from "./helpers";
+import { acceptDontRulesForPicked, DEV_EMAIL, demoBrandId, makeCreative, newCampaign, openLaunch, openStage, settle, signOffVersion, startRunAwaitingApproval, step, untilShown } from "./helpers";
 import { setWaitingLaunchTerms } from "./launch-fixture";
 import type { FullestData } from "./page-budgets";
 
@@ -134,7 +138,7 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
   });
 
   await step(page, "Fullest data: accept the brand's don't rules for every picked ad", async () => {
-    await page.reload();
+    await openStage(page, "creative", path);
     await acceptDontRulesForPicked(page);
   });
 
@@ -147,9 +151,7 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
   });
 
   await step(page, "Fullest data: ask to launch with the defaults, give it a seed with an ad tiring between days 9 and 14, approve it in the inbox", async () => {
-    await page.goto(path);
-    await settle(page);
-    await expect(panel(page).getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
+    await openLaunch(page, path);
     await panel(page).getByRole("button", { name: "Ask to launch" }).click();
     await expect(panel(page).locator("[data-launch-status]")).toHaveText("Waiting for approval", { timeout: 30_000 });
     const [l] = await sql`
@@ -175,8 +177,7 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
 
   await step(page, "Fullest data: move the simulation on to day 14", async () => {
     for (const day of [7, 14]) {
-      await page.goto(path);
-      await settle(page);
+      await openLaunch(page, path);
       await panel(page).getByRole("button", { name: "Next week" }).click();
       await expect(panel(page).locator("[data-sim-clock]")).toHaveText(`Simulated day ${day} of 30`, { timeout: 60_000 });
     }
@@ -208,10 +209,9 @@ export async function buildTwoAudiences(page: Page, sql: Sql): Promise<string> {
   const found = await findTwoAudiences(sql);
   if (found) return found;
   await step(page, "Fullest data: a Quillmoor brief signed off with two audiences, and 24 ads", async () => {
-    await newCampaign(page, "Quillmoor Money", TWO_AUDIENCES_OBJECTIVE);
+    const path = await newCampaign(page, "Quillmoor Money", TWO_AUDIENCES_OBJECTIVE);
     await signOffVersion(page, 1);
-    await page.reload();
-    await settle(page);
+    await openStage(page, "brief", path);
     await page.getByRole("button", { name: "Edit the audiences" }).click();
     const section = page.locator("[data-section=audiences]").filter({ visible: true });
     await section.getByRole("button", { name: "Add an audience" }).click();
@@ -235,10 +235,12 @@ export async function buildWaiting(page: Page, sql: Sql): Promise<string> {
   const found = await findWaiting(sql);
   if (found) return found;
   await step(page, "Fullest data: a Fernhollow brief waiting for sign-off, with its personas and test plan", async () => {
-    await newCampaign(page, "Fernhollow Outfitters", WAITING_OBJECTIVE);
+    const path = await newCampaign(page, "Fernhollow Outfitters", WAITING_OBJECTIVE);
     const signoff = page.locator("[data-signoff-panel]").filter({ visible: true });
     await signoff.getByRole("button", { name: "Send version 1 for sign-off" }).click();
     await expect(toast(page, "Sent for sign-off")).toBeVisible();
+    // The personas and the test plan are on the Audience stage.
+    await openStage(page, "audience", path);
     await untilShown(page, async () => {
       await expect(page.locator("[data-persona]").filter({ visible: true }).first()).toBeVisible({ timeout: 5_000 });
       await expect(page.locator("[data-hypothesis]").filter({ visible: true }).first()).toBeVisible({ timeout: 5_000 });

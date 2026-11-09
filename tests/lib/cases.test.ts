@@ -278,7 +278,55 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
     expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
-    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "BUG-4", "BUG-11"]);
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "BUG-4", "BUG-11"]);
+  });
+
+  it("has every agreed U10-2 case, once each, in order, after U10-6's, checked as the refinement says", async () => {
+    const u102 = CASES.filter((c) => c.story === "U10-2");
+    expect(u102.map((c) => c.id)).toEqual(Array.from({ length: 10 }, (_, i) => `U10-2.${i + 1}`));
+    for (const c of u102) expect(c.sprint, c.id).toBe(10);
+    // Every case is a browser test; case 5 is the existing suite updated, plus its own tests here.
+    expect(u102.map(caseKind)).toEqual(Array(10).fill("browser"));
+    const SPEC = "campaign-stages.spec.ts";
+    const LIB = "tests/lib/campaign-stages.test.ts";
+    const FLOWS = "tests/flows/campaign-stages.test.ts";
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    // Case 6 is U10-6's measurement of U10-2's own pages; every other case's browser tests are in the new spec.
+    for (const c of u102) {
+      for (const x of c.checks.filter((y) => y.kind === "browser")) expect((x as { spec: string }).spec, c.id).toBe(c.id === "U10-2.6" ? "page-length.spec.ts" : SPEC);
+    }
+    const { PAGE_BUDGETS } = await import("../e2e/page-budgets");
+    const six = CASES.find((c) => c.id === "U10-2.6")!.checks.map((x) => (x as { title: string }).title);
+    const sixKeys = ["campaign-live", "campaign-live-brief", "campaign-live-audience", "campaign-live-launch", "campaign-two-audiences", "campaign-waiting", "campaign-waiting-brief", "campaign-early", "campaign-early-brief"];
+    expect(six).toEqual(sixKeys.map((k) => `U10-6 #1: ${k} is within its length budget at 375 px and 1440 px`));
+    for (const k of sixKeys) expect(PAGE_BUDGETS.find((b) => b.key === k)?.path({ fernhollow: "f", quillmoor: "q", live: "l", twoAudiences: "t", waiting: "w", early: "e", imageryRun: "r", taglineRun: "g" }), k).toMatch(/^\/campaigns\//);
+    // The CI parts: the stage and Needs you functions for every combination (1 to 5, 8 to 10), and the loader
+    // against plain Postgres (1, 2, 4 and 7, rule 7 among them). Nothing in tests/db: U10-2 adds no table.
+    for (const id of ["U10-2.1", "U10-2.2", "U10-2.3", "U10-2.4", "U10-2.5", "U10-2.8", "U10-2.9", "U10-2.10"]) expect(ciIn(id, LIB), id).toBe(true);
+    for (const id of ["U10-2.1", "U10-2.2", "U10-2.4", "U10-2.7"]) expect(ciIn(id, FLOWS), id).toBe(true);
+    expect(u102.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
+    expect(u102.flatMap((c) => c.checks).some((x) => x.kind === "hand" || x.kind === "withdrawn")).toBe(false);
+    // The browser tests change no brand kit, so they run in the main project; none is marked as an expected failure.
+    const spec = read(`tests/e2e/${SPEC}`);
+    expect(spec).not.toMatch(/test\.fail\(|test\.fixme\(|test\.skip\(\s*true/);
+    for (const c of u102.filter((x) => x.id !== "U10-2.6")) {
+      for (const x of c.checks.filter((y) => y.kind === "browser")) {
+        const title = (x as { title: string }).title;
+        const at = declaredAt(spec, title);
+        expect(at, title).toBeGreaterThan(-1);
+        expect(spec.slice(at, spec.indexOf("async (", at)), c.id).not.toContain("@brand-kit");
+      }
+    }
+    // The builder's interface is written at the top of the spec, and the shared helpers go through the stage bar,
+    // so the specs that walk a campaign change in one place.
+    expect(spec.slice(0, spec.indexOf("import "))).toContain("---------------------------------------------------------------- interface");
+    const helpers = read("tests/e2e/helpers.ts");
+    for (const fn of ["openStage", "stagePath", "overviewPath", "openLaunch", "openHistory"]) expect(helpers, fn).toMatch(new RegExp(`export (async )?function ${fn}\\(`));
+    expect(helpers).toContain('[data-stage-bar]');
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("U10-6")).toBeLessThan(order.indexOf("U10-2"));
+    expect(order.lastIndexOf("U10-2")).toBeLessThan(order.indexOf("BUG-4"));
+    expect(STORIES.find((s) => s.id === "U10-2")).toEqual({ sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" });
   });
 
   it("has every agreed BUG-4 and BUG-11 case, once each, in order, after F-23's: CI with the mock model, and the real models in an eval run", () => {

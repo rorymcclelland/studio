@@ -162,7 +162,24 @@ describe("U10-6 the budgets table", () => {
 
   it("the pages already within budget today carry no marker, so their tests must pass now", () => {
     const clean = PAGE_BUDGETS.filter((b) => !b.lengthUntil && !b.mainActionUntil).map((b) => b.key);
-    expect(clean).toEqual(["welcome", "brands", "run-trail", "run-awaiting", "invites", "not-found-app"]);
+    expect(clean).toEqual([
+      "welcome",
+      "brands",
+      // U10-2: the campaign's overview and its Brief, Audience and Launch stages fit their budgets.
+      "campaign-live",
+      "campaign-live-brief",
+      "campaign-live-audience",
+      "campaign-live-launch",
+      "campaign-two-audiences",
+      "campaign-waiting",
+      "campaign-waiting-brief",
+      "campaign-early",
+      "campaign-early-brief",
+      "run-trail",
+      "run-awaiting",
+      "invites",
+      "not-found-app",
+    ]);
   });
 
   it("the spec has both cases' tests for every page, by key", () => {

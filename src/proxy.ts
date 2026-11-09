@@ -4,8 +4,8 @@ import { NextResponse, type NextRequest } from "next/server";
 // can't set the status, because the app shell streams (and commits to 200)
 // before the page runs; rewriting to a path no route matches makes Next.js
 // answer with its not-found page and a 404 status. P9-3 adds a campaign's
-// Performance view.
-const RECORD_PAGE = /^\/(?:(?:brands|runs|campaigns)\/([^/]+)(?:\/edit)?|campaigns\/([^/]+)\/performance)\/?$/;
+// Performance view, and U10-2 its other stage pages.
+const RECORD_PAGE = /^\/(?:(?:brands|runs|campaigns)\/([^/]+)(?:\/edit)?|campaigns\/([^/]+)\/(?:brief|audience|creative|launch|performance))\/?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 export function malformedRecordPath(pathname: string): boolean {

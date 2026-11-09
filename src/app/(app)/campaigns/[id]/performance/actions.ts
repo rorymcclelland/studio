@@ -6,6 +6,7 @@
 // runModelStep and generate() (rules 4 and 5). Each returns a brief action's
 // state, so the page's forms show the error.
 import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { sendEvent } from "@/inngest/client";
 import { StartRunError } from "@/lib/agents/runs";
 import { requireMember } from "@/lib/auth/session";
@@ -18,7 +19,7 @@ export async function markAlertAsSeen(campaignId: string, alertId: string): Prom
   const member = await requireMember();
   try {
     await markAlertSeen(member, alertId);
-    revalidatePath(`/campaigns/${campaignId}/performance`);
+    revalidateCampaign(campaignId);
     revalidatePath("/");
     return { done: "Marked as seen." };
   } catch (err) {
@@ -33,7 +34,7 @@ export async function askAboutCampaign(campaignId: string, question: string): Pr
   const member = await requireMember();
   try {
     await askQuestion(member, campaignId, question, sendEvent);
-    revalidatePath(`/campaigns/${campaignId}/performance`);
+    revalidateCampaign(campaignId);
     return { done: "Question asked. The answer appears below in a few seconds." };
   } catch (err) {
     if (err instanceof AskError || err instanceof StartRunError) return { error: err.message };

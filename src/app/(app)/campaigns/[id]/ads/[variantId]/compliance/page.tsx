@@ -23,8 +23,8 @@ async function CompliancePageContent(props: PageProps<"/campaigns/[id]/ads/[vari
     <div className="space-y-8">
       <div>
         <div className="flex flex-wrap gap-x-4 gap-y-1">
-          <TextLink href={`/campaigns/${id}#creative`}>
-            <span aria-hidden>← </span>Back to the campaign
+          <TextLink href={`/campaigns/${id}/creative`}>
+            <span aria-hidden>← </span>Back to Creative
           </TextLink>
           <TextLink href={`/campaigns/${id}/ads/${variantId}/sizes`}>Sizes of this ad</TextLink>
         </div>

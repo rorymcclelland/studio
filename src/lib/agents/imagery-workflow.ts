@@ -355,7 +355,7 @@ export async function executeImageryRun(ctx: StepContext, step: StepTools): Prom
       simulated,
       campaignId: prepared.campaignId,
       briefVersion: prepared.version,
-      href: `/campaigns/${prepared.campaignId}#creative`,
+      href: `/campaigns/${prepared.campaignId}/creative`,
       hrefLabel: "See the campaign",
     };
     if (capped) {

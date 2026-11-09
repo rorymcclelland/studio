@@ -1,11 +1,13 @@
-// P9-3: a campaign's Performance view. The campaign page has no tabs, so this
-// is its own route, linked from the Launch (simulated) panel while a launch is
-// live or ended. It reads stored facts only (src/lib/performance/dashboard.ts,
-// through asUser()), and every figure on it is simulated and says so (rule 1).
-// Server-rendered throughout: the chart is SVG with no client code.
+// P9-3: a campaign's Performance view, its last stage (U10-2: with the stage
+// bar, and locked with the reason until a launch is live or ended). Linked
+// from the Launch (simulated) panel too. It reads stored facts only
+// (src/lib/performance/dashboard.ts, through asUser()), and every figure on it
+// is simulated and says so (rule 1). Server-rendered throughout: the chart is
+// SVG with no client code.
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
-import { requireMember } from "@/lib/auth/session";
+import { performanceReads } from "@/lib/campaigns/facts";
+import { campaignStages } from "@/lib/campaigns/stages";
 import { formatDay } from "@/components/format-day";
 import { TextLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -14,14 +16,16 @@ import { PageSkeleton } from "@/components/ui/skeleton";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatPrice, formatWhen } from "@/lib/format";
 import { ALERT_NAMES, NO_ALERTS, type AlertKind } from "@/lib/performance/alerts";
-import { listAlerts, type AlertView } from "@/lib/performance/alerts-store";
+import type { AlertView } from "@/lib/performance/alerts-store";
 import { askPanel, questionsFor, type AskPanel, type QuestionView } from "@/lib/performance/ask";
 import { ANSWER_LABEL, CANNOT_ANSWER, MEASURE_LABELS, type QueryResult } from "@/lib/performance/ask-rules";
-import { NOT_LAUNCHED, performanceFor, TREND_NOTE, type PerformanceView } from "@/lib/performance/dashboard";
+import { TREND_NOTE, type PerformanceView } from "@/lib/performance/dashboard";
 import { HEALTHY_DEFINITION, NOT_ENOUGH_DATA, shareText, STATUS_NAMES, type AdHealth, type AdStatus, type DayHealth } from "@/lib/performance/health";
 import { isKpiMeasure, thresholdPhrase } from "@/lib/performance/launch-rules";
 import { adName, MEASURE_SHORT, PerformanceChart } from "./chart";
 import { AskForm, MarkSeenButton } from "./monitor-controls";
+import { campaignOr404, LockedStage, lockOf } from "../campaign-frame";
+import { StageBar } from "../stage-bar";
 
 const STATUS_TONE: Record<AdStatus, PillTone> = {
   healthy: "good",
@@ -368,26 +372,26 @@ function Ask({ campaignId, panel, questions }: { campaignId: string; panel: AskP
 
 async function PerformancePageContent(props: PageProps<"/campaigns/[id]/performance">) {
   const { id } = await props.params;
-  const member = await requireMember();
-  const [view, alerts, panel, questions] = await Promise.all([performanceFor(member.userId, id), listAlerts(member.userId, id), askPanel(member, id), questionsFor(member.userId, id)]);
+  const { member, data } = await campaignOr404(id);
+  const [{ view, alerts }, panel, questions] = await Promise.all([performanceReads(member.userId, id), askPanel(member, id), questionsFor(member.userId, id)]);
   if (!view || !alerts || !panel || !questions) notFound();
   const l = view.launch;
+  const lock = lockOf(data, "performance");
   return (
     <div className="space-y-8">
-      <div>
-        <TextLink href={`/campaigns/${view.campaignId}`}>
-          <span aria-hidden>← </span>Back to the campaign
-        </TextLink>
-        <div className="mt-3">
-          <Header view={view} />
+      <div className="space-y-4">
+        <div>
+          <TextLink href={`/campaigns/${view.campaignId}`} data-campaign-overview="">
+            <span aria-hidden>← </span>Overview
+          </TextLink>
+          <div className="mt-3">
+            <Header view={view} />
+          </div>
         </div>
+        <StageBar stages={campaignStages(data.facts)} current="performance" />
       </div>
-      {!l ? (
-        <Card>
-          <p className="max-w-prose" data-perf-not-launched="">
-            {NOT_LAUNCHED} Launch it from the campaign&apos;s Launch (simulated) panel.
-          </p>
-        </Card>
+      {lock || !l ? (
+        lock && <LockedStage lock={lock} />
       ) : (
         <>
           <Headline view={view} />

@@ -19,10 +19,12 @@ import {
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openStage,
   saveShot,
   settle,
   signIn,
   signOffVersion,
+  stagePath,
   step,
   untilShown,
 } from "./helpers";
@@ -85,16 +87,18 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
   await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
   await page.getByLabel("Objective").fill(OBJECTIVE);
   await page.getByRole("button", { name: "Write the brief" }).click();
+  // It opens on the overview (U10-2); the brief and its sign-off are on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
+  const path = new URL(page.url()).pathname;
+  await openStage(page, "brief", path);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
   const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
   await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
   await expect(toast(page, "Sent for sign-off")).toBeVisible();
   await panel.getByRole("button", { name: "Approve version 1" }).click();
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
-  // Read the signed-off page afresh (as F-26 does): on a slow dev server the action's re-render can lag.
-  await page.reload();
-  await settle(page);
+  // The ads are made on the Creative stage, opened afresh after the sign-off.
+  await openStage(page, "creative", path);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
 
@@ -189,7 +193,7 @@ test(
     let campaignPath = "";
 
     await step(page, "A signed-off Fernhollow brief and its ads (simulated pictures)", async () => {
-      campaignPath = await newCampaign(page, "Fernhollow Outfitters", "Win back lapsed customers for the winter range in three more languages");
+      campaignPath = stagePath(await newCampaign(page, "Fernhollow Outfitters", "Win back lapsed customers for the winter range in three more languages"), "creative");
       await signOffVersion(page, 1);
       await makeCreative(page, 12);
     });

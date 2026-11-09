@@ -1,4 +1,4 @@
-// S4-2 and S4-4 on the campaign page: the persona review and the test plan,
+// S4-2 and S4-4 on the campaign's Audience stage (U10-2): the persona review and the test plan,
 // each with its button, in-flight state and failure.
 import type { Reviews } from "@/lib/strategy/reviews";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -72,8 +72,8 @@ export function PersonasSection({ campaignId, currentVersion, reviews }: { campa
             Personas
           </h2>
           <p className="mt-1 max-w-prose text-ink-2">
-            Up to four synthetic customers, built from the brand&apos;s segments, score the brief and say what puts them off
-            and what would win them over. They are a quick check before money is spent, not research with real people.
+            Up to four synthetic customers, built from the brand&apos;s segments, score the brief and say what puts them off.
+            A quick check before money is spent, not research with real people.
           </p>
         </div>
         <AskPersonasButton campaignId={campaignId} running={active} />
@@ -128,8 +128,7 @@ export function TestPlanSection({ campaignId, currentVersion, reviews }: { campa
             Test plan
           </h2>
           <p className="mt-1 max-w-prose text-ink-2">
-            What to test once there is creative: each hypothesis tests one insight from the brief, with the cells to compare
-            and how the result is judged.
+            What to test once there is creative: one hypothesis for each insight in the brief.
           </p>
         </div>
         <MakeTestPlanButton campaignId={campaignId} running={active} />

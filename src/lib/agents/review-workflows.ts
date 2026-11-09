@@ -138,7 +138,7 @@ export async function executePersonaRun(ctx: StepContext, step: StepTools): Prom
       values (${ctx.workspaceId}, ${l.campaignId}, ${l.version}, ${ctx.runId}, ${tx.json(review as never)}, ${ctx.userId})
       on conflict (run_id) do nothing`);
     await setRun(ctx, "completed", {
-      output: { summary: `${personas.length} synthetic personas scored version ${l.version}: ${overall} out of 5 overall.`, href: `/campaigns/${l.campaignId}#personas`, hrefLabel: "See the persona review" },
+      output: { summary: `${personas.length} synthetic personas scored version ${l.version}: ${overall} out of 5 overall.`, href: `/campaigns/${l.campaignId}/audience#personas`, hrefLabel: "See the persona review" },
     });
     return "completed";
   });
@@ -202,7 +202,7 @@ export async function executeTestPlanRun(ctx: StepContext, step: StepTools): Pro
       values (${ctx.workspaceId}, ${l.campaignId}, ${l.version}, ${ctx.runId}, ${tx.json(plan as never)}, ${ctx.userId})
       on conflict (run_id) do nothing`);
     await setRun(ctx, "completed", {
-      output: { summary: `${plan.hypotheses.length} hypotheses for version ${l.version}.`, href: `/campaigns/${l.campaignId}#test-plan`, hrefLabel: "See the test plan" },
+      output: { summary: `${plan.hypotheses.length} hypotheses for version ${l.version}.`, href: `/campaigns/${l.campaignId}/audience#test-plan`, hrefLabel: "See the test plan" },
     });
     return "completed";
   });

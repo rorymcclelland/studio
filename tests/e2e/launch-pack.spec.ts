@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { acceptDontRulesForPicked, caption, contrastViolations, expectNoHorizontalScroll, saveShot, settle, signIn, untilShown } from "./helpers";
+import { acceptDontRulesForPicked, caption, contrastViolations, expectNoHorizontalScroll, openStage, saveShot, settle, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -49,17 +49,18 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
   await page.getByLabel("Objective").fill(OBJECTIVE);
   await page.getByRole("button", { name: "Write the brief" }).click();
+  // It opens on the overview (U10-2); the brief and its sign-off are on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
   const campaignPath = new URL(page.url()).pathname;
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
+  await openStage(page, "brief", campaignPath);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
   const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
   await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
   await expect(toast(page, "Sent for sign-off")).toBeVisible();
   await panel.getByRole("button", { name: "Approve version 1" }).click();
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
-  // Read the signed-off page afresh (as F-26 does): on a slow dev server the action's re-render can lag.
-  await page.reload();
-  await settle(page);
+  // The ads, their checks and the pack are on the Creative stage, opened afresh after the sign-off.
+  await openStage(page, "creative", campaignPath);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
 

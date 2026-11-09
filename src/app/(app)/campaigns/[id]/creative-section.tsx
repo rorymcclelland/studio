@@ -1,4 +1,4 @@
-// S5-4 on the campaign page: the Creative section. Shown in full once the
+// S5-4 on the campaign's Creative stage (U10-2): the Creative section. Shown in full once the
 // brief is signed off: Make creative with its estimate, the gallery of ads
 // (each a PNG drawn in code from a picture, a set of words and a layout), the
 // words for text-only channels, the discarded ads and words, and the AI cost
@@ -33,9 +33,9 @@ import {
   type FieldSpec,
 } from "./creative-controls";
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
-import { LaunchPanel, LaunchPanelSkeleton, type LaunchPanelData } from "./launch-panel";
 import { PictureCheckBar } from "./picture-check-bar";
 import { PretestBar, PretestScores } from "./pretest-panel";
+import { HistoryDetails } from "./history-details";
 import { CompliancePillView } from "./ads/[variantId]/compliance/compliance-view";
 import { BulkAcceptDontRules } from "./ads/[variantId]/compliance/bulk-accept";
 
@@ -85,13 +85,10 @@ export function CreativeSection({
   view,
   pack,
   compliance = null,
-  launch = null,
 }: {
   view: CreativeView;
   pack: Promise<PackSummary | null> | null;
   compliance?: ComplianceP;
-  /** P9-1: the Launch (simulated) panel's data, streamed in after the pack. */
-  launch?: Promise<LaunchPanelData | null> | null;
 }) {
   const make = view.makeCreative;
   const running = !!make.runningRunId;
@@ -205,11 +202,6 @@ export function CreativeSection({
               {pack && (
                 <Suspense fallback={<LaunchPackSkeleton />}>
                   <LaunchPack summary={pack} />
-                </Suspense>
-              )}
-              {launch && (
-                <Suspense fallback={<LaunchPanelSkeleton />}>
-                  <LaunchPanel data={launch} view={view} />
                 </Suspense>
               )}
               {view.olderKitCount > 0 && (
@@ -704,15 +696,13 @@ function SetFields({ fields, values }: { fields: FieldSpec[]; values: Record<str
   );
 }
 
+/** U10-2: discarded ads and words, one line with a count until opened. */
 function Discarded({ view }: { view: CreativeView }) {
   if (view.discarded.length === 0 && view.discardedSets.length === 0) return null;
   return (
-    <section aria-labelledby="discarded" className="space-y-3">
-      <h3 id="discarded" className="text-xl font-strong tracking-tight">
-        Discarded
-      </h3>
+    <HistoryDetails kind="discarded" id="discarded" title="Discarded" count={view.discarded.length + view.discardedSets.length}>
       <p className="max-w-prose text-ink-2">Nothing is deleted. Restore an ad or a set of words to bring it back.</p>
-      <ul aria-label="Discarded ads and words" className="overflow-hidden rounded-card bg-surface">
+      <ul aria-label="Discarded ads and words" className="overflow-hidden rounded-field border border-line">
         {view.discarded.map((v) => {
           const drawable = !v.image.discarded && !v.words.discarded;
           const what = `the ad "${v.words.headline}"`;
@@ -758,22 +748,18 @@ function Discarded({ view }: { view: CreativeView }) {
           );
         })}
       </ul>
-    </section>
+    </HistoryDetails>
   );
 }
 
+/** U10-2: the creative runs and their AI cost, one line with a count until opened. */
 function Runs({ view }: { view: CreativeView }) {
   return (
-    <section aria-labelledby="creative-runs" className="space-y-3">
-      <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-        <h3 id="creative-runs" className="text-xl font-strong tracking-tight">
-          Runs and AI cost
-        </h3>
-        <p className="font-semibold" data-creative-cost="">
-          AI cost of the creative so far: <span className="tabular-nums">{formatPence(view.totalCostPence)}</span>
-        </p>
-      </div>
-      <ul aria-label="Creative runs, newest first" className="overflow-hidden rounded-card bg-surface">
+    <HistoryDetails kind="runs" id="creative-runs" title="Runs and AI cost" count={view.runs.length}>
+      <p className="font-semibold" data-creative-cost="">
+        AI cost of the creative so far: <span className="tabular-nums">{formatPence(view.totalCostPence)}</span>
+      </p>
+      <ul aria-label="Creative runs, newest first" className="overflow-hidden rounded-field border border-line">
         {view.runs.map((r) => (
           <li key={r.runId} className="border-line px-4 py-3 not-first:border-t sm:px-6">
             <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -804,7 +790,7 @@ function Runs({ view }: { view: CreativeView }) {
           Simulated costs: the mock models are priced like the real ones so the daily cap can be tried out, and nothing is paid.
         </p>
       )}
-    </section>
+    </HistoryDetails>
   );
 }
 

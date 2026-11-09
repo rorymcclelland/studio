@@ -52,9 +52,11 @@ export async function devMember(sql: postgres.Sql): Promise<{ userId: string; wo
 
 /**
  * One campaign per status, under `brandId`, with objectives that start with
- * `tag` so a test can find its own. Returns each campaign's id by state.
+ * `tag` so a test can find its own. Returns each campaign's id by state. The
+ * live one is on simulated day 14 unless `liveDay` says otherwise (U10-2 #9
+ * uses day 0, whose label is the longest: "Live (simulated, before day 1)").
  */
-export async function insertStatusCampaigns(sql: postgres.Sql, brandId: string, tag: string): Promise<Record<StatusKey, string>> {
+export async function insertStatusCampaigns(sql: postgres.Sql, brandId: string, tag: string, { liveDay = 14 }: { liveDay?: number } = {}): Promise<Record<StatusKey, string>> {
   const { userId, workspaceId } = await devMember(sql);
   const ids = {} as Record<StatusKey, string>;
   await sql.begin(async (tx) => {
@@ -90,7 +92,7 @@ export async function insertStatusCampaigns(sql: postgres.Sql, brandId: string, 
       if (key === "launchWaiting") continue;
       await tx`update public.approvals set status = 'approved', decided_by = ${userId}, decided_at = now() where id = ${ap.id}`;
       await tx`update public.launches set status = 'live', approved_at = now() where id = ${l.id}`;
-      if (key === "live") await tx`update public.launches set sim_day = 14 where id = ${l.id}`;
+      if (key === "live" && liveDay > 0) await tx`update public.launches set sim_day = ${liveDay} where id = ${l.id}`;
       if (key === "ended") await tx`update public.launches set status = 'ended', ended_by = ${userId}, ended_at = now() where id = ${l.id}`;
     }
   });

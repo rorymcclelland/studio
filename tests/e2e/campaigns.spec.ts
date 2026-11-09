@@ -1,13 +1,14 @@
 // S3-2 and S3-3 through the UI, with the mock model: objective in, evidenced
 // brief out; a hand edit, a revision with AI, a stale save from a second tab,
 // a refused edit, and restoring an old version. Plus AA contrast and layout
-// on /campaigns and the campaign page.
+// on /campaigns and the campaign's Brief stage (U10-2: the brief, its sign-off
+// and its version history, collapsed to one line until opened, are there).
 //
 // Campaigns are created for Fernhollow. Pages left with Cache Components stay
 // in the document, hidden, so locators that could match them are filtered to
 // visible elements.
 import { expect, test, type Page } from "@playwright/test";
-import { contrastViolations, demoBrandId, expectNoHorizontalScroll, settle, signIn } from "./helpers";
+import { contrastViolations, demoBrandId, expectNoHorizontalScroll, openHistory, openStage, settle, signIn, stagePath, untilShown } from "./helpers";
 
 const OBJECTIVE = "Launch the winter range to lapsed customers";
 
@@ -30,7 +31,7 @@ async function checkLayoutAndContrast(page: Page, what: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-/** Creates a Fernhollow campaign from /campaigns and waits for version 1. Returns its path. */
+/** Creates a Fernhollow campaign from /campaigns and waits for version 1 on its Brief stage. Returns its overview's path. */
 async function newFernhollowCampaign(page: Page): Promise<string> {
   await demoBrandId(page, "Fernhollow Outfitters");
   await page.goto("/campaigns");
@@ -39,9 +40,12 @@ async function newFernhollowCampaign(page: Page): Promise<string> {
   await page.getByLabel("Objective").fill(OBJECTIVE);
   await expect(page.getByText(`${OBJECTIVE.length} of 300 characters`)).toBeVisible();
   await page.getByRole("button", { name: "Write the brief" }).click();
+  // It opens on the overview (U10-2); the brief is on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
-  return new URL(page.url()).pathname;
+  const path = new URL(page.url()).pathname;
+  await openStage(page, "brief", path);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
+  return path;
 }
 
 test("S3-2 #1 and S3-3 #1, #3, #5, #7: brief, hand edit, revision, stale save and restore", async ({ page, context }) => {
@@ -72,13 +76,14 @@ test("S3-2 #1 and S3-3 #1, #3, #5, #7: brief, hand edit, revision, stale save an
   await story.fill("We meet lapsed customers on the first cold morning of winter with a warm reason to come back.");
   await page.getByRole("button", { name: "Save the story" }).click();
   await expect(toast(page, "Saved as version 2.")).toBeVisible();
+  await openHistory(page, "versions");
   await expect(version(page, 2)).toContainText("Edited by you");
   await expect(version(page, 1)).toContainText("Brief agent");
   await expect(section(page, "story")).toContainText("first cold morning of winter");
 
   // A second tab opens the title editor on version 2.
   const other = await context.newPage();
-  await other.goto(path);
+  await other.goto(stagePath(path, "brief"));
   await settle(other);
   await other.getByRole("button", { name: "Edit the title" }).click();
 
@@ -96,6 +101,7 @@ test("S3-2 #1 and S3-3 #1, #3, #5, #7: brief, hand edit, revision, stale save an
   await expect(section(page, "summary")).not.toContainText("Revised as asked.");
   await proposal.getByRole("button", { name: "Use this version" }).click();
   await expect(toast(page, "Saved as version 3.")).toBeVisible();
+  await openHistory(page, "versions");
   await expect(version(page, 3)).toContainText("Revision: Make it warmer");
   await expect(section(page, "summary")).toContainText("Revised as asked.");
   await expect(page.locator("[data-proposal]").filter({ visible: true })).toHaveCount(0);
@@ -110,6 +116,7 @@ test("S3-2 #1 and S3-3 #1, #3, #5, #7: brief, hand edit, revision, stale save an
   await other.close();
 
   // S3-3 #5: view version 1 read-only and make it current again: version 4.
+  await openHistory(page, "versions");
   await version(page, 1).getByRole("link", { name: "View version 1" }).click();
   await expect(page).toHaveURL(/\?version=1$/);
   await expect(page.getByRole("heading", { name: "You are looking at version 1" })).toBeVisible();
@@ -118,16 +125,17 @@ test("S3-2 #1 and S3-3 #1, #3, #5, #7: brief, hand edit, revision, stale save an
   await checkLayoutAndContrast(page, "an old version");
   await page.getByRole("button", { name: "Make this the current version" }).click();
   await expect(toast(page, "Version 1 restored as version 4.")).toBeVisible();
-  await expect(page).toHaveURL(new RegExp(`${path}$`));
+  await expect(page).toHaveURL(new RegExp(`${stagePath(path, "brief")}$`));
+  await openHistory(page, "versions");
   await expect(version(page, 4)).toContainText("Restored from version 1");
   await expect(section(page, "story")).toContainText(originalStory);
-  await checkLayoutAndContrast(page, "campaign page");
+  await checkLayoutAndContrast(page, "the Brief stage");
 
-  // The list shows the campaign on version 4.
+  // The list shows the campaign as a draft again (U10-1's status labels: version 4 isn't signed off).
   await page.goto("/campaigns");
   await settle(page);
   const row = page.getByRole("link", { name: /Fernhollow Outfitters: campaign brief/ }).filter({ visible: true }).first();
-  await expect(row).toContainText("Draft v");
+  await expect(row).toContainText("Draft");
   await checkLayoutAndContrast(page, "/campaigns with campaigns");
 });
 
@@ -144,8 +152,9 @@ test("S3-3 #2: a hand edit that removes every audience is refused and nothing is
     "Choose at least one audience",
   );
   await audiences.getByRole("button", { name: "Cancel" }).click();
-  await expect(page.locator("[data-version]").filter({ visible: true })).toHaveCount(1);
   await expect(page.getByRole("button", { name: "Edit the audiences" })).toBeFocused();
+  await openHistory(page, "versions");
+  await expect(page.locator("[data-version]").filter({ visible: true })).toHaveCount(1);
 });
 
 test("the objective is checked: too short is refused with the reason", async ({ page }) => {

@@ -118,6 +118,8 @@ test(
         ["brand languages", `/brands/${fernhollow}/languages`],
         ["campaigns", "/campaigns"],
         ...(Object.keys(STATUS_LABELS) as StatusKey[]).map((k): [string, string] => [`campaign, ${STATUS_LABELS[k]}`, `/campaigns/${campaigns![k]}`]),
+        // U10-2: the live campaign's stage pages, each with the stage bar.
+        ...(["brief", "audience", "creative", "launch", "performance"] as const).map((st): [string, string] => [`campaign, ${STATUS_LABELS.live}, ${st}`, `/campaigns/${campaigns!.live}/${st}`]),
         ["approvals", "/approvals"],
         ["invites", "/invites"],
         ["brand not found", "/brands/11111111-1111-4111-8111-111111111111"],

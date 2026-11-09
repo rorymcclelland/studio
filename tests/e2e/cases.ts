@@ -89,6 +89,7 @@ export const STORIES: Story[] = [
   { sprint: 9, id: "F-23", title: "Production deploys wait for the checks" },
   { sprint: 10, id: "U10-1", title: "Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save" },
   { sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" },
+  { sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
@@ -231,6 +232,28 @@ const BUDGET_PAGES = [
   "invites",
   "not-found-app",
 ];
+// U10-2 The campaign in stages: the browser tests, the pure stage and "Needs you" functions
+// (every combination), and the loader's flows against plain Postgres (outside tests/db: CI's
+// Neon job runs tests/db from a US runner). The interface is at the top of the spec.
+const STAGES_SPEC = "campaign-stages.spec.ts";
+const STAGES_LIB = "tests/lib/campaign-stages.test.ts";
+const STAGES_FLOWS = "tests/flows/campaign-stages.test.ts";
+/** U10-2's own pages in tests/e2e/page-budgets.ts (the Creative stage's budgets are U10-3's, Performance's U10-4's). */
+const STAGE_BUDGET_PAGES = [
+  "campaign-live",
+  "campaign-live-brief",
+  "campaign-live-audience",
+  "campaign-live-launch",
+  "campaign-two-audiences",
+  "campaign-waiting",
+  "campaign-waiting-brief",
+  "campaign-early",
+  "campaign-early-brief",
+];
+/** The specs that walk the campaign page, updated to go through the stage pages (U10-2 case 5). */
+const STAGE_WALKERS =
+  "campaigns, signoff, creative, several-audiences, sizes, languages, compliance, vision, pretest, launch-pack, launch, simulation, performance, monitor and quick-fixes, through the shared helpers (newCampaign, signOffVersion, makeCreative, acceptDontRulesForPicked, openStage, openLaunch, openHistory) and the fullest data";
+
 // BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
 // mock model (the unit and regression tests, and the evals in CI's first job); the real models
 // only in a real-model eval run of the affected agents, which needs the keys only Actions has.
@@ -1822,6 +1845,145 @@ export const CASES: Case[] = [
         note: "The spec's own check, run against a deliberately long fixture page (10,000 px, its button 9,000 px down), set as the page's content.",
       },
       { kind: "ci", file: PAGE_BUDGETS_LIB, test: "U10-6 #3 a page over budget fails with its measured height and the budget" },
+    ],
+  },
+  // U10-2 The campaign in stages, opening on what needs you
+  {
+    id: "U10-2.1",
+    sprint: 10,
+    story: "U10-2",
+    words: "A live campaign opens on its overview, and its first screen at 375 px and 1440 px shows \"Live (simulated day 14)\", the unseen alert count and the ad below the threshold.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #1: a live campaign opens on its overview, whose first screen at 375 px and 1440 px says it is live on day 14 with its unseen alerts and the ad below the threshold",
+        note: "The campaign is case 2's, launched with one ad and a click-through-rate threshold of 50% (out of any ad's reach), so exactly one ad is below it on day 14. The live state reads as U10-1's list label, \"Live (simulated day 14)\", rather than the case's \"Live (simulated), day 14\", so lists, the overview and the stage bar say the same.",
+      },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #1 the below-threshold line" },
+      { kind: "ci", file: STAGES_FLOWS, test: "#1 #2 #4 live on simulated day 14: the day, the unseen alerts and the ads below the threshold, as the Performance page has them" },
+    ],
+  },
+  {
+    id: "U10-2.2",
+    sprint: 10,
+    story: "U10-2",
+    words: "Each \"Needs you\" item links to the page where it is done, and doing it removes it: send for sign-off, decide a sign-off, decide a compliance review, approve a launch, mark alerts seen.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #2: each Needs you item links to where it is done, and doing it removes it, from sign-off to a live launch",
+        note: "One Fernhollow campaign through every stage, with the mock models. The launch's threshold is set after it is asked for, as the tables' owner (launch-fixture.ts), so its ad falls below it. Until U10-3 the gallery ignores ?show=decide and shows every ad.",
+      },
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #2: marking the alerts seen on Performance removes them from Needs you" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #2 and #3 what needs you" },
+      { kind: "ci", file: STAGES_FLOWS, test: "U10-2 campaignFacts() reads each campaign's stage facts" },
+    ],
+  },
+  {
+    id: "U10-2.3",
+    sprint: 10,
+    story: "U10-2",
+    words: "A campaign with nothing to do says so (\"Nothing needs you right now.\") rather than showing an empty list.",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #3: a campaign with nothing to do says Nothing needs you, not an empty list" },
+      { kind: "ci", file: STAGES_LIB, test: "#3 nothing to do: an empty list, and the words the overview shows instead" },
+    ],
+  },
+  {
+    id: "U10-2.4",
+    sprint: 10,
+    story: "U10-2",
+    words: "The stage bar shows the right state for a campaign in each state, from writing to ended.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #4: the stage bar shows the right state for campaigns waiting for sign-off, signed off, launch waiting, live and ended",
+        note: "Five states, written to the database as the app leaves them (status-fixture.ts); the refinement asks for three. Writing and every other combination are the CI test.",
+      },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #4 the stage bar's stages and their states" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 unknown inputs" },
+      { kind: "ci", file: STAGES_FLOWS, test: "U10-2 campaignFacts() reads each campaign's stage facts" },
+    ],
+  },
+  {
+    id: "U10-2.5",
+    sprint: 10,
+    story: "U10-2",
+    words: "Every action on today's campaign page is reachable from the new pages, at most one click further; history collapses to a line with a count; old links land on the right stage; the existing specs pass through the stage bar.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #5: every action on today's campaign page is on a stage page, at most one click further",
+        note: `The stage-level controls; each ad card's own tools are U10-3's case 8. The existing specs that walk the campaign (${STAGE_WALKERS}) are updated, not deleted, and pass in the same run.`,
+      },
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #5: history is one line with a count on its stage, and opens in place" },
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #5: old links to the campaign page's sections land on the right stage" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #5 old links land on the right stage" },
+    ],
+  },
+  {
+    id: "U10-2.6",
+    sprint: 10,
+    story: "U10-2",
+    words: "Each stage page is within its length budget (U10-6) with the audit's fullest data.",
+    checks: STAGE_BUDGET_PAGES.map(
+      (key): Check => ({
+        kind: "browser",
+        spec: PAGE_LENGTH_SPEC,
+        title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px`,
+        note: "U10-6's measurement. The Creative stage's budgets wait for U10-3's compact cards, and the Performance page's for U10-4, by their markers in tests/e2e/page-budgets.ts.",
+      }),
+    ),
+  },
+  {
+    id: "U10-2.7",
+    sprint: 10,
+    story: "U10-2",
+    words: "Another workspace's campaign id gives the not-found page on every stage route (rule 7).",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #7: another workspace's campaign id gives the not-found page on every stage route" },
+      { kind: "ci", file: STAGES_FLOWS, test: "#7 rule 7: another workspace gets nothing for any of these campaigns, and a malformed or missing id is the same" },
+    ],
+  },
+  {
+    id: "U10-2.8",
+    sprint: 10,
+    story: "U10-2",
+    words: "A stage that isn't reachable yet (Creative before sign-off, Launch before picked ads pass, Performance before launch) shows a one-line reason and a link to the step that unlocks it, not an error.",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #8: a stage that isn't reachable yet says why in one line and links to the step that unlocks it" },
+      { kind: "ci", file: STAGES_LIB, test: "creative: locked before sign-off, with the reason and a link to the sign-off; then Making ads, No ads yet, or the count" },
+      { kind: "ci", file: STAGES_LIB, test: "launch is locked before sign-off, and when no picked ad passes; the link goes to what unlocks it" },
+      { kind: "ci", file: STAGES_LIB, test: "performance: locked until a launch is live or ended; then the unseen alerts" },
+    ],
+  },
+  {
+    id: "U10-2.9",
+    sprint: 10,
+    story: "U10-2",
+    words: "The stage bar never makes the page scroll sideways at 375 px, with the longest labels.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #9: at 375 px the stage bar with the longest labels never makes the page scroll sideways",
+        note: "The longest label is \"Live (simulated, before day 1)\" (30 characters); CI checks no label is longer.",
+      },
+      { kind: "ci", file: STAGES_LIB, test: "every combination: five stages in order, one short label each, locks exactly as the rules say, and never an error" },
+    ],
+  },
+  {
+    id: "U10-2.10",
+    sprint: 10,
+    story: "U10-2",
+    words: "Keyboard: the stage bar is a nav with aria-current on the current stage; every stage link and \"Needs you\" link works with Enter.",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #10: the stage bar is a nav with aria-current, and stage and Needs you links work with Enter" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #10 the stage bar and the Needs you list as rendered" },
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

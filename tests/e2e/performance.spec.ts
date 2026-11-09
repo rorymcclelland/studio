@@ -48,11 +48,12 @@ import { simulateDays, type SimLaunch, type SimRow } from "@/lib/performance/sim
 import {
   acceptDontRulesForPicked,
   contrastViolations,
-  DEV_EMAIL,
   demoBrandId,
+  DEV_EMAIL,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openLaunch,
   saveShot,
   settle,
   signIn,
@@ -92,11 +93,9 @@ async function pickCard(page: Page, card: ReturnType<Page["locator"]>) {
   await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
 }
 
+/** The campaign's Launch stage (U10-2), through the stage bar, with its Launch (simulated) panel. */
 async function openPanel(page: Page, path: string) {
-  await page.goto(path);
-  await settle(page);
-  await expect(panel(page).getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
-  await panel(page).scrollIntoViewIfNeeded();
+  await openLaunch(page, path);
 }
 
 /** Ask to launch with the panel's defaults; the launch then waits for approval. */

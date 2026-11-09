@@ -167,7 +167,7 @@ describe("S5-4 Make creative and the gallery", () => {
         [3, "Write the copy (Copy agent)", "succeeded"],
         [4, "Compose the ads", "succeeded"],
       ]);
-      expect(run.output).toMatchObject({ variants: 12, pictures: 4, sets: 3, href: `/campaigns/${id}#creative` });
+      expect(run.output).toMatchObject({ variants: 12, pictures: 4, sets: 3, href: `/campaigns/${id}/creative` });
       expect(String(run.output!.summary)).toMatch(/^12 ads from 4 pictures and 3 sets of words\./);
 
       expect(g.runs).toHaveLength(1);

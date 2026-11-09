@@ -7,6 +7,7 @@
 // its refusal into a message for the page.
 
 import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { acceptDontRuleForPicked, ComplianceError, decideFinding } from "@/lib/compliance/compute";
 import type { BriefActionState } from "../../../../actions";
@@ -18,7 +19,7 @@ export async function decideCompliance(campaignId: string, variantId: string, pa
   try {
     const f = await decideFinding(member, variantId, payload);
     revalidatePath(`/campaigns/${campaignId}/ads/${variantId}/compliance`);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: f.outcome === "accepted" ? `Accepted: ${f.name.toLowerCase()}.` : `Marked not acceptable: ${f.name.toLowerCase()}.` };
   } catch (err) {
     if (err instanceof ComplianceError) return { error: err.message };
@@ -35,7 +36,7 @@ export async function acceptRuleForPicked(campaignId: string, key: string): Prom
   const member = await requireMember();
   try {
     const r = await acceptDontRuleForPicked(member, campaignId, key);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     const ads = (n: number) => `${n} picked ${n === 1 ? "ad" : "ads"}`;
     const kept = r.rejected ? ` ${ads(r.rejected)} marked not acceptable ${r.rejected === 1 ? "is" : "are"} left as ${r.rejected === 1 ? "it is" : "they are"}.` : "";
     if (r.accepted === 0) return { done: `Nothing to accept: every picked ad already has a decision on that rule.${kept}` };

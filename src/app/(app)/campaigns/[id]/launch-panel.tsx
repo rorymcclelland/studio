@@ -1,4 +1,4 @@
-// P9-1 in the Creative section, after the launch pack: Launch (simulated).
+// P9-1 on the campaign's Launch stage (U10-2): Launch (simulated).
 // P9-2 adds the simulated clock to a live launch, and P9-3 the link to the
 // campaign's Performance view while a launch is live or ended.
 // The ads that would launch (the pack's rule), the ones left out with the
@@ -38,9 +38,9 @@ function Shell({ children }: { children: React.ReactNode }) {
   return (
     <section aria-labelledby={HEADING} className="space-y-4 rounded-field bg-surface px-4 py-4" data-launch-panel="">
       <div className="space-y-1">
-        <h3 id={HEADING} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base font-semibold">
+        <h2 id={HEADING} className="flex flex-wrap items-center gap-x-3 gap-y-1 text-base font-semibold">
           Launch (simulated) <Pill tone="review">Simulated</Pill>
-        </h3>
+        </h2>
         <p className="max-w-prose text-sm text-ink-2">
           A rehearsal of a real launch: Studio simulates how the ads would do. {NO_REAL_MONEY}
         </p>
@@ -124,7 +124,7 @@ function AskToLaunch({ eligibility, hasHistory }: { eligibility: LaunchPanelData
   const e = eligibility;
   return (
     <div className="space-y-4" data-launch-ask="">
-      {hasHistory && <h4 className="font-semibold">Ask to launch again</h4>}
+      {hasHistory && <h3 className="font-semibold">Ask to launch again</h3>}
       <div className="grid gap-4 lg:grid-cols-2">
         <div className="min-w-0 space-y-2">
           <p className="text-sm font-semibold">Would launch</p>

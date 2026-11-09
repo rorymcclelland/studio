@@ -141,7 +141,7 @@ describe("S5-2 Copy agent", () => {
     const trace = await figureTrace(a, campaign, sets);
     expect(trace.figures.length).toBeGreaterThan(0);
     expect(trace.unsupported).toEqual([]);
-    expect(r.output).toMatchObject({ href: `/campaigns/${campaign}#copy`, version });
+    expect(r.output).toMatchObject({ href: `/campaigns/${campaign}/creative`, version });
   });
 
   it("#2 a headline over 40 characters, 'save 20%', 'guaranteed returns' or 'Monzo' is repaired, then fails with each problem named", async () => {

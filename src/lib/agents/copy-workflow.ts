@@ -176,7 +176,7 @@ export async function executeCopyRun(ctx: StepContext, step: StepTools): Promise
         sets: saved,
         notes: prepared.notes,
         ...(replacing ? { stale } : {}),
-        href: `/campaigns/${prepared.campaignId}#copy`,
+        href: `/campaigns/${prepared.campaignId}/creative`,
         hrefLabel: "See the copy",
       },
     });
