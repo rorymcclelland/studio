@@ -165,6 +165,7 @@ import postgres from "postgres";
 import { randomUUID } from "node:crypto";
 import {
   acceptDontRulesForPicked,
+  openPickedChecks,
   adTool,
   demoBrandId,
   expectNoHorizontalScroll,
@@ -444,6 +445,8 @@ test.describe("U10-2 a Fernhollow campaign taken through every stage from its ov
         await openStage(page, "creative", path);
         await expect(visible(page, "[data-creative]").getByRole("button", { name: /^Make creative/ })).toBeVisible();
         await expect(visible(page, "[data-gallery] > li").first()).toBeVisible();
+        // U10-3: the checks on the picked ads are folded into one line until opened.
+        await openPickedChecks(page);
         for (const css of ["[data-languages]", "[data-compliance-summary]", "[data-pretest-bar]", "[data-picture-check-bar]", "[data-launch-pack]"]) await expect(visible(page, css), css).toBeVisible();
         // U10-3: an ad's Sizes and Compliance links are in its card's More menu.
         await openAdMenu(visible(page, "[data-gallery] > li").first(), "more");

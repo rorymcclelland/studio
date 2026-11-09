@@ -15,7 +15,7 @@ export function PretestBar({ view }: { view: CreativeView }) {
   const p = view.pretest;
   const running = !!p.runningRunId;
   return (
-    <div className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" data-pretest-bar="">
+    <div className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" id="pretest" data-pretest-bar="">
       <div className="min-w-0 max-w-prose space-y-1.5">
         <p className="font-semibold">Pre-test</p>
         <p className="text-sm text-ink-2">

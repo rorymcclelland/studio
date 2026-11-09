@@ -331,10 +331,11 @@ describe("the case list", () => {
 
   it("has every agreed U10-3 case, once each, in order, after U10-2's, checked as the refinement says", () => {
     const u103 = CASES.filter((c) => c.story === "U10-3");
-    expect(u103.map((c) => c.id)).toEqual(Array.from({ length: 8 }, (_, i) => `U10-3.${i + 1}`));
+    // 1 to 8 as refined; 9 and 10 are Rory's choices (a) and (b) of 9 November 2026, which make the page fit its budget.
+    expect(u103.map((c) => c.id)).toEqual(Array.from({ length: 10 }, (_, i) => `U10-3.${i + 1}`));
     for (const c of u103) expect(c.sprint, c.id).toBe(10);
-    // The refinement: browser tests for 1, 2, 3, 4, 5, 7 and 8; CI for 2 (each action), 3 and 6.
-    expect(u103.map(caseKind)).toEqual(["browser", "browser", "browser", "browser", "browser", "ci", "browser", "browser"]);
+    // The refinement: browser tests for 1, 2, 3, 4, 5, 7 and 8; CI for 2 (each action), 3 and 6. Rory's 9 and 10: browser tests, with CI for the line, the order and the cut-off.
+    expect(u103.map(caseKind)).toEqual(["browser", "browser", "browser", "browser", "browser", "ci", "browser", "browser", "browser", "browser"]);
     const SPEC = "creative-gallery.spec.ts";
     const LIB = "tests/lib/gallery-filter.test.ts";
     const FLOWS = "tests/flows/creative-lock.test.ts";
@@ -342,7 +343,7 @@ describe("the case list", () => {
     for (const c of u103) for (const x of c.checks.filter((y) => y.kind === "browser")) expect((x as { spec: string }).spec, c.id).toBe(SPEC);
     // The server's refusals and their end against plain Postgres (2 and 3, rule 7 in 2); the filter's parsing in the pure tests (6).
     for (const id of ["U10-3.2", "U10-3.3"]) expect(ciIn(id, FLOWS), id).toBe(true);
-    for (const id of ["U10-3.1", "U10-3.2", "U10-3.3", "U10-3.4", "U10-3.5", "U10-3.6"]) expect(ciIn(id, LIB), id).toBe(true);
+    for (const id of ["U10-3.1", "U10-3.2", "U10-3.3", "U10-3.4", "U10-3.5", "U10-3.6", "U10-3.9", "U10-3.10"]) expect(ciIn(id, LIB), id).toBe(true);
     expect(u103.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
     expect(u103.flatMap((c) => c.checks).some((x) => x.kind === "hand" || x.kind === "withdrawn")).toBe(false);
     // The browser tests change no brand kit, so they run in the main project; none is marked as an expected failure.
@@ -361,7 +362,7 @@ describe("the case list", () => {
     expect(head).toContain("---------------------------------------------------------------- interface");
     expect(head).toContain("That ad is running in a launch (simulated), so it can't change until the launch ends.");
     const helpers = read("tests/e2e/helpers.ts");
-    for (const fn of ["adCard", "openAdMenu", "adTool"]) expect(helpers, fn).toMatch(new RegExp(`export (async )?function ${fn}\\(`));
+    for (const fn of ["adCard", "openAdMenu", "adTool", "openPickedChecks", "showAllAds"]) expect(helpers, fn).toMatch(new RegExp(`export (async )?function ${fn}\\(`));
     expect(helpers).toContain("export const AD_TOOLS");
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-2")).toBeLessThan(order.indexOf("U10-3"));

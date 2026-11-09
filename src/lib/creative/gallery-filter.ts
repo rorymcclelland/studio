@@ -184,3 +184,77 @@ export function adTools({ picked, launch, olderKit, translate }: { picked: boole
     return true;
   });
 }
+
+// ---------------------------------------------------------------- the gallery's order and length (U10-3, Rory's choice b)
+
+/** How many ads an audience group shows before "Show all N ads", under All. A filter shows every ad it matches. */
+export const GROUP_PREVIEW = 6;
+
+/** What the gallery's order needs to know about an ad: its facts, when it was made, and the run that made it. */
+export type OrderFacts = AdFacts & { createdAt: Date; runId: string | null };
+
+const TIER: Record<AdState, number> = { launched: 0, decide: 1, picked: 2, discarded: 3 };
+
+/**
+ * The order the gallery shows an audience's ads in: launched, then needing a
+ * decision, then picked, then the rest; newest first within each. Ads one run
+ * made together (Make creative's batch) count as one age and keep the order
+ * they were given in, so a batch reads Ad 1, Ad 2, ... and not backwards; an ad
+ * made later (a new picture, new or edited words, a redraw) comes before them.
+ */
+export function galleryOrder<T extends OrderFacts>(ads: readonly T[]): T[] {
+  const age = new Map<string, number>();
+  for (const a of ads) {
+    const key = a.runId ?? a.id;
+    age.set(key, Math.max(age.get(key) ?? -Infinity, a.createdAt.getTime()));
+  }
+  const tier = (a: T) => {
+    const s = adState(a);
+    return s === null ? 4 : TIER[s];
+  };
+  return ads
+    .map((a, i) => ({ a, i }))
+    .sort((x, y) => tier(x.a) - tier(y.a) || age.get(y.a.runId ?? y.a.id)! - age.get(x.a.runId ?? x.a.id)! || x.i - y.i)
+    .map((x) => x.a);
+}
+
+/** How many of a group's ads show before "Show all": every one under a filter, else GROUP_PREVIEW. */
+export function previewCount(show: GalleryShow, total: number): number {
+  return show === "all" ? Math.min(total, GROUP_PREVIEW) : total;
+}
+
+/** "Show all 12 ads" */
+export const showAllLabel = (total: number) => `Show all ${total} ads`;
+
+// ---------------------------------------------------------------- the checks on the picked ads (U10-3, Rory's choice a)
+
+/** What the one line above the folded checks on the picked ads is made from: counts the page already has. */
+export type PickedChecksFacts = {
+  picked: number;
+  /** Picked ads whose compliance waits for a person (the Needs a decision count). */
+  toDecide: number;
+  /** Picked ads with current pre-test scores, and whether any of those scores came from the mock model. */
+  pretested: { count: number; simulated: boolean };
+  /** Picked ads with at least one translation, and whether any came from the mock model. */
+  translated: { count: number; simulated: boolean };
+  /** Pictures with no picture-check result yet. */
+  picturesUnchecked: number;
+  /** The launch pack: null while it is worked out (or when there is none to work out). */
+  packReady: boolean | null;
+};
+
+/**
+ * The folded checks' one-line state: "Checks on the 4 picked ads: 1 needs a
+ * decision, 4 pre-tested (simulated scores), launch pack ready". Simulated
+ * figures say so (rule 1).
+ */
+export function pickedChecksLine(f: PickedChecksFacts): { title: string; state: string } {
+  if (f.picked === 0) return { title: "Checks on the picked ads", state: "no ad is picked yet" };
+  const parts: string[] = [];
+  parts.push(f.toDecide === 0 ? "none needs a decision" : `${f.toDecide} ${f.toDecide === 1 ? "needs" : "need"} a decision`);
+  if (f.pretested.count > 0) parts.push(`${f.pretested.count} pre-tested${f.pretested.simulated ? " (simulated scores)" : ""}`);
+  if (f.translated.count > 0) parts.push(`${f.translated.count} translated${f.translated.simulated ? " (simulated)" : ""}`);
+  if (f.picturesUnchecked > 0) parts.push(`${f.picturesUnchecked} ${f.picturesUnchecked === 1 ? "picture" : "pictures"} not checked yet`);
+  if (f.packReady !== null) parts.push(f.packReady ? "launch pack ready" : "no launch pack yet");
+  return { title: `Checks on the ${f.picked} picked ${f.picked === 1 ? "ad" : "ads"}`, state: parts.join(", ") };
+}

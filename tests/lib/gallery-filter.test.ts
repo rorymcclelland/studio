@@ -18,6 +18,11 @@ import {
   filterAds,
   GALLERY_SHOWS,
   galleryHref,
+  galleryOrder,
+  GROUP_PREVIEW,
+  pickedChecksLine,
+  previewCount,
+  showAllLabel,
   LOCK_LINES,
   LOCKED_TOOLS,
   lockLine,
@@ -229,5 +234,88 @@ describe("U10-3 #1 and #3 the card follows the ad's state", () => {
     expect(tools({ picked: true, translate: true })).toContain("translate");
     // No tool twice.
     for (const t of [tools(), tools({ picked: true, olderKit: true, translate: true })]) expect(new Set(t).size).toBe(t.length);
+  });
+});
+
+describe("U10-3 #10 the gallery's order and how many ads a group shows (Rory's choice b, 9 November 2026)", () => {
+  const at = (minute: number) => new Date(Date.UTC(2026, 10, 9, 12, minute));
+  const ad = (id: string, over: Partial<AdFacts> & { minute?: number; runId?: string | null } = {}) => ({
+    id,
+    picked: false,
+    toDecide: false,
+    launch: null as LaunchHold,
+    segmentRef: null,
+    createdAt: at(over.minute ?? 0),
+    runId: "make" as string | null,
+    ...over,
+  });
+
+  it("#10 launched, then needing a decision, then picked, then the rest", () => {
+    const ads = [ad("plain"), ad("picked", { picked: true }), ad("decide", { picked: true, toDecide: true }), ad("live", { picked: true, launch: "live" })];
+    expect(galleryOrder(ads).map((a) => a.id)).toEqual(["live", "decide", "picked", "plain"]);
+    // A waiting launch's ad is ordered by what it otherwise is (it isn't running).
+    expect(galleryOrder([ad("plain"), ad("waiting", { picked: true, launch: "awaiting_approval" })]).map((a) => a.id)).toEqual(["waiting", "plain"]);
+  });
+
+  it("#10 newest first within each; ads one run made together keep the order they were given in", () => {
+    // Make creative's twelve ads, a second apart, then a new picture and a person's edited words (no run) later.
+    const batch = ["a1", "a2", "a3", "a4"].map((id, i) => ad(id, { minute: i, runId: "make" }));
+    const later = [ad("picture", { minute: 10, runId: "picture-run" }), ad("edited", { minute: 20, runId: null })];
+    expect(galleryOrder([...batch, ...later]).map((a) => a.id)).toEqual(["edited", "picture", "a1", "a2", "a3", "a4"]);
+    // Within a tier only: a picked ad from the old batch still comes before a newer plain one.
+    expect(galleryOrder([ad("old", { minute: 0, picked: true }), ad("new", { minute: 30, runId: "x" })]).map((a) => a.id)).toEqual(["old", "new"]);
+    // It doesn't change the list it was given.
+    const given = [...batch, ...later];
+    galleryOrder(given);
+    expect(given.map((a) => a.id)).toEqual(["a1", "a2", "a3", "a4", "picture", "edited"]);
+  });
+
+  it("#10 under All a group shows its first six, with Show all N ads; a filter shows every ad it matches", () => {
+    expect(GROUP_PREVIEW).toBe(6);
+    expect(previewCount("all", 12)).toBe(6);
+    expect(previewCount("all", 6)).toBe(6);
+    expect(previewCount("all", 4)).toBe(4);
+    for (const show of ["picked", "decide", "launched"] as const) expect(previewCount(show, 9), show).toBe(9);
+    expect(showAllLabel(12)).toBe("Show all 12 ads");
+  });
+});
+
+describe("U10-3 #9 the folded checks on the picked ads say their state in one line (Rory's choice a)", () => {
+  const facts = (over: Partial<Parameters<typeof pickedChecksLine>[0]> = {}) => ({
+    picked: 4,
+    toDecide: 1,
+    pretested: { count: 0, simulated: false },
+    translated: { count: 0, simulated: false },
+    picturesUnchecked: 0,
+    packReady: true as boolean | null,
+    ...over,
+  });
+  const line = (over: Parameters<typeof facts>[0] = {}) => {
+    const l = pickedChecksLine(facts(over));
+    return `${l.title}: ${l.state}`;
+  };
+
+  it("#9 the line Rory gave: the picked ads, those needing a decision, the launch pack", () => {
+    expect(line()).toBe("Checks on the 4 picked ads: 1 needs a decision, launch pack ready");
+    expect(line({ toDecide: 2, packReady: false })).toBe("Checks on the 4 picked ads: 2 need a decision, no launch pack yet");
+    expect(line({ toDecide: 0 })).toBe("Checks on the 4 picked ads: none needs a decision, launch pack ready");
+    expect(line({ picked: 1, toDecide: 1 })).toBe("Checks on the 1 picked ad: 1 needs a decision, launch pack ready");
+    // While the pack is worked out the line leaves it out, rather than guessing.
+    expect(line({ packReady: null })).toBe("Checks on the 4 picked ads: 1 needs a decision");
+  });
+
+  it("#9 simulated figures say so (rule 1): mock pre-test scores and mock translations", () => {
+    expect(line({ pretested: { count: 4, simulated: true }, translated: { count: 1, simulated: true } })).toBe(
+      "Checks on the 4 picked ads: 1 needs a decision, 4 pre-tested (simulated scores), 1 translated (simulated), launch pack ready",
+    );
+    expect(line({ pretested: { count: 4, simulated: false }, translated: { count: 1, simulated: false } })).toBe(
+      "Checks on the 4 picked ads: 1 needs a decision, 4 pre-tested, 1 translated, launch pack ready",
+    );
+    expect(line({ picturesUnchecked: 1 })).toBe("Checks on the 4 picked ads: 1 needs a decision, 1 picture not checked yet, launch pack ready");
+    expect(line({ picturesUnchecked: 3 })).toContain("3 pictures not checked yet");
+  });
+
+  it("#9 with nothing picked it says so", () => {
+    expect(line({ picked: 0, toDecide: 0 })).toBe("Checks on the picked ads: no ad is picked yet");
   });
 });

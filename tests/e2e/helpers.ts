@@ -340,6 +340,8 @@ export async function makeCreative(page: Page, count: number) {
   await page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ }).click();
   await expect(page.locator("[data-creative]").getByRole("button", { name: /^Making creative/ })).toBeVisible({ timeout: 30_000 });
   await untilShown(page, () => expect(page.locator("[data-gallery] > li")).toHaveCount(count, { timeout: 10_000 }));
+  // U10-3: every ad shown, as the specs that follow work on any of them (each group shows six until Show all).
+  await showAllAds(page);
 }
 
 /**
@@ -350,6 +352,7 @@ export async function makeCreative(page: Page, count: number) {
 export async function acceptDontRulesForPicked(page: Page) {
   if (!/\/campaigns\/[0-9a-f-]{36}\/creative$/.test(new URL(page.url()).pathname)) await openStage(page, "creative");
   await settle(page);
+  await openPickedChecks(page);
   await expect(page.locator("[data-bulk-dont-rule]").first()).toBeVisible({ timeout: 60_000 });
   const open = page.locator('[data-bulk-dont-rule]:not([data-open="0"])');
   for (let n = await open.count(); n > 0; n--) {
@@ -412,4 +415,27 @@ export async function adTool(card: Locator, tool: AdToolName): Promise<Locator> 
   const t = AD_TOOLS[tool];
   const where = t.menu ? await openAdMenu(card, t.menu) : card;
   return where.getByRole(t.role, { name: t.name });
+}
+
+// ---------------------------------------------------------------- U10-3: the Creative stage's length (Rory's choices a and b)
+// The checks on the picked ads (compliance, languages, pre-test, picture
+// checks, the launch pack) fold into one <details data-picked-checks>, and
+// each audience shows its first six ads until "Show all N ads"
+// ([data-show-all-ads]). Specs that use what is folded or past the sixth ad
+// open it here first (tests/e2e/creative-gallery.spec.ts has the interface).
+
+/** Opens the checks on the picked ads on the Creative stage (a no-op when they are open). */
+export async function openPickedChecks(page: Page) {
+  const details = page.locator("details[data-picked-checks]").filter({ visible: true });
+  if ((await details.getAttribute("open")) === null) await details.locator(":scope > summary").click();
+  await expect(details).toHaveAttribute("open", "");
+}
+
+/** Shows every ad in every audience group on the Creative stage (presses each "Show all N ads"). */
+export async function showAllAds(page: Page) {
+  const buttons = page.locator("button[data-show-all-ads]").filter({ visible: true });
+  for (let n = await buttons.count(); n > 0; n--) {
+    await buttons.first().click();
+    await expect(buttons).toHaveCount(n - 1);
+  }
 }

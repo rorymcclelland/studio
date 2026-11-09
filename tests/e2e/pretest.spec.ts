@@ -7,7 +7,7 @@
 // 1440 px: nothing scrolls sideways, AA contrast. SHOTS_DIR=<folder> saves
 // screenshots.
 import { expect, test, type Page } from "@playwright/test";
-import { adTool, contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
+import { adTool, contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown, openPickedChecks } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan, pre-tested by the panel";
 const SYNTHETIC_PANEL = "Synthetic panel, not real customers";
@@ -42,6 +42,8 @@ test(
     });
 
     await step(page, "Nothing is picked yet: Pre-test picked ads says why and can't be pressed", async () => {
+      // U10-3: the pre-test bar is among the checks on the picked ads, folded into one line until opened.
+      await openPickedChecks(page);
       await expect(bar(page)).toContainText(SYNTHETIC_PANEL);
       await expect(bar(page).getByRole("button", { name: /^Pre-test picked ads/ })).toBeDisabled();
       await expect(bar(page).locator("[data-pretest-reason]")).toHaveText("Pick ads first: the panel scores the picked ads.");
@@ -62,13 +64,21 @@ test(
     await step(page, "The button shows its cost before the click, once the panel is ready", async () => {
       // The persona review runs in the background after sign-off; the page shows the panel's names when it is done.
       const button = bar(page).getByRole("button", { name: /^Pre-test picked ads/ });
-      await untilShown(page, () => expect(button).toBeEnabled({ timeout: 10_000 }), 180_000);
+      await untilShown(
+        page,
+        async () => {
+          await openPickedChecks(page);
+          await expect(button).toBeEnabled({ timeout: 10_000 });
+        },
+        180_000,
+      );
       await expect(button).toHaveText(/^Pre-test picked ads\s*\(about [\d.]+p an ad, [\d.]+p in all\)$/);
       await expect(bar(page)).toContainText(/The brief's synthetic personas \(.+\) score each picked ad from 1 to 5/);
       await checkWidths(page, "pre-test bar, four ads picked");
     });
 
     await step(page, "Pre-test picked ads: the panel scores each picked ad", async () => {
+      await openPickedChecks(page);
       await bar(page).getByRole("button", { name: /^Pre-test picked ads/ }).click();
       await expect(page.locator("[data-toast]").filter({ hasText: "Pre-testing the picked ads." })).toBeVisible();
       await untilShown(

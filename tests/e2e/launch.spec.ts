@@ -30,6 +30,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   acceptDontRulesForPicked,
+  openPickedChecks,
+  showAllAds,
   contrastViolations,
   DEV_EMAIL,
   expectNoHorizontalScroll,
@@ -71,6 +73,8 @@ async function checkWidths(page: Page, what: string) {
 
 /** Picks the i-th paid-social ad from its card; returns its gallery number. */
 async function pickSocial(page: Page, i: number): Promise<number> {
+  // U10-3: every ad shown first (each group shows six until Show all).
+  await showAllAds(page);
   const card = social(page).nth(i);
   const button = card.getByRole("button", { name: /^Pick ad \d+$/ });
   const n = Number((await button.getAttribute("aria-label"))!.replace("Pick ad ", ""));
@@ -118,6 +122,7 @@ test(
       await checkWidths(page, "launch stage, nothing passes yet");
       // Each picked ad's reason, as the launch pack on the Creative stage gives it.
       await openStage(page, "creative", path);
+      await openPickedChecks(page);
       await pack(page).locator("[data-pack-left-out] summary").click();
       const rows = pack(page).locator("[data-pack-left-out] li").filter({ hasText: /^Ad \d+, every size, English:/ });
       await expect(rows).toHaveCount(4);
@@ -134,6 +139,7 @@ test(
     await step(page, "P9-1.2: the panel lists the four ads that would launch, and the fifth left out with the same reason the launch pack gives", async () => {
       // The pack's reason for the same ad, in English (the pack lists English first), on the Creative stage.
       await openStage(page, "creative", path);
+      await openPickedChecks(page);
       await pack(page).locator("[data-pack-left-out] summary").click();
       const packRow = pack(page).locator("[data-pack-left-out] li").filter({ hasText: new RegExp(`^Ad ${waiting}, every size, English:`) });
       await expect(packRow).toHaveCount(1);

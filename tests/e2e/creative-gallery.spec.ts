@@ -3,7 +3,7 @@
 // to a live launch of two ads, a third ad picked after it (so it needs a
 // compliance decision), and finally the launch ended; the cases run in the
 // order that needs (serial): 2 (the launch, and a page opened before it whose
-// Discard the server refuses), 1, 4, 5, 7, 8, then 3 (the launch ends). Case 6,
+// Discard the server refuses), 1, 4, 5, 7, 8, 9, 10, then 3 (the launch ends). Case 6,
 // an unknown filter value, is CI (tests/lib/gallery-filter.test.ts); case 5's
 // test also opens one to show it. The server's refusals for each action, the
 // launch states and another workspace are tests/flows/creative-lock.test.ts.
@@ -18,6 +18,12 @@
 // 5. The filter survives a reload and a shared link (?show=picked).
 // 7. A card at 375 px is at most about 450 px tall with its tools closed.
 // 8. Every tool on today's card is reachable from the card's menus, by keyboard.
+// 9. (Rory's choice a, 9 November 2026) The checks on the picked ads fold into
+//    one line with their state; ?show=decide, and a link to one of them, open it.
+// 10. (Rory's choice b) Each audience shows its first six ads, launched, then
+//    needing a decision, then picked, then the rest; "Show all N ads" reveals
+//    the rest in place; a filter shows every ad it matches; a link to an ad, or
+//    a tool's way back, shows it.
 //
 // ---------------------------------------------------------------- interface
 // What the builder provides. The tests here, tests/lib/gallery-filter.test.ts and
@@ -115,12 +121,35 @@
 //     tests/e2e/helpers.ts has AD_TOOLS (each tool's menu, role and name), adCard, openAdMenu and adTool,
 //     for the specs that use a card's tools (creative, sizes, languages, compliance, pretest, vision,
 //     launch-pack, several-audiences, campaign-stages, the fullest data): update them through adTool().
+//
+// The page's length (Rory's choices a and b, 9 November 2026), so it fits U10-6's budget:
+//   (a) The checks on the picked ads (the compliance summary with Accept for every picked ad, Languages,
+//     Pre-test, Picture checks, the launch pack) are inside one <details data-picked-checks id="picked-checks">
+//     after the gallery, closed by default. Its <summary> holds the leaf-ish heading [data-picked-checks-line]
+//     whose text is pickedChecksLine() (src/lib/creative/gallery-filter.ts): "<title>: <state>", e.g.
+//     "Checks on the 3 picked ads: 1 needs a decision, launch pack ready", from counts the page has (the
+//     picked ads, those needing a decision, those with current pre-test scores "(simulated scores)" when
+//     the mock scored them, those translated "(simulated)" likewise, pictures not checked yet, and whether
+//     the launch pack can be built); "Checks on the picked ads: no ad is picked yet" with none. Open from the
+//     start on ?show=decide. Open when the fragment points at it or anything inside it: #picked-checks,
+//     #picked-compliance, #languages, #pretest, #picture-checks, #launch-pack, or an older id inside (such
+//     as #launch-pack-heading), as the page opens and when the fragment changes; the target is scrolled to.
+//   (b) Each audience group (or the one gallery) is in the order galleryOrder() gives: launched, needing a
+//     decision, picked, the rest, newest first within each (ads one run made together keep their order).
+//     Under All, the first GROUP_PREVIEW (6) show and the rest are hidden (not displayed), with a
+//     <button data-show-all-ads> "Show all N ads" after the group's list; pressing it shows them in place,
+//     with no navigation, removes the button and moves focus to the first ad it revealed (its picture link).
+//     Under a filter (picked, decide, launched) every matching ad shows, with no button. Each card is
+//     <li id="ad-N"> (its number); a fragment #ad-N, or #ad-<id> (the ad's Sizes and Compliance pages link
+//     back to /campaigns/<id>/creative#ad-<id>), shows that ad's group in full and scrolls to the ad.
+//   tests/e2e/helpers.ts has openPickedChecks() and showAllAds(); makeCreative() ends with showAllAds().
 // ----------------------------------------------------------------------------
 import AxeBuilder from "@axe-core/playwright";
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
   acceptDontRulesForPicked,
   AD_TOOLS,
+  contrastViolations,
   adCard,
   adTool,
   makeCreative,
@@ -129,6 +158,7 @@ import {
   openLaunch,
   openStage,
   settle,
+  showAllAds,
   signIn,
   signOffVersion,
   stagePath,
@@ -283,6 +313,7 @@ test.describe("U10-3 a Fernhollow campaign's gallery, from a live launch to its 
         await expect(filterRow(page)).toHaveAttribute("aria-label", "Filter the ads");
         for (const show of SHOWS) await expect(filterLink(page, show)).toContainText(LABELS[show]);
         await expect(filterLink(page, "all")).toHaveAttribute("aria-current", "page");
+        await showAllAds(page);
         expect({ all: await count(page, "all"), picked: await count(page, "picked"), decide: await count(page, "decide"), launched: await count(page, "launched") }).toEqual({
           all: 12,
           picked: 3,
@@ -326,6 +357,7 @@ test.describe("U10-3 a Fernhollow campaign's gallery, from a live launch to its 
         await filterLink(page, "all").click();
         await page.waitForURL((u) => u.pathname === stagePath(path, "creative") && !u.searchParams.has("show"));
         await settle(page);
+        await showAllAds(page);
         await expect(cards(page)).toHaveCount(12);
       });
     },
@@ -365,6 +397,7 @@ test.describe("U10-3 a Fernhollow campaign's gallery, from a live launch to its 
       await step(page, "U10-3.6 (CI's case, shown here too): an unknown value shows All", async () => {
         await openGallery(page, "everything");
         await expect(filterLink(page, "all")).toHaveAttribute("aria-current", "page");
+        await showAllAds(page);
         await expect(cards(page)).toHaveCount(12);
       });
     },
@@ -376,6 +409,7 @@ test.describe("U10-3 a Fernhollow campaign's gallery, from a live launch to its 
     async ({ page }) => {
       await page.setViewportSize(PHONE);
       await openGallery(page);
+      await showAllAds(page);
       await expect(cards(page)).toHaveCount(12);
       await expect(visible(page, "[data-ad-menu]")).toHaveCount(0);
       const heights = await cards(page).evaluateAll((els) => els.map((e) => ({ id: e.getAttribute("data-ad")!, height: Math.round(e.getBoundingClientRect().height) })));
@@ -489,6 +523,150 @@ test.describe("U10-3 a Fernhollow campaign's gallery, from a live launch to its 
       await step(page, "U10-3.8: axe finds nothing on the gallery with a card's menus open", async () => {
         const results = await new AxeBuilder({ page }).include("[data-gallery]").analyze();
         expect(results.violations.map((v) => `${v.id}: ${v.nodes.map((x) => x.target.join(" ")).join(", ")}`)).toEqual([]);
+      });
+    },
+  );
+
+  test(
+    "U10-3 #9: the checks on the picked ads fold into one line with their state, and open from ?show=decide and from a link to one of them",
+    { annotation: [{ type: "case", description: "U10-3.9" }] },
+    async ({ page }) => {
+      const checks = () => visible(page, "details[data-picked-checks]");
+      const INSIDE = ["[data-compliance-summary]", "[data-languages]", "[data-pretest-bar]", "[data-picture-check-bar]", "[data-launch-pack]"];
+      await step(page, "U10-3.9: under All the checks are one closed line, with the picked ads' state from the page's own counts", async () => {
+        await openGallery(page);
+        await expect(checks()).not.toHaveAttribute("open", "");
+        // The same counts as the filter row: 3 picked, 1 needing a decision; the two launched ads' pack can be built.
+        expect([await count(page, "picked"), await count(page, "decide")]).toEqual([3, 1]);
+        await expect(checks().locator(":scope > summary [data-picked-checks-line]")).toHaveText("Checks on the 3 picked ads: 1 needs a decision, launch pack ready");
+        for (const css of INSIDE) await expect(page.locator(css), css).toBeHidden();
+      });
+      await step(page, "U10-3.9: the line opens and closes by keyboard, and open shows every check", async () => {
+        await checks().locator(":scope > summary").focus();
+        await page.keyboard.press("Enter");
+        await expect(checks()).toHaveAttribute("open", "");
+        for (const css of INSIDE) await expect(visible(page, css), css).toBeVisible();
+        await expect(visible(page, "[data-bulk-dont-rule]").first()).toBeVisible();
+        await page.keyboard.press("Enter");
+        await expect(checks()).not.toHaveAttribute("open", "");
+      });
+      await step(page, "U10-3.9: ?show=decide (the Needs you link) opens with the checks open, Accept for every picked ad in view", async () => {
+        await openGallery(page, "decide");
+        await expect(checks()).toHaveAttribute("open", "");
+        await expect(visible(page, "[data-compliance-summary]")).toBeVisible();
+        await expect(visible(page, "[data-bulk-dont-rule]").first()).toBeVisible();
+      });
+      for (const [hash, css] of [
+        ["#pretest", "[data-pretest-bar]"],
+        ["#launch-pack", "[data-launch-pack]"],
+        ["#launch-pack-heading", "[data-launch-pack]"],
+        ["#picked-checks", "[data-languages]"],
+      ] as const) {
+        await step(page, `U10-3.9: a link to ${hash} opens the checks and lands on it`, async () => {
+          await page.goto(`${stagePath(path, "creative")}${hash}`);
+          await settle(page);
+          await expect(checks()).toHaveAttribute("open", "");
+          await expect(visible(page, css)).toBeVisible();
+          await expect(page.locator(hash)).toBeInViewport();
+        });
+      }
+      await step(page, "U10-3.9: on an open page, following a fragment inside the checks opens them", async () => {
+        await openGallery(page);
+        await expect(checks()).not.toHaveAttribute("open", "");
+        await page.evaluate(() => (window.location.hash = "languages"));
+        await expect(checks()).toHaveAttribute("open", "");
+        await expect(visible(page, "[data-languages]")).toBeInViewport();
+      });
+    },
+  );
+
+  test(
+    "U10-3 #10: each audience shows its first six ads, launched first, and Show all reveals the rest in place; a filter shows every ad; a link to an ad shows it",
+    { annotation: [{ type: "case", description: "U10-3.10" }] },
+    async ({ page }) => {
+      test.setTimeout(300_000);
+      const showAll = () => visible(page, "button[data-show-all-ads]");
+      const numberOf = async (card: Locator) => Number(((await card.getByRole("heading").first().textContent()) ?? "").replace(/\D/g, ""));
+      const inOrder = () => cards(page).evaluateAll((els) => els.map((e) => e.getAttribute("data-ad")!));
+      let hidden = "";
+      let hiddenNumber = 0;
+
+      await step(page, "U10-3.10: under All, six ads: the two launched, then the one needing a decision, then the rest in order; then Show all 12 ads", async () => {
+        await openGallery(page);
+        await expect(cards(page)).toHaveCount(6);
+        await expect(page.locator("[data-gallery] > li[data-ad]")).toHaveCount(12);
+        const first = await inOrder();
+        expect(sorted(first.slice(0, 2))).toEqual(sorted(launchedIds));
+        expect(first[2]).toBe(decideId);
+        // The rest come from one Make creative run, so they keep the gallery's order: their numbers go up.
+        const rest = await Promise.all(first.slice(3).map((id) => numberOf(adCard(page, id))));
+        expect(rest).toEqual([...rest].sort((a, b) => a - b));
+        await expect(showAll()).toHaveText("Show all 12 ads");
+        await expect(showAll()).toHaveCount(1);
+      });
+
+      await step(page, "U10-3.10: Show all reveals the other six in place, with no reload, and focus moves to the first revealed", async () => {
+        const url = page.url();
+        await page.evaluate(() => ((window as unknown as { __u1010?: number }).__u1010 = 1));
+        await showAll().focus();
+        await page.keyboard.press("Enter");
+        await expect(cards(page)).toHaveCount(12);
+        await expect(showAll()).toHaveCount(0);
+        expect(page.url()).toBe(url);
+        expect(await page.evaluate(() => (window as unknown as { __u1010?: number }).__u1010)).toBe(1);
+        const ids = await inOrder();
+        await expect(adCard(page, ids[6]).locator("a[data-ad-full]")).toBeFocused();
+        hidden = ids[11];
+        hiddenNumber = await numberOf(adCard(page, hidden));
+        expect(await contrastViolations(page)).toEqual([]);
+      });
+
+      const extra: string[] = [];
+      await step(page, "U10-3.10: with seven ads picked, Picked shows all seven, with no Show all", async () => {
+        for (const id of (await inOrder()).slice(3, 7)) {
+          await (await adTool(adCard(page, id), "pick")).click();
+          await expect(adCard(page, id)).toHaveAttribute("data-picked", "", { timeout: 30_000 });
+          extra.push(id);
+        }
+        await openGallery(page, "picked");
+        expect(await count(page, "picked")).toBe(7);
+        await expect(cards(page)).toHaveCount(7);
+        await expect(showAll()).toHaveCount(0);
+      });
+
+      await step(page, "Unpick the four again, so the journey's picks are as they were", async () => {
+        await openGallery(page);
+        await showAllAds(page);
+        for (const id of extra) {
+          await (await adTool(adCard(page, id), "pick")).click();
+          await expect(adCard(page, id)).not.toHaveAttribute("data-picked", "", { timeout: 30_000 });
+        }
+        await openGallery(page);
+        expect(await count(page, "picked")).toBe(3);
+      });
+
+      await step(page, `U10-3.10: a link to #ad-N for an ad past the first six shows its group in full and lands on it`, async () => {
+        await openGallery(page);
+        await expect(adCard(page, hidden)).toHaveCount(0);
+        await page.goto(`${stagePath(path, "creative")}#ad-${hiddenNumber}`);
+        await settle(page);
+        await expect(adCard(page, hidden)).toBeVisible();
+        await expect(adCard(page, hidden)).toBeInViewport();
+        await expect(showAll()).toHaveCount(0);
+        await expect(cards(page)).toHaveCount(12);
+      });
+
+      await step(page, "U10-3.10: from that ad's Sizes, Back to Creative lands on its card, shown", async () => {
+        await openGallery(page);
+        await showAllAds(page);
+        await (await adTool(adCard(page, hidden), "sizes")).click();
+        await page.waitForURL((u) => u.pathname.endsWith(`/ads/${hidden}/sizes`));
+        await settle(page);
+        await page.getByRole("link", { name: "Back to Creative" }).click();
+        await page.waitForURL((u) => u.pathname === stagePath(path, "creative") && u.hash === `#ad-${hidden}`);
+        await settle(page);
+        await expect(adCard(page, hidden)).toBeVisible();
+        await expect(adCard(page, hidden)).toBeInViewport();
       });
     },
   );

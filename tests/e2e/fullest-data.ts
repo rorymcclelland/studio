@@ -37,6 +37,7 @@ import type { LaunchAd } from "@/lib/performance/launch";
 import { MOCK_CPA_QUESTION, seedWithTiring } from "../helpers/monitor";
 import {
   acceptDontRulesForPicked,
+  openPickedChecks,
   adTool,
   DEV_EMAIL,
   demoBrandId,
@@ -163,7 +164,15 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
   await step(page, "Fullest data: pre-test the picked ads", async () => {
     const bar = page.locator("[data-pretest-bar]");
     const button = bar.getByRole("button", { name: /^Pre-test picked ads/ });
-    await untilShown(page, () => expect(button).toBeEnabled({ timeout: 10_000 }), 180_000);
+    // U10-3: the pre-test bar is among the checks on the picked ads, folded into one line until opened.
+    await untilShown(
+      page,
+      async () => {
+        await openPickedChecks(page);
+        await expect(button).toBeEnabled({ timeout: 10_000 });
+      },
+      180_000,
+    );
     await button.click();
     await untilShown(page, () => expect(page.locator("[data-gallery] > li[data-picked] [data-pretest-average]")).toHaveCount(4, { timeout: 10_000 }), 240_000);
   });

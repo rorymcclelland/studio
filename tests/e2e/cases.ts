@@ -1946,7 +1946,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: PAGE_LENGTH_SPEC,
         title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px`,
-        note: "U10-6's measurement. The Creative stage's budgets wait for U10-3's compact cards, and the Performance page's for U10-4, by their markers in tests/e2e/page-budgets.ts.",
+        note: "U10-6's measurement. The live campaign's Creative stage fits since U10-3 (its checks folded, six ads a group); the two-audience Creative stage is still over at 375 px and keeps its U10-3 marker, and the Performance page's waits for U10-4, by their markers in tests/e2e/page-budgets.ts.",
       }),
     ),
   },
@@ -2110,6 +2110,42 @@ export const CASES: Case[] = [
         title: "U10-3 #8: every tool on today's card is reachable from the card's menus, by keyboard",
         note: "On a picked ad outside the launch: Edit and More open with Enter and their tools are Tab stops, Edit words opens its dialog, Escape closes, axe finds nothing. Redraw with the current kit shows only on an ad made with an older kit, which needs a kit change (a @brand-kit test); it is checked in CI (adTools) and by F-26's own specs.",
       },
+    ],
+  },
+  {
+    id: "U10-3.9",
+    sprint: 10,
+    story: "U10-3",
+    words:
+      "(Rory's choice a, 9 November 2026) The checks on the picked ads (compliance, languages, pre-test, picture checks, launch pack) fold into one collapsed section whose summary gives their state in one line, e.g. \"Checks on the 4 picked ads: 1 needs a decision, launch pack ready\", from real counts, saying \"(simulated)\" where the figures are; it opens by itself on ?show=decide or from a link to one of the checks, and any older fragment inside it opens it.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #9: the checks on the picked ads fold into one line with their state, and open from ?show=decide and from a link to one of them",
+        note: "Closed under All, with the line matching the filter row's counts (3 picked, 1 needing a decision) and the pack; opens and closes with Enter; ?show=decide opens with Accept for every picked ad in view; #pretest, #launch-pack, the older #launch-pack-heading and #picked-checks open it and land on their check; a fragment followed on an open page opens it too. U10-2's Decide compliance link (?show=decide) is also followed in campaign-stages.spec.",
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "#9 the line Rory gave: the picked ads, those needing a decision, the launch pack" },
+      { kind: "ci", file: GALLERY_LIB, test: "#9 simulated figures say so (rule 1): mock pre-test scores and mock translations" },
+      { kind: "ci", file: GALLERY_LIB, test: "#9 with nothing picked it says so" },
+    ],
+  },
+  {
+    id: "U10-3.10",
+    sprint: 10,
+    story: "U10-3",
+    words:
+      "(Rory's choice b, 9 November 2026) Each audience group shows its first 6 ads (launched, then needs a decision, then picked, then the rest, newest first within each), then \"Show all N ads\", which reveals the rest without reloading; a filter (picked, decide, launched) shows every matching ad, with no cut-off; an ad reached by a link (#ad-7, or a tool's return) is shown, its group revealed in full.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #10: each audience shows its first six ads, launched first, and Show all reveals the rest in place; a filter shows every ad; a link to an ad shows it",
+        note: "The journey's 12 ads in one group: six shown, the two launched first, then the one needing a decision; Show all 12 ads by keyboard shows the rest with no navigation and moves focus to the seventh; with seven picked, Picked shows all seven and no button (the four extra picks are undone); #ad-N for the twelfth ad, and Back to Creative from its Sizes page (#ad-<id>), show it in view. The order within a tier, and the cut-off for every filter, are checked in CI; the two-audience page's groups are measured by U10-6.",
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 launched, then needing a decision, then picked, then the rest" },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 newest first within each; ads one run made together keep the order they were given in" },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 under All a group shows its first six, with Show all N ads; a filter shows every ad it matches" },
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

@@ -177,6 +177,8 @@ describe("U10-6 the budgets table", () => {
       "campaign-live",
       "campaign-live-brief",
       "campaign-live-audience",
+      // U10-3: the live campaign's Creative stage fits, with its checks folded and six ads shown (Rory's choices a and b).
+      "campaign-live-creative",
       "campaign-live-launch",
       "campaign-two-audiences",
       "campaign-waiting",

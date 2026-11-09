@@ -29,6 +29,8 @@ import {
   stagePath,
   step,
   untilShown,
+  openPickedChecks,
+  showAllAds,
 } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan in January";
@@ -103,6 +105,9 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
   await openStage(page, "creative", path);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
+  // U10-3: every ad shown, and the checks on the picked ads (Languages among them) opened.
+  await showAllAds(page);
+  await openPickedChecks(page);
 
   // Before anything is picked, Translate the picked ads says why it can't run.
   await caption(page, "Before anything is picked, Translate says why it can't run");
@@ -207,6 +212,7 @@ test(
     });
 
     await step(page, "Pick an ad: French, German and Spanish are all offered", async () => {
+      await openPickedChecks(page);
       const pick = await adTool(ads(page).first(), "pick");
       await expect(pick).toHaveAccessibleName("Pick ad 1");
       await pick.click();
@@ -230,6 +236,7 @@ test(
       await step(page, "C7-2.5: back on the campaign, German is left out and the reason shows beside Translate", async () => {
         await page.goto(campaignPath);
         await settle(page);
+        await openPickedChecks(page);
         await expect(bar.locator("[data-language=de-DE]")).toHaveText("German: no legal lines");
         const note = bar.locator("[data-translate-note]");
         await expect(note).toHaveText(/^German is left out: .*no German legal lines, so its ads can't go out in German/);

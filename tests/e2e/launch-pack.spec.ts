@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { acceptDontRulesForPicked, adTool, caption, contrastViolations, expectNoHorizontalScroll, openStage, saveShot, settle, signIn, untilShown } from "./helpers";
+import { acceptDontRulesForPicked, adTool, caption, contrastViolations, expectNoHorizontalScroll, openPickedChecks, openStage, saveShot, settle, showAllAds, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -63,6 +63,9 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await openStage(page, "creative", campaignPath);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
+  // U10-3: every ad shown, and the checks on the picked ads (the launch pack among them) opened.
+  await showAllAds(page);
+  await openPickedChecks(page);
 
   await caption(page, "C7-3.4: nothing picked yet: the pack says why, and offers no download");
   // #4: nothing picked yet: the pack says why, and offers no download; the address refuses too.
@@ -104,6 +107,7 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   // #1: the gallery shows what the pack will hold and its file count before download.
   await page.reload();
   await settle(page);
+  await openPickedChecks(page);
   await expect(pack(page).locator("[data-pack-count]")).toContainText("64 ads from 4 picked ads");
   await expect(pack(page).locator("[data-pack-count]")).toContainText("67 files in one zip");
   await expect(pack(page).locator("[data-pack-language]")).toHaveText(["English: 16", "French: 16", "German: 16", "Spanish: 16"]);

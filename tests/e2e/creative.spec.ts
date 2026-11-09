@@ -24,6 +24,7 @@ import {
   openHistory,
   openStage,
   settle,
+  showAllAds,
   signIn,
   signOffVersion,
   stagePath,
@@ -69,7 +70,8 @@ async function checkLayout(page: Page, what: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-const ad = (page: Page, n: number): Locator => ads(page).nth(n - 1);
+// U10-3: by its number, not its place: the gallery now shows launched, needing a decision and picked ads first, newest first.
+const ad = (page: Page, n: number): Locator => ads(page).filter({ has: page.getByRole("heading", { name: `Ad ${n}`, exact: true }) });
 
 test.beforeEach(async ({ page }) => {
   await signIn(page);
@@ -99,6 +101,8 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await make.click();
   await expect(creative(page).getByRole("status").filter({ hasText: "Drawing four pictures" })).toBeVisible({ timeout: 15_000 });
   await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  // U10-3: the gallery shows six until Show all.
+  await showAllAds(page);
   await expect(page.locator("[data-simulated-note]")).toContainText("Simulated images.");
   for (const card of await ads(page).all()) {
     await expect(card.locator("[data-badge=contrast]")).toContainText(/^Contrast \d+\.\d:1$/);
@@ -185,6 +189,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(dialog).toBeHidden();
   await page.reload();
   await settle(page);
+  await showAllAds(page);
   await expect(ad(page, 3).locator("img")).toHaveAttribute("alt", new RegExp(`Headline: ${headline.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`));
   await expect(page.locator("[data-copy-set]").filter({ hasText: "Edited by a person" })).toHaveCount(0);
 
@@ -199,6 +204,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(toast(page, "Ad discarded.")).toBeVisible();
   await page.reload();
   await settle(page);
+  await showAllAds(page);
   await expect(page.locator(`[data-ad="${pickedId}"]`)).toHaveAttribute("data-picked", "");
   await expect(page.locator(`[data-ad="${pickedId}"]`).getByText("Picked", { exact: true })).toBeVisible();
   await expect(page.locator(`[data-gallery] [data-ad="${discardedId}"]`)).toHaveCount(0);
@@ -239,6 +245,8 @@ test("S5-4 #6: every action on an ad is reachable by keyboard at 375 px", async 
   await openStage(page, "creative", path);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  // U10-3: the gallery shows six until Show all.
+  await showAllAds(page);
 
   await page.setViewportSize({ width: 375, height: 800 });
   await settle(page);
@@ -319,6 +327,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await savePaletteInEditor(page, brandId, brandName, [...palette].reverse());
     await page.goto(campaignPath);
     await settle(page);
+    await showAllAds(page);
     const bar = page.locator("[data-older-kit]");
     await expect(bar).toContainText("All 12 ads were made with an older kit.");
     await expect(page.locator("[data-gallery] [data-badge=kit]")).toHaveCount(12);

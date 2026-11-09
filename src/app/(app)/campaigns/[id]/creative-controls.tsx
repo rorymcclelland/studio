@@ -224,7 +224,7 @@ export function EditTools(p: EditProps) {
           {busyNow("words") ? "Starting…" : p.busy.words ? "Writing new words…" : <Costed label="New words" estimate={p.estimates.newWords} />}
         </Button>
         <WordsDialog
-          openLabel="Edit words"
+          openLabel="Edit the words"
           openAriaLabel={`Edit the words for ${name}`}
           disabled={pending || !!p.busy.words || p.pendingWords}
           title={`Edit the words for ad ${p.number}`}

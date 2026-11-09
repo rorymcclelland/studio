@@ -13,6 +13,12 @@
 // in a live or waiting launch is locked and says so. The checks on the picked
 // ads (compliance, languages, pre-test, pictures, the launch pack) follow the
 // gallery, as they work on what was picked there.
+// U10-3, Rory's choices of 9 November 2026, so the page fits its length
+// budget: (a) those checks fold into one line with their state, open from the
+// start on ?show=decide or when a link points inside; (b) each audience shows
+// its first six ads (launched, then needing a decision, then picked, then the
+// rest, newest first), then "Show all N ads"; a filter shows every ad it
+// matches, and a link to an ad reveals its group in full.
 import type { CopySetView } from "@/lib/creative/copy";
 import { fieldsOf, type AnyCopy, type CopyChannel } from "@/lib/creative/copy-rules";
 import type { Badge, CreativeRunView, CreativeView, VariantView } from "@/lib/creative/gallery";
@@ -24,8 +30,12 @@ import {
   filterAds,
   GALLERY_SHOWS,
   galleryHref,
+  galleryOrder,
   lockLine,
+  pickedChecksLine,
+  previewCount,
   SHOW_LABELS,
+  showAllLabel,
   showCounts,
   TOOL_MENU,
   type AdFacts,
@@ -61,6 +71,7 @@ import {
   type FieldSpec,
 } from "./creative-controls";
 import { AdMenus } from "./ad-menus";
+import { GalleryReveal, PickedChecks } from "./gallery-reveal";
 import { LaunchPack, LaunchPackSkeleton } from "./launch-pack";
 import { PictureCheckBar } from "./picture-check-bar";
 import { PretestBar, PretestScores } from "./pretest-panel";
@@ -146,9 +157,23 @@ export function CreativeSection({
   const grouped = view.audiences.length > 1;
   const facts = new Map(gallery.facts.map((f) => [f.id, f]));
   const shown = new Set(filterAds(gallery.facts, gallery.show, gallery.audience).map((f) => f.id));
+  // Each group in the gallery's order (launched, needing a decision, picked, the rest; newest first).
+  const ordered = (vs: VariantView[]) =>
+    galleryOrder(vs.map((v) => ({ ...(facts.get(v.id) ?? factsOf(v)), createdAt: v.createdAt, runId: v.runId, v }))).map((x) => x.v);
   const groups = (grouped ? view.audiences : [{ segmentRef: null, title: "", variants: view.variants }])
-    .map((g) => ({ ...g, variants: g.variants.filter((v) => shown.has(v.id)) }))
+    .map((g) => ({ ...g, variants: ordered(g.variants.filter((v) => shown.has(v.id))) }))
     .filter((g) => g.variants.length > 0);
+  const pickedFacts = gallery.facts.filter((f) => f.picked);
+  const pickedViews = view.variants.filter((v) => v.picked);
+  const pretested = pickedViews.filter((v) => v.pretest?.state === "current");
+  const translated = pickedViews.filter((v) => v.translations.length > 0);
+  const checksFacts = {
+    picked: pickedFacts.length,
+    toDecide: pickedFacts.filter((f) => f.toDecide).length,
+    pretested: { count: pretested.length, simulated: pretested.some((v) => v.pretest?.simulated) },
+    translated: { count: translated.length, simulated: translated.some((v) => v.translations.some((t) => t.simulated)) },
+    picturesUnchecked: view.pictureCheck.todo,
+  };
 
   return (
     <section id="creative" aria-labelledby="creative-heading" className="scroll-mt-6 space-y-5" data-creative="">
@@ -278,6 +303,7 @@ export function CreativeSection({
                         usedIn={usedIn}
                         level={4}
                         compliance={compliance}
+                        show={gallery.show}
                       />
                     </details>
                   ))
@@ -291,18 +317,25 @@ export function CreativeSection({
                     usedIn={usedIn}
                     level={3}
                     compliance={compliance}
+                    show={gallery.show}
                   />
                 )}
               </div>
 
-              <section aria-labelledby="picked-heading" className="space-y-3">
-                <h3 id="picked-heading" className="text-xl font-strong tracking-tight">
-                  The picked ads
-                </h3>
-                {compliance && (
-                  <Suspense fallback={<Skeleton className="h-6 w-72" />}>
-                    <ComplianceSummaryLine compliance={compliance} campaignId={view.campaignId} />
+              <PickedChecks
+                defaultOpen={gallery.show === "decide"}
+                summary={
+                  <Suspense fallback={<PickedChecksHeading facts={{ ...checksFacts, packReady: null }} />}>
+                    <PickedChecksSummary facts={checksFacts} pack={pack} />
                   </Suspense>
+                }
+              >
+                {compliance && (
+                  <div id="picked-compliance" className="scroll-mt-6">
+                    <Suspense fallback={<Skeleton className="h-6 w-72" />}>
+                      <ComplianceSummaryLine compliance={compliance} campaignId={view.campaignId} />
+                    </Suspense>
+                  </div>
                 )}
                 <Languages view={view} />
                 <PretestBar view={view} />
@@ -312,7 +345,7 @@ export function CreativeSection({
                     <LaunchPack summary={pack} />
                   </Suspense>
                 )}
-              </section>
+              </PickedChecks>
             </div>
           ) : (
             !running && (
@@ -405,6 +438,7 @@ function Gallery({
   usedIn,
   level,
   compliance,
+  show,
 }: {
   view: CreativeView;
   variants: VariantView[];
@@ -414,13 +448,19 @@ function Gallery({
   usedIn: Map<string, number>;
   level: 3 | 4;
   compliance: ComplianceP;
+  show: GalleryShow;
 }) {
   return (
     // Wider than the page column on large screens, so four ads sit side by side.
-    <ul
-      aria-label={label}
-      data-gallery=""
-      className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:mx-[calc(50%-min(50vw-3rem,38rem))] xl:grid-cols-4"
+    // Keyed by the filter, so going back to All starts at the first six again.
+    <GalleryReveal
+      key={show}
+      label={label}
+      total={variants.length}
+      preview={previewCount(show, variants.length)}
+      showAllLabel={showAllLabel(variants.length)}
+      wrapClassName="xl:mx-[calc(50%-min(50vw-3rem,38rem))]"
+      className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
     >
       {variants.map((v) => (
         <AdCard
@@ -434,8 +474,29 @@ function Gallery({
           compliance={compliance}
         />
       ))}
-    </ul>
+    </GalleryReveal>
   );
+}
+
+/** An ad's facts when the page has none for it (it always does): from the ad itself. */
+function factsOf(v: VariantView): AdFacts {
+  return { id: v.id, picked: v.picked, toDecide: false, launch: v.launch?.status ?? null, segmentRef: v.words.audience.segmentRef };
+}
+
+/** The folded checks' summary: "Checks on the 4 picked ads: 1 needs a decision, launch pack ready". */
+function PickedChecksHeading({ facts }: { facts: Parameters<typeof pickedChecksLine>[0] }) {
+  const line = pickedChecksLine(facts);
+  return (
+    <h3 id="picked-heading" className="min-w-0 wrap-anywhere" data-picked-checks-line="">
+      <span className="text-lg font-strong tracking-tight">{line.title}</span>
+      <span className="text-ink-2">: {line.state}</span>
+    </h3>
+  );
+}
+
+async function PickedChecksSummary({ facts, pack }: { facts: Omit<Parameters<typeof pickedChecksLine>[0], "packReady">; pack: Promise<PackSummary | null> | null }) {
+  const summary = pack ? await pack : null;
+  return <PickedChecksHeading facts={{ ...facts, packReady: summary ? summary.allowed : null }} />;
 }
 
 function AdCard({
@@ -458,7 +519,7 @@ function AdCard({
   const titleId = `ad-${v.id}-title`;
   const Heading = level === 3 ? "h3" : "h4";
   const { fields } = specFor(v.channel, { headline: v.words.headline, body: v.words.body, cta: v.words.cta });
-  const f: AdFacts = facts ?? { id: v.id, picked: v.picked, toDecide: false, launch: v.launch?.status ?? null, segmentRef: v.words.audience.segmentRef };
+  const f: AdFacts = facts ?? factsOf(v);
   const state = adState(f);
   const lock = lockLine(f.launch);
   const tools = new Set<AdTool>(adTools({ picked: v.picked, launch: f.launch, olderKit: v.olderKit, translate: v.translate.todo > 0 }));
@@ -467,13 +528,14 @@ function AdCard({
   const keepLocked = f.launch === "live" ? "The new words can be kept once the launch ends." : f.launch ? "The new words can be kept once the launch is decided." : null;
   return (
     <li
+      id={`ad-${number}`}
       aria-labelledby={titleId}
       data-ad={v.id}
       data-channel={v.channel}
       data-words={v.words.setId}
       data-picked={v.picked ? "" : undefined}
       data-locked={f.launch ?? undefined}
-      className={cx("flex min-w-0 flex-col gap-2.5 rounded-card border-2 bg-surface p-3", v.picked ? "border-primary" : "border-transparent")}
+      className={cx("flex min-w-0 scroll-mt-6 flex-col gap-2.5 rounded-card border-2 bg-surface p-3", v.picked ? "border-primary" : "border-transparent")}
     >
       <div className="flex min-w-0 gap-3 sm:flex-col sm:gap-2">
         {/* The ad is drawn by the /ads route; the layout is in the address so a switch shows the new drawing. */}
@@ -694,7 +756,7 @@ function Languages({ view }: { view: CreativeView }) {
   const running = !!t.runningRunId;
   const demo = t.languages.some((l) => l.writtenForDemo);
   return (
-    <div className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" data-languages="">
+    <div className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between" id="languages" data-languages="">
       <div className="min-w-0 max-w-prose space-y-1.5">
         <p className="font-semibold">Languages</p>
         {t.languages.length === 0 ? (
