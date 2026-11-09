@@ -90,6 +90,7 @@ export const STORIES: Story[] = [
   { sprint: 10, id: "U10-1", title: "Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save" },
   { sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" },
   { sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" },
+  { sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
@@ -253,6 +254,16 @@ const STAGE_BUDGET_PAGES = [
 /** The specs that walk the campaign page, updated to go through the stage pages (U10-2 case 5). */
 const STAGE_WALKERS =
   "campaigns, signoff, creative, several-audiences, sizes, languages, compliance, vision, pretest, launch-pack, launch, simulation, performance, monitor and quick-fixes, through the shared helpers (newCampaign, signOffVersion, makeCreative, acceptDontRulesForPicked, openStage, openLaunch, openHistory) and the fullest data";
+
+// U10-3 Ad cards that follow the ad's state, and a filterable gallery: the browser tests (one
+// Fernhollow campaign launched, then ended), the pure filter, card-state and tool functions, and the
+// server's refusals against plain Postgres (outside tests/db, as U10-2's: U10-3 adds no table).
+// The interface is at the top of the spec.
+const GALLERY_SPEC = "creative-gallery.spec.ts";
+const GALLERY_LIB = "tests/lib/gallery-filter.test.ts";
+const GALLERY_FLOWS = "tests/flows/creative-lock.test.ts";
+const GALLERY_JOURNEY =
+  "One Fernhollow campaign with the mock models: 12 ads, two paid-social ads picked, their compliance accepted and launched (approved in the inbox), a third picked after the launch so its compliance needs a decision; the launch is ended in case 3's test, which runs last.";
 
 // BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
 // mock model (the unit and regression tests, and the evals in CI's first job); the real models
@@ -1971,7 +1982,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: STAGES_SPEC,
         title: "U10-2 #9: at 375 px the stage bar with the longest labels never makes the page scroll sideways",
-        note: "The longest label is \"Live (simulated, before day 1)\" (30 characters); CI checks no label is longer.",
+        note: "The longest label is \"Live (simulated, before day 1)\" (30 characters); CI checks no label is longer. On each stage page the current stage is wholly within the bar's visible box as the page opens (a fix made with U10-3: the bar scrolls itself so it is in view).",
       },
       { kind: "ci", file: STAGES_LIB, test: "every combination: five stages in order, one short label each, locks exactly as the rules say, and never an error" },
     ],
@@ -1984,6 +1995,121 @@ export const CASES: Case[] = [
     checks: [
       { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #10: the stage bar is a nav with aria-current, and stage and Needs you links work with Enter" },
       { kind: "ci", file: STAGES_LIB, test: "U10-2 #10 the stage bar and the Needs you list as rendered" },
+    ],
+  },
+  // U10-3 Ad cards that follow the ad's state, and a filterable gallery
+  {
+    id: "U10-3.1",
+    sprint: 10,
+    story: "U10-3",
+    words: "A launched ad's card offers no Discard, New picture, New words or Edit words, and says it is running (\"Running in the launch (simulated)\").",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #1: a launched ad's card offers no Discard, New picture, New words or Edit words, and says it is running",
+        note: `${GALLERY_JOURNEY} Both launched cards are checked with every menu open, Redraw too; an ad outside the launch keeps its tools.`,
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "#1 an ad in a live or waiting launch offers no Discard, New picture, New words, Edit words or Redraw" },
+      { kind: "ci", file: GALLERY_LIB, test: "#1 a launched ad's card says it is running; one in a waiting launch says so; otherwise nothing" },
+      { kind: "ci", file: GALLERY_FLOWS, test: "#1 #3 each ad's launch: live or waiting for the ads in it, null for the others, and null once it ends" },
+    ],
+  },
+  {
+    id: "U10-3.2",
+    sprint: 10,
+    story: "U10-3",
+    words: "Discarding, redrawing or re-wording a launched ad through the server action is refused with \"That ad is running in a launch (simulated), so it can't change until the launch ends.\"",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #2: discarding a launched ad from a page opened before the launch is refused by the server, and the ad stays",
+        note: "The one action the refinement asks for in the browser: Discard, from a tab opened before the launch, so the button is still there and the server's refusal is what shows.",
+      },
+      {
+        kind: "ci",
+        file: GALLERY_FLOWS,
+        test: "U10-3 #2 the server refuses to change an ad in a live or waiting launch",
+        note: "Each of discard, new picture, redraw with the current kit, new words and edit words, through the gallery's functions and the server actions, for a live launch and one waiting for approval; nothing is written or sent. New or edited words for another ad on the launched ad's words are refused too.",
+      },
+      { kind: "ci", file: GALLERY_FLOWS, test: "#2 another workspace gets the refusal for a missing ad, never the launch's state, and changes nothing" },
+      { kind: "ci", file: GALLERY_LIB, test: "#2 the sentence the server refuses with" },
+    ],
+  },
+  {
+    id: "U10-3.3",
+    sprint: 10,
+    story: "U10-3",
+    words: "Once the launch ends, the tools come back.",
+    checks: [
+      { kind: "browser", spec: GALLERY_SPEC, title: "U10-3 #3: once the launch ends, the tools come back", note: "End the launch on the Launch stage; the cards' tools return, Launched shows none, and Discard then works on the ad the server refused." },
+      { kind: "ci", file: GALLERY_FLOWS, test: "U10-3 #3 once the launch ends, the tools come back" },
+      { kind: "ci", file: GALLERY_LIB, test: "#3 out of a launch (none, or ended), every tool today's card has is offered again, each only when it can be used" },
+    ],
+  },
+  {
+    id: "U10-3.4",
+    sprint: 10,
+    story: "U10-3",
+    words: "Filter Picked shows only picked ads, Needs a decision only ads with an open compliance review, Launched only ads in the live launch; counts match.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #4: each filter shows only its ads, and its count matches",
+        note: "Needs a decision counts picked ads of the signed-off version whose compliance waits for a person, as U10-2's overview does, so its Decide compliance link and the filter agree. The audience filter and groups need a campaign with several audiences; they are checked in CI and measured by U10-6's two-audience page.",
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "U10-3 #4 what each filter shows, and its count" },
+      { kind: "ci", file: GALLERY_FLOWS, test: "#4 the filter's counts from the gallery and its compliance; Needs a decision is the count U10-2's overview shows" },
+    ],
+  },
+  {
+    id: "U10-3.5",
+    sprint: 10,
+    story: "U10-3",
+    words: "The filter survives a reload and a shared link (?show=picked).",
+    checks: [
+      { kind: "browser", spec: GALLERY_SPEC, title: "U10-3 #5: the filter survives a reload and a shared link", note: "The shared link is opened in a second browser context, signed in as the same person." },
+      { kind: "ci", file: GALLERY_LIB, test: "the filter's links: All has no show; the rest carry it, then the audience, so a shared link opens the same view" },
+    ],
+  },
+  {
+    id: "U10-3.6",
+    sprint: 10,
+    story: "U10-3",
+    words: "An unknown filter value shows All.",
+    checks: [
+      { kind: "ci", file: GALLERY_LIB, test: "#6 an unknown filter value shows All" },
+      { kind: "ci", file: GALLERY_LIB, test: "a repeated parameter reads its first value, and an unknown first value is All" },
+    ],
+  },
+  {
+    id: "U10-3.7",
+    sprint: 10,
+    story: "U10-3",
+    words: "A gallery card at 375 px is at most about 450 px tall when its tools are closed (today about 1,000).",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #7: a gallery card at 375 px is at most about 450 px tall with its tools closed",
+        note: "Every card of the 12, launched, needing a decision and not picked. \"About\" is read as 460 px (450 and about 2%).",
+      },
+    ],
+  },
+  {
+    id: "U10-3.8",
+    sprint: 10,
+    story: "U10-3",
+    words: "Every tool on today's card is still reachable from the card's menu, by keyboard.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #8: every tool on today's card is reachable from the card's menus, by keyboard",
+        note: "On a picked ad outside the launch: Edit and More open with Enter and their tools are Tab stops, Edit words opens its dialog, Escape closes, axe finds nothing. Redraw with the current kit shows only on an ad made with an older kit, which needs a kit change (a @brand-kit test); it is checked in CI (adTools) and by F-26's own specs.",
+      },
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

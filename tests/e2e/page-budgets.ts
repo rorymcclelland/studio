@@ -185,7 +185,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     signedIn: true,
     mainAction: { css: "[data-gallery-filter]", what: "the gallery's filters" },
     lengthUntil: { story: "U10-3", why: "the creative stage page comes with U10-2, and fits only with U10-3's compact cards and filters" },
-    mainActionUntil: { story: "U10-3", why: "the gallery has no filters yet" },
   },
   {
     key: "campaign-live-launch",
@@ -217,7 +216,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     signedIn: true,
     mainAction: { css: "[data-gallery-filter]", what: "the gallery's filters" },
     lengthUntil: { story: "U10-3", why: "24 full cards; fits only with U10-3's compact cards and collapsing audience groups" },
-    mainActionUntil: { story: "U10-3", why: "the gallery has no filters yet" },
   },
   {
     key: "campaign-waiting",

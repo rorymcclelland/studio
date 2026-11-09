@@ -4,6 +4,8 @@ import { asUser, type Tx } from "@/lib/db/scoped";
 import { NOT_SIGNED_OFF } from "./copy-context";
 import { translateEstimate, type Estimate } from "./costs";
 import { brandLanguagesIn, langList, languageRefusal, SUPPORTED_LANGS, type Lang } from "./languages";
+import { lockRefusal } from "./gallery-filter";
+import { holdOnWords } from "./launch-holds";
 
 // C7-2: Translate, on a picked ad or on the whole pick. The click is the
 // person's choice, with the cost shown on the button first (rule 3, as New
@@ -108,10 +110,16 @@ export async function startTranslate(member: Member, campaignId: string, variant
  */
 export async function discardTranslation(member: Member, setId: string): Promise<{ lang: string }> {
   if (!UUID.test(setId)) throw new TranslateError("That translation isn't in your workspace.");
-  const [row] = await asUser(member.userId, (tx) => tx`
-    update public.copy_sets set discarded_at = now()
-    where id = ${setId} and translated_from is not null and discarded_at is null
-    returning lang`);
+  const [row] = await asUser(member.userId, async (tx) => {
+    // U10-3: a translation an ad in a live or waiting launch shows stays until the launch ends or is decided.
+    const [t] = await tx`select campaign_id, translated_from from public.copy_sets where id = ${setId} and translated_from is not null and discarded_at is null`;
+    const hold = t ? await holdOnWords(tx, t.campaign_id as string, t.translated_from as string) : null;
+    if (hold) throw new TranslateError(lockRefusal(hold.status, true));
+    return tx`
+      update public.copy_sets set discarded_at = now()
+      where id = ${setId} and translated_from is not null and discarded_at is null
+      returning lang`;
+  });
   if (!row) throw new TranslateError("That translation isn't in your workspace, or is already discarded.");
   return { lang: row.lang as string };
 }

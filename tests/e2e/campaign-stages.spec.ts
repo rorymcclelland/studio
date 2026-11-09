@@ -23,7 +23,9 @@
 // 8. A stage that isn't reachable yet says why in one line and links to the
 //    step that unlocks it.
 // 9. At 375 px the stage bar, with the longest labels, never makes the page
-//    scroll sideways; it scrolls inside itself.
+//    scroll sideways; it scrolls inside itself, and opens with the current
+//    stage wholly in its view (a fix made with U10-3: on the locked Creative
+//    page the bar showed "3 C..." cut off at its right edge).
 // 10. The stage bar is a nav with aria-current; stage and "Needs you" links work
 //     with Enter; axe finds nothing on either.
 // Cases 3, 4, 5 (old links), 7, 8, 9 and 10 use campaigns written straight to
@@ -163,11 +165,13 @@ import postgres from "postgres";
 import { randomUUID } from "node:crypto";
 import {
   acceptDontRulesForPicked,
+  adTool,
   demoBrandId,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
   openHistory,
+  openAdMenu,
   openLaunch,
   openStage,
   settle,
@@ -272,7 +276,9 @@ test.describe("U10-2 a Fernhollow campaign taken through every stage from its ov
         await step(page, "Make creative on the Creative stage and pick one paid-social ad", async () => {
           await makeCreative(page, 12);
           const card = page.locator('[data-gallery] > li[data-channel="paid social"]').first();
-          await card.getByRole("button", { name: /^Pick ad \d+$/ }).click();
+          const pick = await adTool(card, "pick");
+          await expect(pick).toHaveAccessibleName(/^Pick ad \d+$/);
+          await pick.click();
           await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
         });
 
@@ -439,6 +445,8 @@ test.describe("U10-2 a Fernhollow campaign taken through every stage from its ov
         await expect(visible(page, "[data-creative]").getByRole("button", { name: /^Make creative/ })).toBeVisible();
         await expect(visible(page, "[data-gallery] > li").first()).toBeVisible();
         for (const css of ["[data-languages]", "[data-compliance-summary]", "[data-pretest-bar]", "[data-picture-check-bar]", "[data-launch-pack]"]) await expect(visible(page, css), css).toBeVisible();
+        // U10-3: an ad's Sizes and Compliance links are in its card's More menu.
+        await openAdMenu(visible(page, "[data-gallery] > li").first(), "more");
         await expect(visible(page, "[data-ad-sizes]").first()).toHaveAttribute("href", new RegExp(`^${path}/ads/[0-9a-f-]{36}/sizes$`));
         await expect(visible(page, "[data-ad-compliance]").first()).toHaveAttribute("href", new RegExp(`^${path}/ads/[0-9a-f-]{36}/compliance$`));
         await expect(visible(page, "[data-pack-download]")).toBeVisible();
@@ -717,6 +725,14 @@ test.describe("U10-2 campaigns in each state, written to the database", () => {
           const box = (await b.boundingBox())!;
           expect(box.x, `${name}: the bar starts off screen`).toBeGreaterThanOrEqual(0);
           expect(box.x + box.width, `${name}: the bar is wider than the screen`).toBeLessThanOrEqual(PHONE.width);
+          // On a stage page the current stage is wholly within the bar's visible box as the page opens, before anything is scrolled.
+          const current = b.locator('a[aria-current="page"]');
+          if ((await current.count()) > 0) {
+            const cb = (await current.boundingBox())!;
+            expect(cb.x, `${name}: the current stage starts left of the bar's view`).toBeGreaterThanOrEqual(box.x - 0.5);
+            expect(cb.x + cb.width, `${name}: the current stage is cut off at the bar's right edge`).toBeLessThanOrEqual(box.x + box.width + 0.5);
+            await expectNoHorizontalScroll(page, `${name} at 375px, with the current stage brought into the bar's view`);
+          }
           // When its stages don't fit, the bar scrolls inside itself, and every stage can be reached.
           const scroll = await b.evaluate((el) => {
             const scroller = [el, ...Array.from(el.querySelectorAll("*"))].find((x) => x.scrollWidth > x.clientWidth + 1) ?? null;

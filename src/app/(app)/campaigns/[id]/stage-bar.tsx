@@ -3,14 +3,16 @@
 // its state in a word or a count; the current stage carries aria-current. A
 // locked stage stays a link (its page says why and what unlocks it). Built
 // from the segmented nav's parts (the soft surface, the primary-soft current
-// item); below 640 px it scrolls sideways inside itself, never the page.
+// item); below 640 px it scrolls sideways inside itself, never the page, and
+// opens scrolled so the current stage is in view (StageBarScroller).
 import Link from "next/link";
 import { cx } from "@/components/ui/cx";
 import type { StageId, StageView } from "@/lib/campaigns/stages";
+import { StageBarScroller } from "./stage-bar-scroller";
 
 export function StageBar({ stages, current }: { stages: StageView[]; current: StageId | null }) {
   return (
-    <nav aria-label="Campaign stages" data-stage-bar="" className="min-w-0 overflow-x-auto rounded-card bg-surface">
+    <StageBarScroller aria-label="Campaign stages" data-stage-bar="" className="min-w-0 overflow-x-auto rounded-card bg-surface">
       {/* The padding keeps each link's focus ring inside the scrolling bar. */}
       <ol className="flex w-max min-w-full gap-1 p-1.5">
         {stages.map((s, i) => {
@@ -41,6 +43,6 @@ export function StageBar({ stages, current }: { stages: StageView[]; current: St
           );
         })}
       </ol>
-    </nav>
+    </StageBarScroller>
   );
 }

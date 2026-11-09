@@ -1,7 +1,7 @@
 // Shared steps for the end-to-end specs.
 import { existsSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 /**
  * Captions in the recordings (decision 0021): when videos are recorded (in CI,
@@ -358,10 +358,58 @@ export async function acceptDontRulesForPicked(page: Page) {
   }
 }
 
-/** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is). */
+/** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is); U10-3: from the card's Edit menu. */
 export async function drawInLayout(page: Page, adNumber: number, layout: "Full bleed" | "Split" | "Card") {
-  const button = page.getByRole("button", { name: `${layout} layout for ad ${adNumber}`, exact: true });
+  const name = `${layout} layout for ad ${adNumber}`;
+  const card = page.locator("[data-gallery] > li[data-ad]").filter({ visible: true }).filter({ has: page.locator(`button[aria-label="${name}"]`) });
+  await openAdMenu(card, "edit");
+  const button = card.getByRole("button", { name, exact: true });
   if ((await button.getAttribute("aria-pressed")) === "true") return;
   await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+}
+
+// ---------------------------------------------------------------- U10-3: the ad card's menus
+// A gallery card shows the ad, its number and headline, its state and its
+// scores, with Pick on its face; its tools open from "Edit" or "More" on the
+// card (tests/e2e/creative-gallery.spec.ts has the interface). Specs that use a
+// card's tools go through adTool(), so they change here, in one place.
+
+export type AdMenu = "edit" | "more";
+
+/** Where each of today's card tools lives after U10-3: on the card's face, or in one of its two menus. */
+export const AD_TOOLS = {
+  pick: { menu: null, role: "button", name: /^(Pick|Unpick) ad \d+$/ },
+  layout: { menu: "edit", role: "button", name: /^(Full bleed|Split|Card) layout for ad \d+$/ },
+  redraw: { menu: "edit", role: "button", name: /^Redraw ad \d+ with the current kit/ },
+  "new-picture": { menu: "edit", role: "button", name: /^(New picture for|Drawing a new picture for) ad \d+/ },
+  "new-words": { menu: "edit", role: "button", name: /^(New words for|Writing new words for) ad \d+/ },
+  "edit-words": { menu: "edit", role: "button", name: /^Edit the words for ad \d+$/ },
+  discard: { menu: "more", role: "button", name: /^Discard ad \d+$/ },
+  sizes: { menu: "more", role: "link", name: /^Sizes of ad \d+$/ },
+  compliance: { menu: "more", role: "link", name: /^Compliance of ad \d+$/ },
+  translate: { menu: "more", role: "button", name: /^(Translate|Translating)/ },
+} as const satisfies Record<string, { menu: AdMenu | null; role: "button" | "link"; name: RegExp }>;
+export type AdToolName = keyof typeof AD_TOOLS;
+
+/** A gallery card by its ad's id. */
+export function adCard(page: Page, variantId: string): Locator {
+  return page.locator(`[data-gallery] > li[data-ad="${variantId}"]`).filter({ visible: true });
+}
+
+/** Opens one of a card's menus (a no-op when it is open) and returns the menu. */
+export async function openAdMenu(card: Locator, menu: AdMenu): Promise<Locator> {
+  const trigger = card.locator(`button[data-ad-menu-button="${menu}"]`);
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const panel = card.locator(`[data-ad-menu="${menu}"]`);
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** One of today's tools on a card, its menu opened first when it lives in one. */
+export async function adTool(card: Locator, tool: AdToolName): Promise<Locator> {
+  const t = AD_TOOLS[tool];
+  const where = t.menu ? await openAdMenu(card, t.menu) : card;
+  return where.getByRole(t.role, { name: t.name });
 }

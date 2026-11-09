@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { acceptDontRulesForPicked, caption, contrastViolations, expectNoHorizontalScroll, openStage, saveShot, settle, signIn, untilShown } from "./helpers";
+import { acceptDontRulesForPicked, adTool, caption, contrastViolations, expectNoHorizontalScroll, openStage, saveShot, settle, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -81,7 +81,8 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   for (let i = 0; i < 4; i++) {
     const card = social.nth(i);
     const title = (await card.locator("h3, h4").first().textContent())!.trim();
-    await card.getByRole("button", { name: `Pick ${title.toLowerCase()}` }).click();
+    await expect(await adTool(card, "pick")).toHaveAccessibleName(`Pick ${title.toLowerCase()}`);
+    await (await adTool(card, "pick")).click();
     await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
   }
   const bar = page.locator("[data-languages]");

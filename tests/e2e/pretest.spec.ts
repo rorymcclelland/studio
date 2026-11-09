@@ -7,7 +7,7 @@
 // 1440 px: nothing scrolls sideways, AA contrast. SHOTS_DIR=<folder> saves
 // screenshots.
 import { expect, test, type Page } from "@playwright/test";
-import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
+import { adTool, contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan, pre-tested by the panel";
 const SYNTHETIC_PANEL = "Synthetic panel, not real customers";
@@ -53,7 +53,8 @@ test(
       for (let i = 0; i < 4; i++) {
         const card = social.nth(i);
         const title = (await card.locator("h3, h4").first().textContent())!.trim();
-        await card.getByRole("button", { name: `Pick ${title.toLowerCase()}` }).click();
+        await expect(await adTool(card, "pick")).toHaveAccessibleName(`Pick ${title.toLowerCase()}`);
+        await (await adTool(card, "pick")).click();
         await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
       }
     });

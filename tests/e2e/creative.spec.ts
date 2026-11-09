@@ -13,12 +13,14 @@
 // tests/agents/creative.test.ts.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  adTool,
   caption,
   contrastViolations,
   demoBrandId,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openAdMenu,
   openHistory,
   openStage,
   settle,
@@ -129,8 +131,9 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   // #6: one column at 375 px, four at 1440 px; nothing scrolls sideways; AA contrast.
   await checkLayout(page, "the gallery");
 
-  // S5-3 #6: a layout switch draws the ad in that layout, or says why not.
+  // S5-3 #6: a layout switch draws the ad in that layout, or says why not (U10-3: from the card's Edit menu).
   const first = ad(page, 1);
+  await openAdMenu(first, "edit");
   const firstLayout = (await first.getByRole("button", { pressed: true }).textContent())!.trim();
   const other = firstLayout === "Split" ? "Full bleed" : "Split";
   await first.getByRole("button", { name: `${other} layout for ad 1` }).click();
@@ -146,6 +149,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   // #2: New picture says its cost, replaces only that ad's picture, and the cost is shown.
   const beforeId = await ad(page, 1).getAttribute("data-ad");
   const sibling = await ad(page, 2).getAttribute("data-ad");
+  await openAdMenu(ad(page, 1), "edit");
   const newPicture = ad(page, 1).getByRole("button", { name: /^New picture for ad 1, (about \d+p|under 1p)$/ });
   await newPicture.click();
   await expect(toast(page, "Drawing a new picture")).toBeVisible();
@@ -159,7 +163,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
 
   // #3: Edit words with a banned term is refused inline, and nothing is saved.
   const headline = (await ad(page, 3).locator("img").getAttribute("alt"))!.match(/Headline: (.*?)\. /)![1];
-  await ad(page, 3).getByRole("button", { name: "Edit the words for ad 3" }).click();
+  await (await adTool(ad(page, 3), "edit-words")).click();
   const dialog = page.getByRole("dialog", { name: "Edit the words for ad 3" });
   await expect(dialog).toBeVisible();
   const field = dialog.getByRole("textbox", { name: "Headline" });
@@ -186,10 +190,12 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
 
   // #4: Pick and Discard survive a reload; a discarded ad is listed with an undo.
   const pickedId = await ad(page, 4).getAttribute("data-ad");
-  await ad(page, 4).getByRole("button", { name: "Pick ad 4" }).click();
+  const pick4 = await adTool(ad(page, 4), "pick");
+  await expect(pick4).toHaveAccessibleName("Pick ad 4");
+  await pick4.click();
   await expect(toast(page, "Picked for the shortlist.")).toBeVisible();
   const discardedId = await ad(page, 5).getAttribute("data-ad");
-  await ad(page, 5).getByRole("button", { name: "Discard ad 5" }).click();
+  await (await adTool(ad(page, 5), "discard")).click();
   await expect(toast(page, "Ad discarded.")).toBeVisible();
   await page.reload();
   await settle(page);
@@ -237,6 +243,9 @@ test("S5-4 #6: every action on an ad is reachable by keyboard at 375 px", async 
   await page.setViewportSize({ width: 375, height: 800 });
   await settle(page);
   const card = ad(page, 1);
+  // U10-3: the tools are in the card's Edit and More menus; opened, every one is a Tab stop.
+  await openAdMenu(card, "edit");
+  await openAdMenu(card, "more");
   for (const name of [/layout for ad 1$/, /^Pick ad 1$/, /^Discard ad 1$/, /^New picture for ad 1/, /^New words for ad 1/, /^Edit the words for ad 1$/]) {
     const b = card.getByRole("button", { name }).first();
     await b.focus();
@@ -325,8 +334,11 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await caption(page, "F-26.1, F-26.4: pick ad 1 and redraw it with the current kit: the pick carries over");
     // #1 and #4: one ad redrawn; the pick carries over to the redrawn ad.
     const firstId = (await ad(page, 1).getAttribute("data-ad"))!;
-    await ad(page, 1).getByRole("button", { name: "Pick ad 1" }).click();
+    const pick1 = await adTool(ad(page, 1), "pick");
+    await expect(pick1).toHaveAccessibleName("Pick ad 1");
+    await pick1.click();
     await expect(toast(page, "Picked for the shortlist.")).toBeVisible();
+    await openAdMenu(ad(page, 1), "edit");
     await ad(page, 1).getByRole("button", { name: "Redraw ad 1 with the current kit, no AI cost" }).click();
     await expect(toast(page, "Ad redrawn with the current kit.")).toBeVisible();
     await expect(page.locator(`[data-gallery] [data-ad="${firstId}"]`)).toHaveCount(0);

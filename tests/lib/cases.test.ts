@@ -278,7 +278,7 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
     expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
-    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "BUG-4", "BUG-11"]);
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "BUG-4", "BUG-11"]);
   });
 
   it("has every agreed U10-2 case, once each, in order, after U10-6's, checked as the refinement says", async () => {
@@ -327,6 +327,46 @@ describe("the case list", () => {
     expect(order.lastIndexOf("U10-6")).toBeLessThan(order.indexOf("U10-2"));
     expect(order.lastIndexOf("U10-2")).toBeLessThan(order.indexOf("BUG-4"));
     expect(STORIES.find((s) => s.id === "U10-2")).toEqual({ sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" });
+  });
+
+  it("has every agreed U10-3 case, once each, in order, after U10-2's, checked as the refinement says", () => {
+    const u103 = CASES.filter((c) => c.story === "U10-3");
+    expect(u103.map((c) => c.id)).toEqual(Array.from({ length: 8 }, (_, i) => `U10-3.${i + 1}`));
+    for (const c of u103) expect(c.sprint, c.id).toBe(10);
+    // The refinement: browser tests for 1, 2, 3, 4, 5, 7 and 8; CI for 2 (each action), 3 and 6.
+    expect(u103.map(caseKind)).toEqual(["browser", "browser", "browser", "browser", "browser", "ci", "browser", "browser"]);
+    const SPEC = "creative-gallery.spec.ts";
+    const LIB = "tests/lib/gallery-filter.test.ts";
+    const FLOWS = "tests/flows/creative-lock.test.ts";
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    for (const c of u103) for (const x of c.checks.filter((y) => y.kind === "browser")) expect((x as { spec: string }).spec, c.id).toBe(SPEC);
+    // The server's refusals and their end against plain Postgres (2 and 3, rule 7 in 2); the filter's parsing in the pure tests (6).
+    for (const id of ["U10-3.2", "U10-3.3"]) expect(ciIn(id, FLOWS), id).toBe(true);
+    for (const id of ["U10-3.1", "U10-3.2", "U10-3.3", "U10-3.4", "U10-3.5", "U10-3.6"]) expect(ciIn(id, LIB), id).toBe(true);
+    expect(u103.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
+    expect(u103.flatMap((c) => c.checks).some((x) => x.kind === "hand" || x.kind === "withdrawn")).toBe(false);
+    // The browser tests change no brand kit, so they run in the main project; none is marked as an expected failure.
+    const spec = read(`tests/e2e/${SPEC}`);
+    expect(spec).not.toMatch(/test\.fail\(|test\.fixme\(|test\.skip\(\s*true/);
+    for (const c of u103) {
+      for (const x of c.checks.filter((y) => y.kind === "browser")) {
+        const title = (x as { title: string }).title;
+        const at = declaredAt(spec, title);
+        expect(at, title).toBeGreaterThan(-1);
+        expect(spec.slice(at, spec.indexOf("async (", at)), c.id).not.toContain("@brand-kit");
+      }
+    }
+    // The builder's interface is at the top of the spec, with the exact refusal; the shared helpers reach a card's tools.
+    const head = spec.slice(0, spec.indexOf("import "));
+    expect(head).toContain("---------------------------------------------------------------- interface");
+    expect(head).toContain("That ad is running in a launch (simulated), so it can't change until the launch ends.");
+    const helpers = read("tests/e2e/helpers.ts");
+    for (const fn of ["adCard", "openAdMenu", "adTool"]) expect(helpers, fn).toMatch(new RegExp(`export (async )?function ${fn}\\(`));
+    expect(helpers).toContain("export const AD_TOOLS");
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("U10-2")).toBeLessThan(order.indexOf("U10-3"));
+    expect(order.lastIndexOf("U10-3")).toBeLessThan(order.indexOf("BUG-4"));
+    expect(STORIES.find((s) => s.id === "U10-3")).toEqual({ sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" });
   });
 
   it("has every agreed BUG-4 and BUG-11 case, once each, in order, after F-23's: CI with the mock model, and the real models in an eval run", () => {

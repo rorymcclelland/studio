@@ -10,6 +10,7 @@
 // simulated, and every ad says so.
 import { expect, test, type Page } from "@playwright/test";
 import {
+  adTool,
   contrastViolations,
   expectNoHorizontalScroll,
   makeCreative,
@@ -112,7 +113,8 @@ test(
     const displayId = (await ads(page, "display").first().getAttribute("data-ad"))!;
 
     await step(page, "C7-1.1: open Sizes on a paid-social ad: the four social sizes, each with contrast, fit, legal lines and the simulated label", async () => {
-      await ads(page, "paid social").first().locator("[data-ad-sizes]").click();
+      // U10-3: Sizes is in the card's More menu.
+      await (await adTool(ads(page, "paid social").first(), "sizes")).click();
       await page.waitForURL(new RegExp(`${campaignPath}/ads/${socialId}/sizes$`));
       await settle(page);
       await expect(page.getByRole("heading", { name: "Sizes", level: 2 })).toBeVisible();

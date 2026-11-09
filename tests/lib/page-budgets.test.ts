@@ -152,6 +152,14 @@ describe("U10-6 the budgets table", () => {
     }
   });
 
+  it("U10-3: the Creative stage's filter row is its main action, within 1.5 screens, so neither page carries a main-action marker", () => {
+    for (const key of ["campaign-live-creative", "campaign-two-audiences-creative"]) {
+      const b = PAGE_BUDGETS.find((x) => x.key === key)!;
+      expect(b.mainAction?.css, key).toBe("[data-gallery-filter]");
+      expect(b.mainActionUntil, key).toBeUndefined();
+    }
+  });
+
   it("the pages over budget that no Sprint 10 story fixes are exactly these, so a new one is a deliberate change", () => {
     const unassigned = PAGE_BUDGETS.flatMap((b) => [
       ...(b.lengthUntil?.story === "unassigned" ? [`${b.key}: length`] : []),

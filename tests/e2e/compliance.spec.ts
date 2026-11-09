@@ -30,6 +30,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import postgres from "postgres";
 import {
+  adTool,
   contrastViolations,
   demoBrandId,
   DEV_EMAIL,
@@ -37,6 +38,7 @@ import {
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openAdMenu,
   openStage,
   saveShot,
   settle,
@@ -66,13 +68,17 @@ async function checkWidths(page: Page, what: string) {
 
 /** Picks an ad from its card and waits for the shortlist to say so. */
 async function pick(page: Page, n: number) {
-  await ads(page).nth(n - 1).getByRole("button", { name: `Pick ad ${n}` }).click();
+  const button = await adTool(ads(page).nth(n - 1), "pick");
+  await expect(button).toHaveAccessibleName(`Pick ad ${n}`);
+  await button.click();
   await expect(toast(page, "Picked for the shortlist.").first()).toBeVisible({ timeout: 30_000 });
   await expect(ads(page).nth(n - 1)).toHaveAttribute("data-picked", "", { timeout: 30_000 });
 }
 
 /** Translate on one picked ad (mock Localise agent), and waits for its three translations. */
 async function translate(page: Page, card: ReturnType<Page["locator"]>) {
+  // U10-3: Translate is in the card's More menu.
+  await openAdMenu(card, "more");
   const button = card.getByRole("button", { name: /^Translate\s*\(/ });
   await expect(button).toBeEnabled({ timeout: 30_000 });
   await button.click();

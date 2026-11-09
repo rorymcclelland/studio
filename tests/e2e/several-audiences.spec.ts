@@ -8,7 +8,7 @@
 // is in tests/agents/creative.test.ts. Each page at 375 px and 1440 px: nothing
 // scrolls sideways, AA contrast. The pictures and words are the mock model's.
 import { expect, test, type Page } from "@playwright/test";
-import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, openStage, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
+import { contrastViolations, expectNoHorizontalScroll, makeCreative, newCampaign, openAdMenu, openStage, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
 
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
 const groups = (page: Page) => page.locator("[data-audience-group]");
@@ -103,6 +103,8 @@ test(
       const secondBefore = await idsIn(page, 1);
       const card = groups(page).nth(1).locator("[data-gallery] > li").first();
       await card.scrollIntoViewIfNeeded();
+      // U10-3: New words is in the card's Edit menu.
+      await openAdMenu(card, "edit");
       await card.getByRole("button", { name: /^New words for ad \d+, (about \d+p|under 1p)/ }).click();
       // The mock Copy agent writes them through Inngest; the page shows them when the run ends.
       await untilShown(page, () => expect(groups(page).nth(1).locator("[data-pending-words]")).toHaveCount(4, { timeout: 10_000 }), 180_000);

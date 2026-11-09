@@ -29,13 +29,28 @@
 // through the shared helpers (openStage, openLaunch in ./helpers), so the
 // creative steps run on the Creative stage, the launch and the clock on the
 // Launch stage, and the personas are waited for on the Audience stage. U10-3
-// moves the ad cards' controls into a menu: update the pick and translate
-// steps here with it.
+// moved the ad cards' tools into their Edit and More menus: the pick and
+// translate steps reach them through adTool() and openAdMenu().
 import { expect, type Page } from "@playwright/test";
 import type postgres from "postgres";
 import type { LaunchAd } from "@/lib/performance/launch";
 import { MOCK_CPA_QUESTION, seedWithTiring } from "../helpers/monitor";
-import { acceptDontRulesForPicked, DEV_EMAIL, demoBrandId, makeCreative, newCampaign, openLaunch, openStage, settle, signOffVersion, startRunAwaitingApproval, step, untilShown } from "./helpers";
+import {
+  acceptDontRulesForPicked,
+  adTool,
+  DEV_EMAIL,
+  demoBrandId,
+  makeCreative,
+  newCampaign,
+  openAdMenu,
+  openLaunch,
+  openStage,
+  settle,
+  signOffVersion,
+  startRunAwaitingApproval,
+  step,
+  untilShown,
+} from "./helpers";
 import { setWaitingLaunchTerms } from "./launch-fixture";
 import type { FullestData } from "./page-budgets";
 
@@ -124,13 +139,16 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
     expect(await social(page).count()).toBeGreaterThanOrEqual(4);
     for (let i = 0; i < 4; i++) {
       const card = social(page).nth(i);
-      await card.getByRole("button", { name: /^Pick ad \d+$/ }).click();
+      const pick = await adTool(card, "pick");
+      await expect(pick).toHaveAccessibleName(/^Pick ad \d+$/);
+      await pick.click();
       await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
     }
   });
 
   await step(page, "Fullest data: translate ad 1 into French, German and Spanish", async () => {
     const first = page.locator("[data-gallery] > li[data-picked]").first();
+    await openAdMenu(first, "more");
     const translate = first.getByRole("button", { name: /^Translate\s*\((about \d+p|under 1p), at most \d+p\)$/ });
     await expect(translate).toBeEnabled({ timeout: 30_000 });
     await translate.click();
