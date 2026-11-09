@@ -217,7 +217,9 @@ jobs:
         # tests put a TCP relay in front of the database (Neon needs the endpoint's name, which a
         # relay hides), so they also run
         # in the first job.
-        timeout-minutes: 45
+        # Raised from 45 to 75 minutes on 9 Nov: as the suite grew this step took 36 to 47
+        # minutes, so passing runs began to time out (PR #4, twice).
+        timeout-minutes: 75
         run: TEST_DATABASE_URL="$NEON_CI_URL" npx vitest run tests/db tests/auth tests/models --testTimeout=60000 --hookTimeout=60000 --exclude tests/db/migrate.test.ts --exclude tests/db/copy-data.test.ts --exclude tests/db/dropped-connection.test.ts
       - name: Delete the throwaway branch (also after a failure)
         if: always() && steps.branch.outputs.branch_id != ''
