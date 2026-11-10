@@ -4,8 +4,8 @@
 // U10-4's Mark all as seen (the only things a person can do with alerts: they
 // never act, rule 3), and the Ask about this campaign box, which shows the cost before the click and starts
 // the Monitor's run. The server checks everything again.
-import { useState } from "react";
-import { Button } from "@/components/ui/button";
+import { useRef, useState } from "react";
+import { Button, buttonClass } from "@/components/ui/button";
 import { Field } from "@/components/ui/field";
 import { Textarea } from "@/components/ui/input";
 import { ActionError } from "../brief-actions";
@@ -84,5 +84,40 @@ export function AskForm({ campaignId, cost, reason, maxLength }: { campaignId: s
       )}
       <ActionError error={error} />
     </form>
+  );
+}
+
+/**
+ * R1 (10 November): the alerts list, with the alerts past the first few
+ * (li[data-alert-more]) hidden until "Show all N alerts" reveals them in place.
+ * The cut-off is CSS on the list, so every alert is rendered once, on the
+ * server, and stays in the page (newest first) while hidden.
+ */
+export function AlertsReveal({ total, more, showAllLabel, children }: { total: number; more: number; showAllLabel: string; children: React.ReactNode }) {
+  const list = useRef<HTMLUListElement>(null);
+  const [all, setAll] = useState(false);
+  const collapsed = !all && more > 0;
+  const showAll = () => {
+    setAll(true);
+    // Focus moves to the first alert revealed, so a keyboard user carries on from where the list was cut.
+    requestAnimationFrame(() => list.current?.querySelector<HTMLElement>(":scope > li[data-alert-more] :is(summary, a, button)")?.focus());
+  };
+  return (
+    <div className="space-y-2">
+      <ul
+        ref={list}
+        aria-label={`Alerts, ${total} in all`}
+        data-alerts-list=""
+        data-collapsed={collapsed ? "" : undefined}
+        className="divide-y divide-line data-collapsed:[&>[data-alert-more]]:hidden"
+      >
+        {children}
+      </ul>
+      {collapsed && (
+        <button type="button" data-show-all-alerts="" onClick={showAll} className={buttonClass("quiet", "sm", "w-full sm:w-auto")}>
+          {showAllLabel}
+        </button>
+      )}
+    </div>
   );
 }

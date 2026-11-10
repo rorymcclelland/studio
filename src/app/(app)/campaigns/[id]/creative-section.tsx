@@ -457,7 +457,7 @@ function Gallery({
   groups: number;
 }) {
   return (
-    // Wider than the page column on large screens, so four ads sit side by side.
+    // Three columns from lg up, so rows are always full (three ads per group; R2, 10 November).
     // Keyed by the filter, so going back to All starts at the first few again.
     <GalleryReveal
       key={show}
@@ -465,8 +465,7 @@ function Gallery({
       total={variants.length}
       preview={previewCount(show, variants.length, groups)}
       showAllLabel={showAllLabel(variants.length)}
-      wrapClassName="xl:mx-[calc(50%-min(50vw-3rem,38rem))]"
-      className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4"
+      className="grid grid-cols-1 items-start gap-3 sm:grid-cols-2 lg:grid-cols-3"
     >
       {variants.map((v) => (
         <AdCard

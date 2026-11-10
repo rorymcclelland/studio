@@ -297,7 +297,7 @@ describe("the case list", () => {
     }
     const { PAGE_BUDGETS } = await import("../e2e/page-budgets");
     const six = CASES.find((c) => c.id === "U10-2.6")!.checks.map((x) => (x as { title: string }).title);
-    const sixKeys = ["campaign-live", "campaign-live-brief", "campaign-live-audience", "campaign-live-launch", "campaign-two-audiences", "campaign-waiting", "campaign-waiting-brief", "campaign-early", "campaign-early-brief"];
+    const sixKeys = ["campaign-live", "campaign-live-brief", "campaign-live-audience", "campaign-live-creative", "campaign-live-launch", "performance", "campaign-two-audiences", "campaign-two-audiences-creative", "campaign-waiting", "campaign-waiting-brief", "campaign-early", "campaign-early-brief"];
     expect(six).toEqual(sixKeys.map((k) => `U10-6 #1: ${k} is within its length budget at 375 px and 1440 px`));
     for (const k of sixKeys) expect(PAGE_BUDGETS.find((b) => b.key === k)?.path({ fernhollow: "f", quillmoor: "q", live: "l", twoAudiences: "t", waiting: "w", early: "e", imageryRun: "r", taglineRun: "g" }), k).toMatch(/^\/campaigns\//);
     // The CI parts: the stage and Needs you functions for every combination (1 to 5, 8 to 10), and the loader
@@ -372,10 +372,11 @@ describe("the case list", () => {
 
   it("has every agreed U10-4 case, once each, in order, after U10-3's, checked as the refinement says", async () => {
     const u104 = CASES.filter((c) => c.story === "U10-4");
-    expect(u104.map((c) => c.id)).toEqual(Array.from({ length: 7 }, (_, i) => `U10-4.${i + 1}`));
+    // 8 is Rory's answer R1 after QA (10 November): the newest 3 unseen alerts in full, the rest behind Show all.
+    expect(u104.map((c) => c.id)).toEqual(Array.from({ length: 8 }, (_, i) => `U10-4.${i + 1}`));
     for (const c of u104) expect(c.sprint, c.id).toBe(10);
     // The refinement: a browser test for every case; CI for 3 (health) and 4 (another launch unchanged, another workspace refused).
-    expect(u104.map(caseKind)).toEqual(Array(7).fill("browser"));
+    expect(u104.map(caseKind)).toEqual(Array(8).fill("browser"));
     const SPEC = "performance-attention.spec.ts";
     const LIB = "tests/lib/performance-attention.test.ts";
     const FLOWS = "tests/flows/performance-attention.test.ts";

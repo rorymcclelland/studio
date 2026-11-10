@@ -301,3 +301,7 @@ The independent QA found the Performance page's length depended on the launch's 
 | R2 | Creative gallery columns at 1440 px | 3 columns at 1440 px | U10-3: rows are always full (3, or 3 and 3); "three ads per group" stands |
 
 The review's should-fix items (the campaigns list's cursor, and the spend meter's app-wide figures read only for the owner) are fixed; see the commit "Sprint 10 review fixes".
+
+### Sign-off and release approval (Rory, 10 November, 09:42)
+
+Rory approved in advance Sprint 10's sign-off, its production database change (`20261109000001_spend_meter.sql`) and its merge, on the conditions recorded in docs/refinement/sprint-10b.md (CI fully green, no QA or review blocker, the migration's fingerprint matches, no production errors after the deploy). He still gets the demo page before the merge and can hold it.

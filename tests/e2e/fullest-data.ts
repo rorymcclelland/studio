@@ -57,7 +57,7 @@ import {
   step,
   untilShown,
 } from "./helpers";
-import { setWaitingLaunchTerms } from "./launch-fixture";
+import { PINNED_STARTS_ON, setWaitingLaunchTerms } from "./launch-fixture";
 import type { FullestData } from "./page-budgets";
 
 type Sql = postgres.Sql;
@@ -201,13 +201,16 @@ export async function buildLive(page: Page, sql: Sql): Promise<string> {
     const prices = await sql`
       select p.price_pence from public.products p join public.campaigns c on c.brand_id = p.brand_id
       where c.id = ${idOf(path)} and p.active order by p.price_pence`;
+    // QA finding 3 (10 November): the launch starts on a fixed date, not today, so its days (and the page's
+    // length) don't depend on the calendar. A Monday whose 14 simulated days have no simulator event: no UK bank
+    // holiday, Black Friday or Cyber Monday (src/config/simulation.ts), only the weekends every fortnight has.
     const found = seedWithTiring(
-      { startsOn: l.starts_on, days: l.days, dailyBudgetPence: l.daily_budget_pence, ads: l.ads as LaunchAd[], orderValuesPence: prices.map((p) => p.price_pence as number) },
+      { startsOn: PINNED_STARTS_ON, days: l.days, dailyBudgetPence: l.daily_budget_pence, ads: l.ads as LaunchAd[], orderValuesPence: prices.map((p) => p.price_pence as number) },
       9,
       14,
     );
     // The default threshold stays (cost per acquisition at or below £20), so ads below it raise alerts as well.
-    await setWaitingLaunchTerms(sql, launchId, { seed: found.seed });
+    await setWaitingLaunchTerms(sql, launchId, { seed: found.seed, starts_on: PINNED_STARTS_ON });
     await page.goto("/approvals");
     await settle(page);
     const card = inboxCard(page, "launch", path);
