@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "42872718180",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/studio/actions/runs/42872718180",
+  "repository": "rorymcclelland/studio",
+  "commit": "4c87503509c5992104cd19da5a6f6d1da31c0b0e",
+  "branch": "fix-agent-replies",
+  "date": "2026-11-10T18:51:33.246Z",
+  "checksJob": "success"
+}
