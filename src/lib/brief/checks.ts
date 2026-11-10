@@ -171,6 +171,28 @@ export function containsTerm(text: string, term: string): boolean {
   return false;
 }
 
+/** Words for matching a name: no endings trimmed, and a possessive is the name ("Cookpad's"). */
+const nameWords = (s: string) => words(s).map((w) => w.replace(/'s$|'$/, "")).filter(Boolean);
+
+/**
+ * A company's name in a text, as whole words. Unlike containsTerm, no word endings are
+ * trimmed: "ONS" became "on" and matched every text with the word "on" (10 November 2026).
+ * A short all-capital name (an acronym such as "ONS" or "M&S") matches only in capitals,
+ * so "ons" or "Ons" in ordinary words is not the company.
+ */
+export function containsName(text: string, name: string): boolean {
+  const n = name.trim();
+  if (/^[A-Z][A-Z0-9&]{1,4}$/.test(n)) {
+    // Only capitals, digits and "&", none of them special in a pattern.
+    return new RegExp(`(?<![\\p{L}\\p{N}])${n}(?![\\p{L}\\p{N}])`, "u").test(text);
+  }
+  const t = nameWords(normaliseKitText(n));
+  if (t.length === 0) return false;
+  const w = nameWords(text);
+  for (let i = 0; i + t.length <= w.length; i++) if (t.every((x, j) => w[i + j] === x)) return true;
+  return false;
+}
+
 /**
  * Problems with a brief's evidence. `refs` are tags for a model reply or item
  * ids for a stored brief; figures in `allowedText` (the objective, and in a
@@ -225,7 +247,7 @@ export function evidenceProblems(
   for (const f of fields) {
     for (const term of kit.bannedTerms) if (containsTerm(f.text, term)) problems.push(`${f.where} uses the banned term "${term}"`);
     for (const name of refusableNames(kit.realNames ?? [], { name: "", ownNames: kit.ownNames ?? [] })) {
-      if (containsTerm(f.text, name)) problems.push(`${f.where} names ${name}, a real company from the market notes; describe it instead ("a large outdoor chain")`);
+      if (containsName(f.text, name)) problems.push(`${f.where} names ${name}, a real company from the market notes; describe it instead ("a large outdoor chain")`);
     }
     for (const claim of kit.evidenceClaims) {
       if (containsTerm(f.text, claim)) problems.push(`${f.where} claims "${claim}", which needs evidence the context does not hold`);

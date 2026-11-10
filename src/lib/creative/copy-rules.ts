@@ -1,6 +1,6 @@
 import { refusableNames } from "@/lib/brands/own-names";
 import { z } from "zod";
-import { containsTerm, figuresIn, figureSupported, quantityInWords, type Figure } from "@/lib/brief/checks";
+import { containsName, containsTerm, figuresIn, figureSupported, quantityInWords, type Figure } from "@/lib/brief/checks";
 import { undeclaredNames } from "@/lib/text/names";
 import { voiceProblem } from "@/lib/text/voice";
 import { normaliseKitText } from "@/lib/context/keys";
@@ -165,7 +165,7 @@ export function setProblems(channel: CopyChannel, copy: AnyCopy, rules: CopyRule
       for (const t of rules.bannedTerms) if (containsTerm(f.text, t)) problems.push(`${at} uses the banned term "${t}"`);
       for (const c of rules.evidenceClaims) if (containsTerm(f.text, c)) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
       for (const n of realNames) {
-        if (containsTerm(f.text, n)) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
+        if (containsName(f.text, n)) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
       }
       continue;
     }
@@ -180,7 +180,7 @@ export function setProblems(channel: CopyChannel, copy: AnyCopy, rules: CopyRule
     for (const t of rules.bannedTerms) if (containsTerm(f.text, t)) problems.push(`${at} uses the banned term "${t}"`);
     for (const c of rules.evidenceClaims) if (containsTerm(f.text, c)) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
     for (const n of realNames) {
-      if (containsTerm(f.text, n)) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
+      if (containsName(f.text, n)) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
     }
     for (const n of undeclaredNames(f.text, realNames, { brandName: brandWords, category: "", products: rules.products, places: rules.places })) {
       problems.push(`${at} names "${n}", which looks like another brand; name only ${rules.brandName} and its products, and write in sentence case`);
@@ -281,7 +281,7 @@ export function translationProblems(channel: CopyChannel, copy: AnyCopy, rules: 
     for (const t of rules.bannedTerms) if (containsTerm(folded, foldText(t))) problems.push(`${at} uses the banned term "${t}"`);
     for (const c of rules.evidenceClaims) if (containsTerm(folded, foldText(c))) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
     for (const n of realNames) {
-      if (containsTerm(folded, foldText(n))) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
+      if (containsName(folded, foldText(n))) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
     }
     if (rules.lang !== "de-DE") {
       for (const n of undeclaredNames(text, realNames, { brandName: brandWords, category: "", products: rules.products, places: rules.places })) {

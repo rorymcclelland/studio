@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { containsTerm, figuresIn, figureSupported, quantityInWords } from "@/lib/brief/checks";
+import { containsName, containsTerm, figuresIn, figureSupported, quantityInWords } from "@/lib/brief/checks";
 import { type CheckExtra, defineAgent } from "./contract";
 import { JAPAN_REGIONS, undeclaredNames } from "@/lib/text/names";
 
@@ -125,7 +125,7 @@ export async function noteProblems(input: MarketInput, output: MarketOutput, ext
         if (!`${n.title} ${n.text}`.toLowerCase().includes(name.toLowerCase())) problems.push(`${where} declares "${name}", which it does not name`);
       }
       // A fictional brand has nothing to find on the web, so a note naming it is invented. A real brand's notes may name it (D-2).
-      if (isFictionalBrand(input) && containsTerm(`${n.title} ${n.text}`, input.brandName)) problems.push(`${where} is about ${input.brandName} itself; notes are about the market`);
+      if (isFictionalBrand(input) && containsName(`${n.title} ${n.text}`, input.brandName)) problems.push(`${where} is about ${input.brandName} itself; notes are about the market`);
       // Rule 2 (review 2): every proper name in the note must be declared, unless it is a place, a date or the brand's own words.
       for (const name of undeclaredNames(`${n.title}. ${n.text}`, n.names, { ...input, brandName: brandWords(input).join(" ") })) {
         problems.push(`${where} names "${name}" without declaring it in names; list every real company, brand or product it names`);
