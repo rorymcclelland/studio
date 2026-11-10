@@ -1,3 +1,4 @@
+import { refusableNames } from "@/lib/brands/own-names";
 import { COMPLIANCE } from "@/config/compliance";
 import { containsTerm } from "@/lib/brief/checks";
 import { foldText } from "@/lib/creative/copy-rules";
@@ -132,7 +133,9 @@ export function namedCompanies(words: Word[], realNames: string[]): string[] {
  * fails. The name is said here, once; the words shown with the check say "a
  * named company" instead (maskNames).
  */
-export function realNameRule(words: Word[], realNames: string[]): UploadFinding {
+export function realNameRule(words: Word[], allRealNames: string[], ownNames: readonly string[] = []): UploadFinding {
+  // D-2 (Sprint 10b): the brand's own names, such as a parent brand's, may be named.
+  const realNames = refusableNames(allRealNames, { name: "", ownNames });
   const found = namedCompanies(words, realNames);
   if (found.length) {
     return make(

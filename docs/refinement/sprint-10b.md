@@ -102,7 +102,7 @@ On production, Rory can add a brand of his own, give it simulated customers, and
 
 **What changes.**
 - The brief gets an optional `line` field, 3 to 30 characters, so it fits every headline limit. It is versioned and signed off with the brief, like the other sections. It's on the Brief stage as **Campaign line**, with Edit.
-- **Suggest lines** runs the Tagline agent with the brief's title, story, the audiences' names and the kit's voice. Its input grows from a brand name to this context. It still returns 3 lines, each 30 characters at most. You pick one, or edit it, and it's saved as a new brief version. The cost is shown before you click (about 0.2p with Haiku). It goes through `generate()` (rule 5).
+- **Suggest lines** runs the Tagline agent with the brief's title, story, the audiences' names and the kit's voice. Its input grows from a brand name to this context. It still returns 3 lines, each 30 characters at most. You pick one, or edit it, and it's saved as a new brief version. The cost is shown before you click (about 0.02p with Haiku; corrected from 0.2p during the build). It goes through `generate()` (rule 5).
 - **Copy:** when the signed-off version has a line, every paid-social and display headline is the line exactly. Search keeps its own headlines. The copy checks refuse a set whose headline isn't the line. Translations translate the line once and use it for every ad in that language.
 - The home tagline card stays as it is.
 

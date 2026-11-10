@@ -12,7 +12,7 @@ import { parseBrandInput } from "@/lib/brands/schema";
 import { brandTabHref } from "@/lib/brands/tabs";
 import { saveBrand, type BrandDraft } from "../../actions";
 
-type ListKey = "toneWords" | "doRules" | "dontRules" | "legalLines" | "bannedTerms" | "evidenceClaims";
+type ListKey = "toneWords" | "doRules" | "dontRules" | "legalLines" | "bannedTerms" | "evidenceClaims" | "ownNames";
 type Row = { key: number; value: string };
 type ColourRow = { key: number; name: string; hex: string };
 type Draft = Omit<Required<BrandDraft>, ListKey | "palette"> & Record<ListKey, Row[]> & { palette: ColourRow[] };
@@ -39,6 +39,7 @@ function toDraft(k: BrandDraft): Draft {
     legalLines: rows(k.legalLines),
     bannedTerms: rows(k.bannedTerms),
     evidenceClaims: rows(k.evidenceClaims),
+    ownNames: rows(k.ownNames),
     palette: (k.palette ?? []).map((c) => ({ key: nextKey++, name: c.name, hex: c.hex })),
   };
 }
@@ -60,6 +61,7 @@ function toInput(d: Draft): BrandDraft {
     legalLines: values(d.legalLines),
     bannedTerms: values(d.bannedTerms),
     evidenceClaims: values(d.evidenceClaims),
+    ownNames: values(d.ownNames),
   };
 }
 
@@ -87,7 +89,18 @@ function canonical(v: unknown): string {
  * above the form, inside the same block as the save bar, so the bar stays in
  * view from the top of the page to the bottom (U10-1).
  */
-export function BrandEditor({ brandId, initial, lead }: { brandId: string; initial: BrandDraft; lead?: React.ReactNode }) {
+export function BrandEditor({
+  brandId,
+  initial,
+  lead,
+  isFictional = false,
+}: {
+  brandId: string;
+  initial: BrandDraft;
+  lead?: React.ReactNode;
+  /** Review fix S1: a fictional demo brand has no other names (rule 2), so "Also known as" is not shown. */
+  isFictional?: boolean;
+}) {
   const formId = useId();
   const [draft, setDraft] = useState<Draft>(() => toDraft(initial));
   const [baseline, setBaseline] = useState<BrandDraft>(initial);
@@ -242,6 +255,21 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
               />
             </Field>
           </div>
+          {!isFictional && (
+            <ListField
+              field="ownNames"
+              label="Also known as"
+              itemLabel="Own name"
+              hint="Other names this brand's ads may use, such as a parent brand's. Up to 5, 80 characters each."
+              max={5}
+              rows={draft.ownNames}
+              errors={errors}
+              onChange={(v) => set("ownNames", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+          )}
         </Section>
 
         <Section id="voice" title="Voice" intro="How the brand sounds, and what it always or never does.">

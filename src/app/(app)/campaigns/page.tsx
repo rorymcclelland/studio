@@ -54,13 +54,18 @@ async function CampaignsPageContent({ searchParams }: { searchParams: PageProps<
           title="Add a brand first"
           headingLevel={2}
           action={
-            <ButtonLink href="/brands" size="sm">
-              Go to brands
-            </ButtonLink>
+            <div className="flex flex-col items-start gap-3 sm:flex-row">
+              <ButtonLink href="/brands/new" size="sm">
+                New brand
+              </ButtonLink>
+              <ButtonLink href="/brands" size="sm" variant="quiet">
+                Add demo brands
+              </ButtonLink>
+            </div>
           }
         >
-          A campaign belongs to a brand, and the brief is written from that brand&apos;s kit, products and customers. Add
-          the demo brands on the Brands page to try it.
+          A campaign belongs to a brand, and the brief is written from that brand&apos;s kit, products and customers. Start
+          a brand of your own, or add the two fictional demo brands on the Brands page to try it.
         </EmptyState>
       ) : (
         <Card as="section" tone="primary" aria-labelledby="new-campaign">

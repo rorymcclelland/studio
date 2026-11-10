@@ -4,9 +4,11 @@
 // ?version= shows an old version). Never locked: every other stage starts here.
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
+import { latestLineSuggestions } from "@/lib/brief/line";
 import { getVersion, type CampaignDetail, type Proposal } from "@/lib/brief/repo";
 import type { StoredBrief } from "@/lib/brief/schema";
 import { listContext } from "@/lib/context/store";
+import { suggestLinesEstimate } from "@/lib/creative/costs";
 import { listMarketNotes, type MarketNote } from "@/lib/strategy/market";
 import { daysSince } from "@/components/format-day";
 import { AutoRefresh } from "@/components/auto-refresh";
@@ -35,10 +37,11 @@ async function BriefStageContent(props: PageProps<"/campaigns/[id]/brief">) {
 
   const requested = typeof versionParam === "string" && /^\d+$/.test(versionParam) ? Number(versionParam) : null;
   const viewing = requested !== null && requested !== campaign.currentVersion ? requested : null;
-  const [context, old, market] = await Promise.all([
+  const [context, old, market, lineRun] = await Promise.all([
     listContext(member.userId, campaign.brand.id),
     viewing !== null ? getVersion(member.userId, campaign.id, viewing) : Promise.resolve(null),
     listMarketNotes(member.userId, campaign.brand.id),
+    latestLineSuggestions(member.userId, campaign.id),
   ]);
   if (viewing !== null && !old) notFound();
 
@@ -57,11 +60,14 @@ async function BriefStageContent(props: PageProps<"/campaigns/[id]/brief">) {
   const drafting = !brief;
   const runActive = !!campaign.run && RUNNING.has(campaign.run.status);
   const revisingActive = campaign.revising.some((r) => RUNNING.has(r.status));
+  // D-4: Suggest lines for the current version only; a pick makes a new version, which closes them.
+  const suggestions = lineRun && lineRun.version === campaign.currentVersion ? lineRun : null;
+  const suggesting = !!suggestions && RUNNING.has(suggestions.status);
   const oldMarket = brief ? oldMarketSources(brief, notes) : [];
 
   return (
     <div className="space-y-6">
-      <AutoRefresh active={(drafting && (runActive || campaign.run?.status === "completed")) || revisingActive} />
+      <AutoRefresh active={(drafting && (runActive || campaign.run?.status === "completed")) || revisingActive || suggesting} />
       <StageHeader data={data} current="brief">
         <p className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 text-ink-2">
           {drafting ? (
@@ -107,6 +113,8 @@ async function BriefStageContent(props: PageProps<"/campaigns/[id]/brief">) {
             unsourced={campaign.unsourced}
             citeOptions={citeOptions(brief, context, sources)}
             segments={context.filter((c) => c.kind === "segment").map((c) => ({ id: c.id, kind: c.kind, title: c.title }))}
+            suggestions={suggestions && { runId: suggestions.runId, status: suggestions.status, taglines: suggestions.taglines, error: suggestions.error }}
+            suggestCost={suggestLinesEstimate().label}
           />
         </>
       )}

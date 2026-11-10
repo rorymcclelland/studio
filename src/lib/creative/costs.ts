@@ -51,6 +51,12 @@ export const TYPICAL_TOKENS = {
    * sentences back.
    */
   monitorAnswer: { input: 7_000, output: 300 },
+  /**
+   * D-4: Suggest lines, one Tagline call: the instructions and the campaign's title, story (up to
+   * 1,200 characters), audiences and the kit's voice (up to 2,100), at about 3 characters a token;
+   * three lines of JSON back, rounded up.
+   */
+  suggestLines: { input: 1_500, output: 200 },
 } as const;
 
 /** What a repair prompt adds to the first prompt besides the previous reply: the issues and the instructions. */
@@ -76,7 +82,7 @@ const round = (p: number) => Math.round(p * 10_000) / 10_000;
 /** A button that shows the typical cost only; the worst case is kept for any check against the cap. */
 const est = (pence: number, worstPence: number): Estimate => ({ pence: round(pence), worstPence: round(worstPence), label: aboutPence(pence) });
 
-type ModelAgent = "imagery" | "imageCheck" | "copy" | "localise" | "pretest" | "readAd" | "monitorPlan" | "monitorAnswer";
+type ModelAgent = "tagline" | "imagery" | "imageCheck" | "copy" | "localise" | "pretest" | "readAd" | "monitorPlan" | "monitorAnswer";
 
 function modelCall(agent: ModelAgent, tokens: { input: number; output: number }, env: Env): number {
   const m = resolveAgentModel(agent, env);
@@ -199,4 +205,14 @@ export function askEstimate(env: Env = process.env): Estimate {
   const pence = modelCall("monitorPlan", TYPICAL_TOKENS.monitorPlan, env) + modelCall("monitorAnswer", TYPICAL_TOKENS.monitorAnswer, env);
   const worstPence = worstModelCall("monitorPlan", TYPICAL_TOKENS.monitorPlan.input, env) + worstModelCall("monitorAnswer", TYPICAL_TOKENS.monitorAnswer.input, env);
   return { pence: round(pence), worstPence: round(worstPence), label: `about ${smallPence(pence)}` };
+}
+
+/**
+ * D-4: Suggest lines: one Tagline call on Haiku (about 0.02p at the prices in
+ * prices.ts, so the button says "under 1p"). The worst case repairs the reply
+ * once (a line over 30 characters, or lines that repeat), each call writing its
+ * full output allowance.
+ */
+export function suggestLinesEstimate(env: Env = process.env): Estimate {
+  return est(modelCall("tagline", TYPICAL_TOKENS.suggestLines, env), worstModelCall("tagline", TYPICAL_TOKENS.suggestLines.input, env));
 }

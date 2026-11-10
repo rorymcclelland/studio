@@ -701,6 +701,170 @@ describe("the case list", () => {
     expect(STORIES.find((s) => s.id === "BUG-11")).toEqual({ sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" });
   });
 
+  it("has every agreed Sprint 10b case, D-1.1 to D-6.1, once each, in order, after Sprint 10's, checked as the refinement says", () => {
+    const d = CASES.filter((c) => c.sprint === "10b");
+    expect(d.map((c) => c.id)).toEqual([
+      ...[1, 2, 3, 4, 5].map((n) => `D-1.${n}`),
+      ...[1, 2, 3, 4, 5].map((n) => `D-2.${n}`),
+      ...[1, 2, 3, 4, 5, 6].map((n) => `D-3.${n}`),
+      ...[1, 2, 3, 4, 5, 6, 7].map((n) => `D-4.${n}`),
+      "D-5.1",
+      "D-6.1",
+    ]);
+    expect(STORIES.filter((s) => s.sprint === "10b")).toEqual([
+      { sprint: "10b", id: "D-1", title: "New brand" },
+      { sprint: "10b", id: "D-2", title: "Fictional versus simulated, and a brand's own names" },
+      { sprint: "10b", id: "D-3", title: "Simulated data for a new brand" },
+      { sprint: "10b", id: "D-4", title: "The campaign's line: typed, or suggested and picked" },
+      { sprint: "10b", id: "D-5", title: "Rule 2, as answered" },
+      { sprint: "10b", id: "D-6", title: "Run-through on production (by hand, Rory)" },
+    ]);
+    // After every Sprint 10 case, in the list and in the stories.
+    const order = CASES.map((c) => c.id);
+    expect(order.indexOf("D-1.1")).toBe(order.lastIndexOf("BUG-11.3") + 1);
+    expect(STORIES.findIndex((s) => s.id === "D-1")).toBe(STORIES.findIndex((s) => s.id === "BUG-11") + 1);
+
+    // How each is checked, as the refinement says: browser tests for D-1 (#4's other workspace is the database test),
+    // D-2 #2, D-3 #1 and #4, D-4 #1 and #2; CI for the rest; D-6 by hand (real models on production, Rory's run-through).
+    const kinds = Object.fromEntries(d.map((c) => [c.id, caseKind(c)]));
+    expect(kinds).toEqual({
+      "D-1.1": "browser", "D-1.2": "browser", "D-1.3": "browser", "D-1.4": "browser", "D-1.5": "browser",
+      "D-2.1": "ci", "D-2.2": "browser", "D-2.3": "ci", "D-2.4": "ci", "D-2.5": "ci",
+      "D-3.1": "browser", "D-3.2": "ci", "D-3.3": "ci", "D-3.4": "browser", "D-3.5": "ci", "D-3.6": "ci",
+      "D-4.1": "browser", "D-4.2": kinds["D-4.2"] === "withdrawn" ? "withdrawn" : "browser", "D-4.3": "ci", "D-4.4": "ci", "D-4.5": "ci", "D-4.6": "ci", "D-4.7": "ci",
+      "D-5.1": "ci",
+      "D-6.1": "hand",
+    });
+    // D-4.2 is the cut line (Rory's answer Q1): if Suggest lines is cut, the case says so, by that answer, and nothing else.
+    if (kinds["D-4.2"] === "withdrawn") {
+      expect(CASES.find((c) => c.id === "D-4.2")!.checks).toEqual([{ kind: "withdrawn", why: expect.stringMatching(/cut line.*Q1/) }]);
+    }
+
+    const of = (id: string) => CASES.find((c) => c.id === id)!.checks;
+    const ciIn = (id: string, file: string) => of(id).some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    const browserIn = (id: string) => of(id).filter((x) => x.kind === "browser").map((x) => (x as { spec: string }).spec);
+    // The browser tests: D-1, D-2 and D-3 in new-brand.spec.ts; the typed line in campaign-line.spec.ts; Suggest lines alone.
+    for (const id of ["D-1.1", "D-1.2", "D-1.3", "D-1.4", "D-1.5", "D-2.2", "D-3.1", "D-3.4"]) expect(browserIn(id), id).toEqual(["new-brand.spec.ts"]);
+    expect(browserIn("D-4.1")).toEqual(["campaign-line.spec.ts"]);
+    if (kinds["D-4.2"] === "browser") expect(browserIn("D-4.2")).toEqual(["suggest-lines.spec.ts"]);
+    // Rule 7: another workspace in the database, for the new brand (D-1.4) and for generating data (D-3.5); the new
+    // columns in tests/db (D-2.1, which runs on Neon too); the generator's flows outside tests/db (too many rows for Neon).
+    expect(ciIn("D-1.4", "tests/db/new-brand.test.ts")).toBe(true);
+    expect(of("D-1.4").some((x) => x.kind === "ci" && "test" in x && /another workspace/.test(x.test))).toBe(true);
+    expect(of("D-3.5").some((x) => x.kind === "ci" && "file" in x && x.file === "tests/flows/simulated-data.test.ts" && /another workspace/.test(x.test))).toBe(true);
+    expect(ciIn("D-2.1", "tests/db/fictional-brands.test.ts")).toBe(true);
+    for (const id of ["D-3.1", "D-3.3", "D-3.4", "D-3.6"]) expect(ciIn(id, "tests/flows/simulated-data.test.ts"), id).toBe(true);
+    for (const id of ["D-2.2", "D-2.3", "D-2.4", "D-2.5"]) expect(ciIn(id, "tests/lib/own-names.test.ts"), id).toBe(true);
+    for (const id of ["D-3.1", "D-3.2", "D-3.4"]) expect(ciIn(id, "tests/lib/simulated-profile.test.ts"), id).toBe(true);
+    for (const id of ["D-4.1", "D-4.4", "D-4.6"]) expect(ciIn(id, "tests/flows/campaign-line.test.ts"), id).toBe(true);
+    for (const id of ["D-4.5", "D-4.7"]) expect(ciIn(id, "tests/agents/campaign-line.test.ts"), id).toBe(true);
+    // The Tagline agent's existing injection cases still pass (D-4.7).
+    expect(ciIn("D-4.7", "tests/agents/run.test.ts")).toBe(true);
+    // The existing creative specs pass unchanged (D-4.4), in CI's end-to-end job.
+    expect(of("D-4.4").some((x) => x.kind === "ci" && "job" in x && x.job === "End-to-end (app, Inngest dev server, mock model)")).toBe(true);
+    // The cut line: Suggest lines' tests are in their own files, and no other case's browser test is in its spec.
+    const suggestFiles = ["tests/agents/suggest-lines.test.ts"];
+    for (const c of d.filter((x) => x.id !== "D-4.2" && x.id !== "D-4.7")) {
+      for (const x of c.checks) {
+        if (x.kind === "ci" && "file" in x) expect(suggestFiles, c.id).not.toContain(x.file);
+        if (x.kind === "browser") expect(x.spec, c.id).not.toBe("suggest-lines.spec.ts");
+      }
+    }
+    // D-5: the existing check (S2-4 #7) and its extension to the files.
+    expect(ciIn("D-5.1", "tests/lib/demo-generate.test.ts")).toBe(true);
+    expect(ciIn("D-5.1", "tests/lib/fictional-names.test.ts")).toBe(true);
+    // D-6: by hand, with the reason: real models on production, Rory's run-through, with the test pack.
+    expect(of("D-6.1")).toEqual([
+      { kind: "hand", why: expect.stringMatching(/^CI runs the mock model and has no real keys.*Rory on production after the deploy.*DAILY_CAP_PENCE.*docs\/testing\/sprint-10b-test-pack\.md\.$/) },
+    ]);
+
+    // The browser tests change no demo brand's kit, so they run in the main project; none is marked as an expected failure.
+    for (const spec of ["new-brand.spec.ts", "campaign-line.spec.ts", "suggest-lines.spec.ts"]) {
+      const src = read(`tests/e2e/${spec}`);
+      expect(src, spec).not.toMatch(/test\.fail\(|test\.fixme\(|test\.skip\(\s*true/);
+      expect(src, spec).not.toContain("@brand-kit");
+      // The builder's interface is written at the top of each spec.
+      expect(src.slice(0, src.indexOf("import ")), spec).toContain("---------------------------------------------------------------- interface");
+    }
+    const head = (spec: string) => {
+      const src = read(`tests/e2e/${spec}`);
+      return src.slice(0, src.indexOf("import "));
+    };
+    for (const words of [
+      "brands.is_fictional",
+      "brands.own_names",
+      "slugFromName",
+      "parseNewBrand",
+      "/brands/new",
+      "Create brand",
+      "data-new-brand",
+      "data-new-brand-form",
+      "Some fields need changing. Nothing was saved.",
+      "Give the brand a name.",
+      "Name must be 80 characters or fewer.",
+      "Already used by another brand.",
+      "Also known as",
+      "Add an own name",
+      "No more than 5 own names.",
+      "This name is also one of the brand's banned terms.",
+      "refusableNames",
+      "Demo brand",
+      "Simulated data",
+      "src/lib/demo/profile.ts",
+      "REGION_SETS",
+      '["Hokkaido", "Tohoku", "Kanto", "Chubu", "Kansai", "Chugoku", "Shikoku", "Kyushu-Okinawa"]',
+      "parseDataProfile",
+      "penceFromPounds",
+      "simulatedDataSeed",
+      "profileToBrief",
+      "simulateProfile",
+      "generateSimulatedData",
+      "SimulatedDataError",
+      "Generate simulated data",
+      "data-generate-data",
+      "data-simulated-data-form",
+      "Generate data",
+      "UK regions",
+      "Japan's regions",
+      "Busiest months",
+      "This brand already has customers, so no simulated data can be added.",
+      "That brand isn't in your workspace.",
+      "asUser()",
+    ]) {
+      expect(head("new-brand.spec.ts"), words).toContain(words);
+    }
+    for (const words of [
+      "CAMPAIGN_LINE_MAX = 30",
+      "line",
+      "Campaign line",
+      "No campaign line yet.",
+      "Edit the campaign line",
+      "Save the campaign line",
+      "The campaign line must be 30 characters or fewer.",
+      "every paid-social and display headline is the",
+      "data-section=\"line\"",
+      "localiseInput gains line",
+    ]) {
+      expect(head("campaign-line.spec.ts"), words).toContain(words);
+    }
+    for (const words of ["taglineInput", "campaign?:", "checkTagline", "startSuggestLines", "suggestLinesEstimate", "Suggest lines", "Use this line", "Edit first", "data-line-suggestions", "data-line-suggestion"]) {
+      expect(head("suggest-lines.spec.ts"), words).toContain(words);
+    }
+    // The fixtures are fictional (rule 2, as answered); D-5 #1 scans them.
+    expect(read("tests/fixtures/new-brand.ts")).toContain('"Brightwater Kitchen"');
+  });
+
+  it("the demo page can be built for Sprint 10b: the case list's sprint may be a name, and the script reads --sprint 10b", async () => {
+    const mod = (await import("../../scripts/demo-page.mjs")) as unknown as { sprintArg?: (raw: string | undefined) => number | string | null };
+    expect(mod.sprintArg, "scripts/demo-page.mjs exports sprintArg").toBeTypeOf("function");
+    expect(mod.sprintArg!("10")).toBe(10);
+    expect(mod.sprintArg!("10b")).toBe("10b");
+    expect(mod.sprintArg!(undefined)).toBeNull();
+    expect(mod.sprintArg!("")).toBeNull();
+    expect(mod.sprintArg!("../etc")).toBeNull();
+    expect(existsSync(join(root, "docs/refinement/sprint-10b.md"))).toBe(true);
+  });
+
   it("every case belongs to a known story of its sprint, with an id of that story, words and at least one check", () => {
     for (const c of CASES) {
       const story = STORIES.find((s) => s.id === c.story);

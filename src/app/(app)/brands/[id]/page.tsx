@@ -215,13 +215,29 @@ async function BrandPageContent(props: PageProps<"/brands/[id]">) {
           ),
           products: (
             <div className="space-y-10">
+              {/* D-3: a brand with no customers can be given simulated ones from a short profile (no AI, rule 5). */}
+              {(!summary || summary.customers === 0) && (
+                <Card as="section" tone="primary" aria-labelledby="generate-data" className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <h2 id="generate-data" className="text-xl font-strong tracking-tight">
+                      No customers yet
+                    </h2>
+                    <p className="mt-1 max-w-prose text-ink-2">
+                      Make simulated customers and orders from a short profile. They are labelled as simulated everywhere, and no AI is used.
+                    </p>
+                  </div>
+                  <ButtonLink href={`/brands/${brand.id}/simulated-data`} data-generate-data="" className="shrink-0 self-start sm:self-center">
+                    Generate simulated data
+                  </ButtonLink>
+                </Card>
+              )}
               <section aria-labelledby="products">
                 <h2 id="products" className="text-2xl font-strong tracking-tight">
                   Products
                 </h2>
                 <p className="mt-1 text-ink-2">
                   {products.length === 0
-                    ? "No products yet. The demo brands come with a catalogue; adding products by hand is a later step."
+                    ? "No products yet. The demo brands come with a catalogue, and generating simulated data adds the products you list."
                     : `${products.length} ${products.length === 1 ? "product" : "products"}, by category.`}
                 </p>
                 {products.length > 0 && (

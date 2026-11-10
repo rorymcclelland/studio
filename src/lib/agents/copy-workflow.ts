@@ -77,6 +77,7 @@ async function prepare(ctx: StepContext): Promise<{ result: Prepared; raw: unkno
       bannedTerms: context.kit.bannedTerms,
       evidenceClaims: context.kit.evidenceClaims,
       realNames: context.kit.realNames,
+      ownNames: context.kit.ownNames,
       products: context.products,
       places: context.places,
       legalLines: context.kit.legalLines,
@@ -91,6 +92,8 @@ async function prepare(ctx: StepContext): Promise<{ result: Prepared; raw: unkno
       },
       write,
       replace,
+      // D-4: the signed-off version's line, the headline of every paid-social and display set.
+      line: b.line ?? null,
     };
     return {
       result: { ok: true, start, campaignId: start.campaignId, version: context.version, input, audiences, legalLines: context.kit.legalLines, notes },

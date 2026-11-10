@@ -302,10 +302,18 @@ export async function saveBriefEdit(member: Member, campaignId: string, baseVers
   }
   if (!UUID.test(campaignId)) throw new CampaignError("That campaign isn't in your workspace.");
   return asUser(member.userId, async (tx) => {
-    const [c] = await tx`select c.id, c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+    const [c] = await tx`select c.id, c.brand_id, c.objective, b.name as brand_name, b.own_names, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
       from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
     if (!c) throw new CampaignError("That campaign isn't in your workspace.");
-    const kit = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims, realNames: await realNamesFor(tx, c.brand_id) };
+    const kit: KitLists = {
+      legalLines: c.legal_lines,
+      bannedTerms: c.banned_terms,
+      dontRules: c.dont_rules,
+      evidenceClaims: c.evidence_claims,
+      realNames: await realNamesFor(tx, c.brand_id),
+      brandName: c.brand_name,
+      ownNames: c.own_names ?? [],
+    };
     const context = await contextById(tx, c.brand_id);
     // Only the parts the person changed are checked, so a source removed since can't block an edit elsewhere.
     const [base] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
@@ -326,7 +334,7 @@ export async function startRevision(
   instruction: string,
   send: SendEvent,
 ): Promise<string> {
-  if (section !== null && !BRIEF_SECTIONS.includes(section)) throw new CampaignError("Choose a part of the brief to revise.");
+  if (section !== null && (!BRIEF_SECTIONS.includes(section) || section === "line")) throw new CampaignError("Choose a part of the brief to revise.");
   const c = await getCampaign(member.userId, campaignId);
   if (!c) throw new CampaignError("That campaign isn't in your workspace.");
   if (c.currentVersion !== baseVersion) throw new StaleBriefError();
@@ -383,10 +391,18 @@ export async function dismissRevision(member: Member, campaignId: string, runId:
  * Figures are not re-checked: the version they come from already passed.
  */
 async function recheck(tx: Tx, campaignId: string, brief: StoredBrief, sections?: BriefSection[]): Promise<StoredBrief> {
-  const [b] = await tx`select c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+  const [b] = await tx`select c.brand_id, c.objective, b.name as brand_name, b.own_names, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
     from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
   if (!b) throw new CampaignError("That campaign isn't in your workspace.");
-  const kit: KitLists = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims, realNames: await realNamesFor(tx, b.brand_id) };
+  const kit: KitLists = {
+    legalLines: b.legal_lines,
+    bannedTerms: b.banned_terms,
+    dontRules: b.dont_rules,
+    evidenceClaims: b.evidence_claims,
+    realNames: await realNamesFor(tx, b.brand_id),
+    brandName: b.brand_name,
+    ownNames: b.own_names ?? [],
+  };
   const problems = evidenceProblems(brief, await contextById(tx, b.brand_id), kit, { objective: b.objective, allowUnsourcedNumbers: true, sections });
   if (problems.length) throw new BriefEditError(problems);
   return storedBrief.parse({ ...brief, ...kitListsFor(kit) });

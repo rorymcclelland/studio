@@ -63,6 +63,7 @@ export const FERNHOLLOW: DemoBrief = {
     legalLines: ["Prices include VAT.", "Free returns within 30 days on unworn items."],
     bannedTerms: ["indestructible", "waterproof forever", "guaranteed to keep you safe", "lifetime of adventure"],
     evidenceClaims: ["warmest", "lightest", "most sustainable", "fully recycled"],
+    ownNames: [],
     logoSvg: FERNHOLLOW_LOGO,
   },
   products: [
@@ -135,6 +136,7 @@ export const QUILLMOOR: DemoBrief = {
     ],
     bannedTerms: ["guaranteed returns", "risk-free", "free money", "get rich", "best rates on the market", "never pay fees"],
     evidenceClaims: ["cheapest", "fastest", "most secure", "highest rate", "award-winning"],
+    ownNames: [],
     logoSvg: QUILLMOOR_LOGO,
   },
   products: [

@@ -224,9 +224,9 @@ export async function insertDemoLanguages(tx: Tx, member: Member, brandId: strin
 export async function addDemoLanguages(member: Member, brandId: string): Promise<number> {
   if (!UUID.test(brandId)) throw new LanguageError("That brand isn't in your workspace.");
   return asUser(member.userId, async (tx) => {
-    const [b] = await tx`select slug, is_simulated from public.brands where id = ${brandId}`;
+    const [b] = await tx`select slug, is_fictional from public.brands where id = ${brandId}`;
     if (!b) throw new LanguageError("That brand isn't in your workspace.");
-    if (!b.is_simulated || !isDemoSlug(b.slug as string)) throw new LanguageError("Only the demo brands come with languages written for the demo.");
+    if (!b.is_fictional || !isDemoSlug(b.slug as string)) throw new LanguageError("Only the demo brands come with languages written for the demo.");
     return insertDemoLanguages(tx, member, brandId, b.slug as string);
   });
 }

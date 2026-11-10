@@ -1,7 +1,11 @@
+import { refusableNames } from "@/lib/brands/own-names";
 import { z } from "zod";
 import { containsTerm, figuresIn, figureSupported, quantityInWords, type Figure } from "@/lib/brief/checks";
-import { undeclaredNames } from "@/lib/agents/market";
+import { undeclaredNames } from "@/lib/text/names";
+import { voiceProblem } from "@/lib/text/voice";
 import { normaliseKitText } from "@/lib/context/keys";
+
+export { voiceProblem };
 
 // S5-2: what a copy set is, the channel limits, and the checks in code that
 // every set passes, whether the Copy agent wrote it (one repair) or a person
@@ -101,7 +105,23 @@ export type CopyRules = {
   legalLines: string[];
   /** Figures in the brief's cited items (its insights' sources and its audiences' segments). */
   pool: Figure[];
+  /** D-2 (Sprint 10b): the brand's own names, such as a parent brand's: treated like its name, never refused as a real company. */
+  ownNames?: string[];
+  /** D-4: the signed-off version's campaign line: every paid-social and display headline is exactly this. */
+  line?: string | null;
 };
+
+/** D-4: the channels whose headline is the campaign line when the brief has one (search keeps its own). */
+export const LINE_CHANNELS: readonly CopyChannel[] = ["paid social", "display"];
+
+/** D-4: whether a field is a headline that must be the campaign line. */
+const isLineField = (channel: CopyChannel, field: string, line: string | null | undefined): line is string =>
+  !!line && LINE_CHANNELS.includes(channel) && field === "headline";
+
+/** D-4: the problem a headline that isn't the campaign line raises (Copy, and a person's edit). */
+export function lineProblem(where: string, headline: string, line: string): string {
+  return `${where} headline is "${headline}"; every paid-social and display headline is the campaign line, "${line}", exactly`;
+}
 
 /** The text a brief's evidence pool is built from: each cited item's title and text. */
 export function evidencePool(items: { title: string; text: string }[]): Figure[] {
@@ -115,48 +135,6 @@ export function unsupportedFigures(text: string, pool: Figure[]): string[] {
   return figuresIn(text).filter((f) => !figureSupported(f, pool)).map(showFigure);
 }
 
-// Q8, testimonials refused. Copy may not present anyone's words as a quote:
-//  1. No quotation marks: straight or curly double quotes, low and angle quotes,
-//     or single quotes used as quotation marks (an opening ' or ‘ at the start
-//     of a word, closed later). Apostrophes ("don't", "savers' pots") are fine.
-//  2. No first-person singular voice (I, I'm, I've, I'd, I'll, me, my, mine,
-//     myself): the brand speaks as "we" to "you", so "I" reads as a customer's
-//     own words. A call to action is the reader's own button, so "Start my
-//     plan" and "Show me how" are allowed there.
-//  3. No words attributed to a person: a dash and a name at the end ("— Priya,
-//     Leeds"), a person or customer who says, said or told us something
-//     ("Priya says", "our customers say", "one saver told us"), or star ratings.
-//     The brand's own name after a dash is a sign-off, not an attribution.
-const DOUBLE_QUOTES = /["“”„‟«»‹›]/;
-const SINGLE_QUOTED = /(?:^|[\s([{–—-])['‘](?=[^\s'‘’])[\s\S]*?[^\s]['’](?=$|[\s.,!?;:)\]}–—-])/;
-// Word edges by Unicode letters, not ASCII \b: the same check runs on translations (C7-2), where "même" or
-// "cómeme" end in "me" after an accented letter that \b counts as a gap (found by the C7-3 demo pack).
-const FIRST_PERSON = /(?<![\p{L}\p{M}\p{N}_])(?:I(?:['’](?:m|ve|d|ll))?|me|my|mine|myself)(?![\p{L}\p{M}\p{N}_])/iu;
-const ATTRIBUTION = /(?:^|\s)(?:—|–|-{1,2}|~)\s*([A-Z][\p{L}'’.-]*(?:\s+[A-Z][\p{L}'’.-]*)?)(?:\s*,\s*[\p{L}\d][\p{L}\d\s]*)?\s*$/u;
-const SPEAKER = /\b(customers?|members?|users?|walkers?|savers?|shoppers?|reviewers?|buyers?|parents?|people|someone|everyone|one of (?:you|them|us)|[A-Z][\p{L}'’-]+)\s+(?:(?:have|has|all|often|always|keep|kept)\s+)?(?:say|says|said|tell us|tells us|told us|write|writes|wrote|swear by|swears by|rave about|raves about)\b/gu;
-// After a dash, a month or day is a date, not a person ("Come back - January").
-const CALENDAR = "january february march april may june july august september october november december monday tuesday wednesday thursday friday saturday sunday today tomorrow".split(" ");
-const STARS = /[★☆⭐]|\b(?:five|four|5|4)[- ]stars?\b/i;
-
-export function voiceProblem(textValue: string, opts: { cta: boolean; own: string[] }): string | null {
-  if (DOUBLE_QUOTES.test(textValue) || SINGLE_QUOTED.test(textValue)) {
-    return "has quotation marks; copy may not quote anyone (no testimonials), so say it in the brand's own words";
-  }
-  if (!opts.cta) {
-    const m = FIRST_PERSON.exec(textValue);
-    if (m) return `reads as a customer's own words ("${m[0]}"); copy speaks as the brand to "you", and never invents a customer's voice`;
-  }
-  const own = new Set([...opts.own, ...CALENDAR].map((w) => w.toLowerCase()));
-  const isOwn = (name: string) => name.split(/\s+/).every((w) => own.has(w.toLowerCase().replace(/['’]s$/, "")));
-  const a = ATTRIBUTION.exec(textValue);
-  if (a && !isOwn(a[1])) return `attributes words to a person ("${a[0].trim()}"); no testimonials`;
-  for (const s of textValue.matchAll(SPEAKER)) {
-    if (!isOwn(s[1])) return `reports what someone said ("${s[0]}"); no testimonials or customer quotes`;
-  }
-  if (STARS.test(textValue)) return "shows a rating; no reviews or testimonials";
-  return null;
-}
-
 const plural = (label: string) => (label === "call to action" ? "calls to action" : label === "preview text" ? "preview texts" : `${label}s`);
 
 const flat = (s: string) => normaliseKitText(s).toLowerCase().replace(/[.\s]+$/, "");
@@ -168,9 +146,29 @@ const flat = (s: string) => normaliseKitText(s).toLowerCase().replace(/[.\s]+$/,
  */
 export function setProblems(channel: CopyChannel, copy: AnyCopy, rules: CopyRules, opts: { where: string; allowFigures?: boolean }): string[] {
   const problems: string[] = [];
-  const own = [rules.brandName, ...rules.products, ...rules.places].join(" ").match(/[\p{L}0-9']+/gu) ?? [];
+  // Review fix B1: the line's words are not the brand's; a body or call to action that copies a name from it is checked like any other.
+  const own = [rules.brandName, ...(rules.ownNames ?? []), ...rules.products, ...rules.places].join(" ").match(/[\p{L}0-9']+/gu) ?? [];
+  // D-2: the brand's own names are its own, even when the market notes name them.
+  const realNames = refusableNames(rules.realNames, { name: rules.brandName, ownNames: rules.ownNames ?? [] });
+  const brandWords = [rules.brandName, ...(rules.ownNames ?? [])].join(" ");
   for (const f of fieldsOf(channel, copy)) {
     const at = `${opts.where} ${f.label}`;
+    const isLine = isLineField(channel, f.field, rules.line);
+    if (isLine && f.text !== rules.line) {
+      // Anything else in the line's place is refused, and only that is said.
+      problems.push(lineProblem(opts.where, f.text, rules.line!));
+      continue;
+    }
+    if (isLine) {
+      // Review fix B1: the line passed the brief checks at sign-off (its length, figures, voice and names), but the
+      // kit and the market notes can change since, so a term banned, a claim added or a company noted since is refused.
+      for (const t of rules.bannedTerms) if (containsTerm(f.text, t)) problems.push(`${at} uses the banned term "${t}"`);
+      for (const c of rules.evidenceClaims) if (containsTerm(f.text, c)) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
+      for (const n of realNames) {
+        if (containsTerm(f.text, n)) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
+      }
+      continue;
+    }
     if (f.text.length > f.limit) problems.push(`${at} is ${f.text.length} characters; ${channel} ${plural(f.label.replace(/ \d$/, ""))} are at most ${f.limit}`);
     if (!opts.allowFigures) {
       for (const n of unsupportedFigures(f.text, rules.pool)) {
@@ -181,10 +179,10 @@ export function setProblems(channel: CopyChannel, copy: AnyCopy, rules: CopyRule
     if (q) problems.push(`${at} says "${q}"; quantities in words can't be checked, so use only figures from the brief's evidence${opts.allowFigures ? " (a figure you type is marked as added by a person)" : ""}`);
     for (const t of rules.bannedTerms) if (containsTerm(f.text, t)) problems.push(`${at} uses the banned term "${t}"`);
     for (const c of rules.evidenceClaims) if (containsTerm(f.text, c)) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
-    for (const n of rules.realNames) {
+    for (const n of realNames) {
       if (containsTerm(f.text, n)) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
     }
-    for (const n of undeclaredNames(f.text, rules.realNames, { brandName: rules.brandName, category: "", products: rules.products, places: rules.places })) {
+    for (const n of undeclaredNames(f.text, realNames, { brandName: brandWords, category: "", products: rules.products, places: rules.places })) {
       problems.push(`${at} names "${n}", which looks like another brand; name only ${rules.brandName} and its products, and write in sentence case`);
     }
     const v = voiceProblem(f.text, { cta: f.cta, own });
@@ -246,20 +244,33 @@ export type TranslationRules = {
   bannedTerms: string[];
   evidenceClaims: string[];
   realNames: string[];
+  /** D-2 (Sprint 10b): the brand's own names, such as a parent brand's: treated like its name, never refused as a real company. */
+  ownNames?: string[];
   /** The language's legal lines: code attaches them, the words never repeat them. */
   legalLines: string[];
   /** Figures in the English words: a translation keeps the same figures and adds none. */
   pool: Figure[];
+  /**
+   * D-4: the campaign line already translated into this language (soft hyphens allowed), when the English
+   * headline is the line: the headline must be it, so every ad in the language says the same line.
+   */
+  line?: string | null;
 };
 
 /** Problems with one translated set's words. `where` names the set ("the German paid-social set"). */
 export function translationProblems(channel: CopyChannel, copy: AnyCopy, rules: TranslationRules, opts: { where: string }): string[] {
   const problems: string[] = [];
-  const own = [rules.brandName, ...rules.products, ...rules.places].join(" ").match(/[\p{L}0-9']+/gu) ?? [];
+  const own = [rules.brandName, ...(rules.ownNames ?? []), ...rules.products, ...rules.places].join(" ").match(/[\p{L}0-9']+/gu) ?? [];
+  // D-2: the brand's own names are its own, even when the market notes name them.
+  const realNames = refusableNames(rules.realNames, { name: rules.brandName, ownNames: rules.ownNames ?? [] });
+  const brandWords = [rules.brandName, ...(rules.ownNames ?? [])].join(" ");
   for (const f of fieldsOf(channel, copy)) {
     const text = visible(f.text);
     const folded = foldText(f.text);
     const at = `${opts.where} ${f.label}`;
+    if (rules.line && f.field === "headline" && text !== visible(rules.line)) {
+      problems.push(`${at} is "${text}"; the campaign line in ${rules.langName} is "${visible(rules.line)}", so use it exactly`);
+    }
     if (text.length > f.limit) problems.push(`${at} is ${text.length} characters; ${channel} ${plural(f.label.replace(/ \d$/, ""))} are at most ${f.limit}`);
     // Values only: the unit is a word in another language ("12 Monaten" for "12 months").
     for (const fig of figuresIn(text)) {
@@ -269,11 +280,11 @@ export function translationProblems(channel: CopyChannel, copy: AnyCopy, rules: 
     }
     for (const t of rules.bannedTerms) if (containsTerm(folded, foldText(t))) problems.push(`${at} uses the banned term "${t}"`);
     for (const c of rules.evidenceClaims) if (containsTerm(folded, foldText(c))) problems.push(`${at} claims "${c}", which needs evidence the brief does not hold`);
-    for (const n of rules.realNames) {
+    for (const n of realNames) {
       if (containsTerm(folded, foldText(n))) problems.push(`${at} names ${n}, a real company from the market notes; name no other company`);
     }
     if (rules.lang !== "de-DE") {
-      for (const n of undeclaredNames(text, rules.realNames, { brandName: rules.brandName, category: "", products: rules.products, places: rules.places })) {
+      for (const n of undeclaredNames(text, realNames, { brandName: brandWords, category: "", products: rules.products, places: rules.places })) {
         problems.push(`${at} names "${n}", which looks like another brand; name only ${rules.brandName} and its products, and write in sentence case`);
       }
     }

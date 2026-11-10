@@ -56,12 +56,20 @@ export type WithdrawnCheck = { kind: "withdrawn"; why: string };
 
 export type Check = BrowserCheck | CiCheck | HandCheck | WithdrawnCheck;
 
-export type Story = { sprint: number; id: string; title: string };
+/**
+ * A sprint's number, or its name when it has one: "10b" is the sprint Rory injected before Sprint 11 on
+ * 10 November 2026 (docs/refinement/sprint-10b.md). The demo page is built with --sprint 10b: scripts/demo-page.mjs
+ * exports sprintArg(raw: string | undefined) => number | string | null ("10" is 10, "10b" is "10b"; empty, missing or
+ * anything but digits and lower-case letters is null), and reads docs/refinement/sprint-<sprint>.md.
+ */
+export type Sprint = number | string;
+
+export type Story = { sprint: Sprint; id: string; title: string };
 
 export type Case = {
   /** "<story>.<number>", for example "C7-1.3". */
   id: string;
-  sprint: number;
+  sprint: Sprint;
   story: string;
   /** The case in a few words. */
   words: string;
@@ -97,6 +105,12 @@ export const STORIES: Story[] = [
   { sprint: 10, id: "U10-8", title: "The runs list: filters, the campaign, and every run reachable" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
+  { sprint: "10b", id: "D-1", title: "New brand" },
+  { sprint: "10b", id: "D-2", title: "Fictional versus simulated, and a brand's own names" },
+  { sprint: "10b", id: "D-3", title: "Simulated data for a new brand" },
+  { sprint: "10b", id: "D-4", title: "The campaign's line: typed, or suggested and picked" },
+  { sprint: "10b", id: "D-5", title: "Rule 2, as answered" },
+  { sprint: "10b", id: "D-6", title: "Run-through on production (by hand, Rory)" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -322,6 +336,31 @@ const BRIEF_CHECKS = "tests/lib/brief-checks.test.ts";
 const CI_FIRST_JOB = "Typecheck, lint, unit and database tests, build";
 const EVAL_RUN_10 = (agents: string) =>
   `CI has no real keys, so the real model is checked by a real-model eval run of ${agents}, which Claude starts in .github/workflows/evals.yml with Rory's approval, each run capped at £1 (the estimate, up to about £3.14 in all, splits it into brief, persona and testPlan; copy; and imagery in three parts). Rory reads the reports at the demo, on the branch e2e-results/evals/sprint-10-bugs (the runs used the fixes' own branch, 9 Nov: £2.23 in all).`;
+
+// Sprint 10b (demo readiness, refined and agreed 10 November 2026): a brand of your own, its simulated data, and the
+// campaign's line. The browser tests use a new invitee's workspace (D-1, D-2, D-3) or the dev workspace's fictional
+// Fernhollow (D-4); every name in them is fictional (rule 2, as answered). Suggest lines is D-4's cut line (Rory's
+// answer Q1), so its tests are apart: suggest-lines.spec.ts and tests/agents/suggest-lines.test.ts.
+const NEW_BRAND_SPEC = "new-brand.spec.ts";
+const LINE_SPEC = "campaign-line.spec.ts";
+const SUGGEST_SPEC = "suggest-lines.spec.ts";
+const NEW_BRAND_LIB = "tests/lib/new-brand.test.ts";
+const NEW_BRAND_DB = "tests/db/new-brand.test.ts";
+const FICTIONAL_DB = "tests/db/fictional-brands.test.ts";
+const OWN_NAMES_LIB = "tests/lib/own-names.test.ts";
+const PROFILE_LIB = "tests/lib/simulated-profile.test.ts";
+const SIM_DATA_FLOWS = "tests/flows/simulated-data.test.ts";
+const LINE_LIB = "tests/lib/campaign-line.test.ts";
+const LINE_AGENTS = "tests/agents/campaign-line.test.ts";
+const LINE_FLOWS = "tests/flows/campaign-line.test.ts";
+const SUGGEST_AGENTS = "tests/agents/suggest-lines.test.ts";
+const NAMES_LIB = "tests/lib/fictional-names.test.ts";
+const OWN_NAMES_FLOWS = "tests/flows/own-names.test.ts";
+const REGION_NAMES_LIB = "tests/lib/region-names.test.ts";
+const E2E_JOB = "End-to-end (app, Inngest dev server, mock model)";
+const NEW_BRAND_JOURNEY =
+  "A new invitee's own workspace (the owner invites them on /invites and they accept), so the Brands page starts empty and nothing other specs make is on it. The tests run in order: D-1 makes Brightwater Kitchen, which D-3 fills.";
+const HAND_PACK_10B = "docs/testing/sprint-10b-test-pack.md";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -2729,6 +2768,424 @@ export const CASES: Case[] = [
         note: "Its step \"Agent evals against the mock model\" runs the imagery eval's new regression case (\"Regression, 7 Nov: the brand's name in the brief (Fernhollow)\") with the mock model. The fixture is a reconstruction around the report's finding, labelled with its sources.",
       },
       { kind: "hand", why: EVAL_RUN_10("imagery") },
+    ],
+  },
+  // ---------------------------------------------------------------- Sprint 10b
+  // D-1 New brand
+  {
+    id: "D-1.1",
+    sprint: "10b",
+    story: "D-1",
+    words:
+      "\"Brightwater Kitchen\" with a category creates a brand in the reader's workspace (through createBrand() and asUser(), neither fictional nor simulated), opens its kit editor, and is listed on /brands. The empty states on /brands and /campaigns offer both New brand and Add demo brands.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title:
+          "D-1 #1: Brightwater Kitchen with a category is created in the reader's workspace, opens its kit editor and is listed on /brands; the empty states offer New brand and Add demo brands",
+        note: `${NEW_BRAND_JOURNEY} The short name fills itself in from the name; the kit editor has "Also known as" and no "Demo brand" pill; the database row is in the invitee's workspace, not fictional and not simulated.`,
+      },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #1 createBrand() makes the brand in the reader's workspace, neither fictional nor simulated, with no data" },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #1 the short name is filled in from the name" },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #1 a name with a category, short name and description passes, trimmed" },
+    ],
+  },
+  {
+    id: "D-1.2",
+    sprint: "10b",
+    story: "D-1",
+    words: "A short name another brand in the workspace already uses is refused with the field error (\"Already used by another brand.\"), and nothing is created.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #2: a short name another brand in the workspace uses is refused with the field error, and nothing is created",
+        note: "Brightwater Kitchen Two with Brightwater Kitchen's short name: the form's alert, the error beside Short name, the same address, and the workspace's brand count unchanged.",
+      },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #2 a short name another brand in the workspace uses is refused with the field error, and nothing is made" },
+    ],
+  },
+  {
+    id: "D-1.3",
+    sprint: "10b",
+    story: "D-1",
+    words: "An empty name, and a name of 81 characters, are refused with field errors (\"Give the brand a name.\", \"Name must be 80 characters or fewer.\"), and nothing is created.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #3: an empty name, and a name of 81 characters, are refused with field errors, and nothing is created",
+        note: "Each error beside the Name field, with focus on it; 80 characters clears the error; the workspace's brand count unchanged.",
+      },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #3 an empty name, and a name of 81 characters, are refused with the field's words; 80 is fine" },
+    ],
+  },
+  {
+    id: "D-1.4",
+    sprint: "10b",
+    story: "D-1",
+    words: "Hostile input: a name containing markup or SQL is stored as text and shown escaped. Another workspace never sees the brand (rule 7, a cross-workspace database test).",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #4: a name with markup and SQL is stored as text and shown escaped",
+        note: "The name is stored as typed, shown as text on /brands and on its page, no element is made from it and no script runs. Another workspace is the database test.",
+      },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #4 another workspace never sees, changes or removes the new brand" },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #4 markup and SQL in a name are stored as text, exactly as typed" },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #4 a name with markup and SQL passes as text, unchanged" },
+    ],
+  },
+  {
+    id: "D-1.5",
+    sprint: "10b",
+    story: "D-1",
+    words: "The New brand form fits within 1.5 screens at 375 px. AA contrast and no sideways scroll at 375 and 1440 px.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #5: the New brand form fits within 1.5 screens at 375 px, with AA contrast and no sideways scroll at 375 px and 1440 px",
+        note: "The Create brand button's bottom edge is within 1.5 screens of 812 px at 375 px; contrast and sideways scroll at both widths, with and without field errors.",
+      },
+    ],
+  },
+  // D-2 Fictional versus simulated, and a brand's own names
+  {
+    id: "D-2.1",
+    sprint: "10b",
+    story: "D-2",
+    words: "After the migration (brands.is_fictional and brands.own_names), Fernhollow and Quillmoor are fictional and simulated; a new brand is neither.",
+    checks: [
+      {
+        kind: "ci",
+        file: FICTIONAL_DB,
+        test: "D-2 #1 fictional versus simulated, after the migration",
+        note: "The columns and defaults, the backfill of the demo brands before the guard holds is_fictional, the demo loader and createBrand(), the guard (is_fictional never changes; is_simulated only to true), at most 5 own names, and another workspace.",
+      },
+      {
+        kind: "ci",
+        file: FICTIONAL_DB,
+        test: "review fix S1 (rule 2): a fictional brand has no own names: the database refuses them (23514) and updateBrand refuses them with a field error; the demo brands load",
+        note: "Review fix S1: the check brands_fictional_no_own_names (migration 20261110000002), updateBrand()'s field error, and the demo brands loading with none. The kit editor hides Also known as for a fictional brand.",
+      },
+    ],
+  },
+  {
+    id: "D-2.2",
+    sprint: "10b",
+    story: "D-2",
+    words: "A new brand with generated data shows \"Simulated data\" and no \"Demo brand\" pill. Its launch pack README makes no claim that the brand is fictional.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-2 #2: a new brand with generated data shows Simulated data and no Demo brand pill, and a demo brand still shows Demo brand",
+        note: "Brightwater Kitchen after D-3 #1, on /brands, its page, its kit editor and its languages page; the owner's Fernhollow kit editor still says Demo brand. The README's words are the unit test.",
+      },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #2 the launch pack README says the brand is fictional only when it is fictional, not when its data is simulated" },
+      { kind: "ci", file: "tests/db/pack.test.ts", test: "review fix 6: the README says the brand is fictional only for a simulated demo brand, and the legal lines only where the brand has them" },
+    ],
+  },
+  {
+    id: "D-2.3",
+    sprint: "10b",
+    story: "D-2",
+    words: "A brand with own name \"Brightwater\", whose market notes name Brightwater: a brief and a headline saying \"Brightwater\" pass. A different company in the same notes is still refused.",
+    checks: [
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 a brief saying Brightwater passes when it is an own name; Cairnwick Outdoor from the same notes is still refused" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 a headline saying Brightwater passes the copy checks; Cairnwick Outdoor is still refused" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 a translation saying Brightwater passes; Cairnwick Outdoor is still refused" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 an uploaded ad naming Brightwater passes the real-name rule; one naming Cairnwick Outdoor fails" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 refusableNames() drops the brand's name and its own names from the market notes' names, ignoring case and spacing" },
+      {
+        kind: "ci",
+        file: OWN_NAMES_FLOWS,
+        test: "D-2 #3 own names through the brief and copy repos (QA finding 7)",
+        note: "QA finding 7: Tidewell Moments (a real brand) with own name Brightwater and a market note naming Brightwater and Cairnwick Outdoor, through saveBriefEdit() and saveCopyEdit(): Brightwater passes in the brief, its campaign line and a copy set; Cairnwick Outdoor is refused.",
+      },
+    ],
+  },
+  {
+    id: "D-2.4",
+    sprint: "10b",
+    story: "D-2",
+    words: "Own names: more than 5, or an empty one, are refused with field errors. A name the brand also bans is refused.",
+    checks: [{ kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #4 own names: more than 5, or an empty one, are refused with field errors, and so is a name the brand also bans" }],
+  },
+  {
+    id: "D-2.5",
+    sprint: "10b",
+    story: "D-2",
+    words: "The imagery prompt contains neither the brand's name nor its own names (rule 8 and the picture check unchanged).",
+    checks: [{ kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #5 the imagery prompt contains neither the brand's name nor its own names, and a prompt naming an own name is refused" }],
+  },
+  // D-3 Simulated data for a new brand
+  {
+    id: "D-3.1",
+    sprint: "10b",
+    story: "D-3",
+    words: "A profile with 3 products and 2,000 customers creates them, within 5% of the orders the generator promises. The customer summary shows counts and \"Simulated data\".",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title:
+          "D-3 #1: a profile of 3 products and 2,000 customers makes them, with the orders within 5% of the generator's promise, and the customer summary shows the counts and Simulated data",
+        note: `${NEW_BRAND_JOURNEY} Generate simulated data from the Products and data tab, the form's defaults, then the database's counts against profileToBrief()'s promise and the summary's figures.`,
+      },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #1 a profile with 3 products and 2,000 customers saves them, with the orders within 5% of the generator's promise, the brand simulated and its context synced" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #1 the brief follows the profile: customers, regions, busiest months and popularity; the data lands within 5% of its promised orders" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #1 Japan's regions: every customer is in one of the 8, and every region has customers" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 the region sets: the 12 UK regions, and Japan's 8 regions in order" },
+      {
+        kind: "ci",
+        file: REGION_NAMES_LIB,
+        test: "QA: Japan's places are ordinary words for a brand whose customers are there",
+        note: "QA finding (Japan's places): with Japan's regions, copy and translations saying Japanese, Tokyo or Kyushu-Okinawa pass and a market note naming Japan needs no declaration; with UK regions the name check is unchanged.",
+      },
+      {
+        kind: "ci",
+        file: "tests/lib/market-prompt.test.ts",
+        test: "QA: the country is Japan only when most customers are in Japan's regions",
+        note: "QA finding (the Market agent always researched the UK): the country comes from the brand's customers' regions, with a prompt test for each country in the same file.",
+      },
+    ],
+  },
+  {
+    id: "D-3.2",
+    sprint: "10b",
+    story: "D-3",
+    words: "The same profile, brand and day produces the same data.",
+    checks: [{ kind: "ci", file: PROFILE_LIB, test: "D-3 #2 the same profile, brand and day give the same data; another day or brand gives other data" }],
+  },
+  {
+    id: "D-3.3",
+    sprint: "10b",
+    story: "D-3",
+    words: "The Audience agent (mock model) finds sized segments for the new brand. Each size equals a direct SQL count.",
+    checks: [{ kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #3 the Audience agent (mock model) finds sized segments for the new brand, each size equal to a direct SQL count" }],
+  },
+  {
+    id: "D-3.4",
+    sprint: "10b",
+    story: "D-3",
+    words: "Refused: no products, 11 products, a price of 0 or more than £10,000, a customer count outside 500 to 20,000, or a brand that already has customers. Field errors, and nothing is saved.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title:
+          "D-3 #4: no products, a price of 0 or over £10,000, and a customer count outside 500 to 20,000 are refused with field errors and nothing saved; a brand with customers has no form",
+        note: "On a second new brand, Brightwater Pantry. 11 products can't be entered (Add a product stops at 10), so that refusal is the unit and flow tests'.",
+      },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #4 refused with field errors, and nothing saved: no products, 11 products, a price of 0 or over £10,000, and a customer count outside 500 to 20,000" },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #4 a brand that already has customers is refused, and nothing changes" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #4 refused with field errors: no products, 11 products, a price of 0 or over £10,000, and a customer count outside 500 to 20,000" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #4 the other fields' words: a product's name and popularity, the region set and the busiest months" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #4 prices are read from pounds as a person types them" },
+    ],
+  },
+  {
+    id: "D-3.5",
+    sprint: "10b",
+    story: "D-3",
+    words: "Hostile input: a product name with markup or SQL is stored as text. Another workspace's brand id is refused (rule 7).",
+    checks: [
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #5 another workspace's brand id, or a malformed one, is refused and nothing is saved in either workspace" },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #5 a product name with markup or SQL is stored as text" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #5 a product name with markup or SQL is kept as text" },
+      {
+        kind: "ci",
+        file: "tests/lib/record-paths.test.ts",
+        test: "review fix N2: a malformed brand id on Generate simulated data is a 404; a real one is left alone",
+        note: "Review fix N2: /brands/<id>/simulated-data is a record page in src/proxy.ts.",
+      },
+    ],
+  },
+  {
+    id: "D-3.6",
+    sprint: "10b",
+    story: "D-3",
+    words: "Generating 20,000 customers finishes in under 20 seconds on CI. Measured in the flow test.",
+    checks: [{ kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #6 generating 20,000 customers finishes in under 20 seconds" }],
+  },
+  // D-4 The campaign's line: typed, or suggested and picked
+  {
+    id: "D-4.1",
+    sprint: "10b",
+    story: "D-4",
+    words: "Type a line, save it (a new version), send for sign-off, approve, Make creative (mock): every social and display ad's headline is the line.",
+    checks: [
+      {
+        kind: "browser",
+        spec: LINE_SPEC,
+        title: "D-4 #1: a typed line, saved as a new version and signed off, is the headline of every social and display ad Make creative makes",
+        note: "A Fernhollow brief: a line of 31 characters refused beside the field, then \"Walk further this winter\" as version 2, display added as version 3, signed off, then every ad's headline in the gallery.",
+      },
+      { kind: "ci", file: LINE_FLOWS, test: "D-4 #1 the line is signed off with the brief, and every paid-social and display headline is the line exactly; search keeps its own" },
+      {
+        kind: "ci",
+        file: "tests/lib/render-line-sizes.test.ts",
+        test: "728 × 90 leaderboard: the worst-case line is refused with the reason, with and without legal lines, for both kits",
+        note: "QA finding 6: a worst-case 30-character line in wide capitals is drawn as the headline of every paid-social and display size and layout, for both demo kits, with and without legal lines. Every size holds it except the 728 × 90 leaderboard, which refuses the size with its reason (pinned here, reported to Rory); ordinary 30-character lines fit it.",
+      },
+    ],
+  },
+  {
+    id: "D-4.2",
+    sprint: "10b",
+    story: "D-4",
+    words:
+      "Suggest lines (mock) shows 3 lines, each 30 characters or fewer. Picking one saves it as a new version and resets sign-off as editing does today. (The cut line: Rory's answer Q1.)",
+    checks: [
+      {
+        kind: "browser",
+        spec: SUGGEST_SPEC,
+        title: "D-4 #2: Suggest lines (mock) shows 3 lines of 30 characters or fewer; picking one saves it as a new version and resets sign-off as editing does",
+        note: "The cost on the button before the click; Use this line as version 2; signed off; then Edit first on a second suggestion as version 3, with version 2 still signed off and version 3 to send.",
+      },
+      { kind: "ci", file: SUGGEST_AGENTS, test: "D-4 Suggest lines (the cut line): the Tagline agent with a campaign's context" },
+      {
+        kind: "ci",
+        file: SUGGEST_AGENTS,
+        test: "D-4 #2 review fix B1: a reply with a line holding a figure is repaired once, then the run fails with the reason and nothing is saved",
+        note: "Review fix B1: the Tagline agent's check, with a campaign, refuses figures, quantities in words and names other than the brand's own, so the repair asks again.",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #2 review fix B1: with a campaign, the Tagline agent's check refuses figures, quantities and names other than the brand's own; the home card is unchanged",
+      },
+    ],
+  },
+  {
+    id: "D-4.3",
+    sprint: "10b",
+    story: "D-4",
+    words: "A line of 31 characters is refused with a field error. A line with a banned term, or naming a company from the market notes, is refused by the brief checks.",
+    checks: [
+      { kind: "ci", file: LINE_LIB, test: "D-4 #3 a line of 31 characters is refused with the field's words; 3 to 30 characters pass, trimmed" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #3 a line with a banned term, a claim that needs evidence, or a company from the market notes is refused by the brief checks" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #3 the line is a section of the brief: versioned, compared and edited like the others" },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #3 review fix B1: a line with a figure or a quantity in words is refused by the brief checks, even as a person's edit",
+        note: "Review fix B1 (rules 1 and 2): a hand edit's allowUnsourcedNumbers no longer lets a figure into the line (\"Loved by 10,000 cooks\").",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #3 review fix B1: a line naming another company, quoting anyone or showing a rating is refused; the brand's own names pass",
+      },
+      {
+        kind: "ci",
+        file: OWN_NAMES_FLOWS,
+        test: "D-4 #3 review fix B1: a person's line with a figure, or naming another company, is refused by saveBriefEdit, and no version is saved",
+        note: "Through the repo, on a real brand's campaign: the figure, another company's name and a quote are refused; its own name is the D-2.3 test in the same file.",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #3 review fix N5: a line with a line break, a tab or a control character is refused with a field error",
+      },
+    ],
+  },
+  {
+    id: "D-4.4",
+    sprint: "10b",
+    story: "D-4",
+    words: "A brief with no line works as today. The existing creative specs pass unchanged.",
+    checks: [
+      { kind: "ci", file: LINE_FLOWS, test: "D-4 #4 a brief with no line works as today: Make creative writes the alternatives' own headlines" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #4 a brief with no line works as today: old versions parse, and Copy writes its own headlines" },
+      {
+        kind: "ci",
+        job: E2E_JOB,
+        note: "The existing creative specs (creative.spec.ts, creative-gallery.spec.ts, several-audiences.spec.ts, languages.spec.ts and launch-pack.spec.ts) set no line and run unchanged in this job.",
+      },
+    ],
+  },
+  {
+    id: "D-4.5",
+    sprint: "10b",
+    story: "D-4",
+    words: "A Copy reply whose headline differs from the line is repaired once, then the set is refused.",
+    checks: [
+      { kind: "ci", file: LINE_AGENTS, test: "D-4 #5 a Copy reply whose headline differs from the line is repaired once, naming the line" },
+      { kind: "ci", file: LINE_AGENTS, test: "D-4 #5 a Copy reply off the line twice is refused, and the step fails with the reason" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #5 with a line, every paid-social and display headline must be the line exactly; search keeps its own" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #5 the copy rules hold the line for a person's edit too" },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #5 review fix B1: a line headline is still held to banned terms, claims and the market notes' companies added after sign-off",
+        note: "Review fix B1: only the length and voice checks are skipped for a line headline; the kit and market notes can change after sign-off.",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #5 review fix B1: the line's words aren't the brand's: a body copying a name from the line is refused",
+      },
+    ],
+  },
+  {
+    id: "D-4.6",
+    sprint: "10b",
+    story: "D-4",
+    words: "A translated campaign uses the same translated line in every ad of that language.",
+    checks: [{ kind: "ci", file: LINE_FLOWS, test: "D-4 #6 a translated campaign uses the same translated line in every ad of that language" }],
+  },
+  {
+    id: "D-4.7",
+    sprint: "10b",
+    story: "D-4",
+    words: "Hostile input: a line telling the model to ignore its instructions is treated as data. The Tagline agent's existing injection cases still pass.",
+    checks: [
+      { kind: "ci", file: LINE_AGENTS, test: "D-4 #7 a line telling the model to ignore its instructions is data: it is quoted in the prompt as data, used word for word, and an obedient reply fails" },
+      { kind: "ci", file: "tests/agents/run.test.ts", test: "S1-5 #7: hostile brand names are rejected or stored as plain text, and output still validates" },
+      {
+        kind: "ci",
+        file: SUGGEST_AGENTS,
+        test: "D-4 #7 hostile input in the campaign's story is data: quoted in the prompt as JSON, and an obedient reply fails",
+        note: "Suggest lines' part, on the cut line with D-4.2.",
+      },
+    ],
+  },
+  // D-5 Rule 2, as answered
+  {
+    id: "D-5.1",
+    sprint: "10b",
+    story: "D-5",
+    words: "The case list's guard finds no real company names in seeds and fixtures. Existing CI check, extended to the new fixtures.",
+    checks: [
+      { kind: "ci", file: NAMES_LIB, test: "D-5 #1 no real company names in the seeds and fixtures, Sprint 10b's new fixtures and tests included" },
+      { kind: "ci", file: NAMES_LIB, test: "D-5 #1 the check finds a real name in any case and form, and only as a whole name" },
+      { kind: "ci", file: NAMES_LIB, test: "D-5 rule 2 is reworded as Rory answered, with a decision record, and the README no longer says every brand is fictional" },
+      {
+        kind: "ci",
+        file: NAMES_LIB,
+        test: "D-5 the sign-in, invite and welcome pages and the sign-in email say the demo brands are fictional, never every brand, and that a brand you add may be real",
+        note: "QA finding (rule 1): the copy Rory reads while signing in said every brand is fictional. The check also scans every file under src/app, src/components, src/lib/auth and src/lib/email, and the README.",
+      },
+      { kind: "ci", file: NAMES_LIB, test: "D-5 the check for 'every brand is fictional' catches the old sentences and passes the new ones" },
+      { kind: "ci", file: "tests/lib/demo-generate.test.ts", test: "S2-4 #7: no real company, product or trademark names; the kit is valid" },
+    ],
+  },
+  // D-6 Run-through on production (by hand, Rory)
+  {
+    id: "D-6.1",
+    sprint: "10b",
+    story: "D-6",
+    words: "After the deploy, Rory runs the demo journey on production with real models, as his own brand, from a new brand to 14 simulated days on the Performance page.",
+    checks: [
+      {
+        kind: "hand",
+        why: `CI runs the mock model and has no real keys, so the journey with real models (a brand of Rory's own with its kit, simulated data and audiences, market notes, a campaign with its line, typed or suggested, the brief, sign-off, personas and the test plan, creative, the pre-test, the launch pack, launch, and the Performance page over 14 simulated days) is checked by Rory on production after the deploy on the evening of 10 November 2026, before the demo at 08:45 on 11 November, with DAILY_CAP_PENCE raised in Vercel for 10 and 11 November. Each step and its expected cost are in ${HAND_PACK_10B}.`,
+      },
     ],
   },
 ];

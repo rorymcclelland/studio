@@ -64,7 +64,7 @@ export type FullestData = {
   live: string;
   /** Quillmoor, two audiences, 24 ads, not launched. */
   twoAudiences: string;
-  /** Fernhollow, version 1 waiting for sign-off, with personas and a test plan. */
+  /** Fernhollow, version 2 (a campaign line, with three suggested lines for it) waiting for sign-off, with personas and a test plan. */
   waiting: string;
   /** Quillmoor, version 1, a draft. */
   early: string;
@@ -215,7 +215,7 @@ export const PAGE_BUDGETS: PageBudget[] = [
     name: "Brief stage, waiting for sign-off",
     path: (d) => `/campaigns/${d.waiting}/brief`,
     signedIn: true,
-    mainAction: { css: "[data-signoff-panel] button", text: "Approve version", what: "Approve version 1" },
+    mainAction: { css: "[data-signoff-panel] button", text: "Approve version", what: "Approve version 2, the version with the campaign line and its suggestions" },
   },
   {
     key: "campaign-early",

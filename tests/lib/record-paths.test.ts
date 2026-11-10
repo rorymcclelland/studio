@@ -11,7 +11,15 @@ describe("F-12 record paths", () => {
     }
   });
   it("leaves real ids and other pages alone", () => {
-    for (const p of [`/brands/${ID}`, `/brands/${ID}/edit`, `/runs/${ID.toUpperCase()}`, `/campaigns/${ID}/`, "/brands", "/campaigns", "/", "/design", "/api/health"]) {
+    for (const p of [`/brands/${ID}`, `/brands/${ID}/edit`, `/runs/${ID.toUpperCase()}`, `/campaigns/${ID}/`, "/brands", "/brands/new", "/brands/new/", "/campaigns", "/", "/design", "/api/health"]) {
+      expect(malformedRecordPath(p), p).toBe(false);
+    }
+  });
+  it("review fix N2: a malformed brand id on Generate simulated data is a 404; a real one is left alone", () => {
+    for (const p of ["/brands/nope/simulated-data", "/brands/nope/simulated-data/", `/brands/${ID}x/simulated-data`, "/brands/%E0%A4%A/simulated-data"]) {
+      expect(malformedRecordPath(p), p).toBe(true);
+    }
+    for (const p of [`/brands/${ID}/simulated-data`, `/brands/${ID}/simulated-data/`]) {
       expect(malformedRecordPath(p), p).toBe(false);
     }
   });

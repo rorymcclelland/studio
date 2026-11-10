@@ -18,6 +18,7 @@ import {
   StaleBriefError,
   startRevision,
 } from "@/lib/brief/repo";
+import { startSuggestLines } from "@/lib/brief/line";
 import { BRIEF_SECTIONS, type BriefCore, type BriefSection } from "@/lib/brief/schema";
 import { sendEvent } from "@/inngest/client";
 import { decideSignoff, requestSignoff, SignoffError, withdrawSignoff } from "@/lib/approvals/repo";
@@ -85,7 +86,8 @@ export async function saveBrief(campaignId: string, baseVersion: number, brief: 
 export async function reviseBrief(campaignId: string, baseVersion: number, section: string | null, instruction: string): Promise<BriefActionState> {
   const member = await requireMember();
   const s = section === null || section === "" ? null : (BRIEF_SECTIONS as readonly string[]).includes(section) ? (section as BriefSection) : undefined;
-  if (s === undefined) return { error: "Choose a part of the brief to revise." };
+  // D-4: the campaign line is a person's words; Suggest lines (the Tagline agent) offers some instead.
+  if (s === undefined || s === "line") return { error: "Choose a part of the brief to revise." };
   const text = instruction.trim();
   if (text.length < 3) return { error: "Say what to change." };
   if (text.length > 500) return { error: "Keep the instruction to 500 characters or fewer." };
@@ -99,6 +101,21 @@ export async function reviseBrief(campaignId: string, baseVersion: number, secti
   }
   revalidateCampaign(campaignId);
   return { done: "The Brief agent is revising. The proposal will appear beside the current brief." };
+}
+
+/** D-4: Suggest lines, the Tagline agent on the current version's context; its three lines show on the Brief stage. */
+export async function suggestLines(campaignId: string, baseVersion: number): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    await startSuggestLines(member, campaignId, baseVersion, sendEvent);
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    console.error("[suggestLines]", err);
+    return { error: "Couldn't start Suggest lines. Nothing was changed; try again." };
+  }
+  revalidateCampaign(campaignId);
+  return { done: "The Tagline agent is suggesting lines." };
 }
 
 export async function useProposal(campaignId: string, runId: string): Promise<BriefActionState> {

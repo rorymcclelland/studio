@@ -19,7 +19,10 @@ export type Brand = BrandKit & {
   logoAssetId: string | null;
   /** Where the PNG logo is served from (/assets/[id]), or null. */
   logoPngSrc: string | null;
+  /** D-2 (decision 0028): the brand's data is simulated (the demo brands, or a brand given simulated data). */
   isSimulated: boolean;
+  /** D-2 (decision 0028): the brand is invented (the demo brands). A person's own brand is not. */
+  isFictional: boolean;
   /** When simulated customer data was generated; time windows count back from it. */
   dataAsOf: string | null;
   createdAt: Date;
@@ -46,6 +49,7 @@ function columns(k: BrandKit & { logoSvg: string | null | undefined }) {
     font_primary: k.fontPrimary, font_secondary: k.fontSecondary,
     ...(k.logoSvg === undefined ? {} : { logo_svg: k.logoSvg }),
     legal_lines: k.legalLines, banned_terms: k.bannedTerms, evidence_claims: k.evidenceClaims,
+    own_names: k.ownNames,
   };
 }
 
@@ -70,16 +74,24 @@ function toBrand(r: Record<string, unknown>): Brand {
     legalLines: r.legal_lines as string[],
     bannedTerms: r.banned_terms as string[],
     evidenceClaims: r.evidence_claims as string[],
+    ownNames: (r.own_names as string[] | null) ?? [],
     isSimulated: r.is_simulated as boolean,
+    isFictional: r.is_fictional as boolean,
     dataAsOf: r.data_as_of ? new Date(r.data_as_of as string).toISOString() : null,
     createdAt: r.created_at as Date,
     updatedAt: r.updated_at as Date,
   };
 }
 
+/** Review fix S1 (rule 2): a fictional demo brand has no other names; the database holds this too (brands_fictional_no_own_names). */
+export const FICTIONAL_OWN_NAMES = "A demo brand is fictional, so it has no other names.";
+
 function rethrow(err: unknown): never {
   if ((err as { code?: string }).code === "23505") {
     throw new BrandInputError("That short name is already used by another brand.", { slug: "Already used by another brand." });
+  }
+  if ((err as { code?: string; constraint_name?: string }).code === "23514" && (err as { constraint_name?: string }).constraint_name === "brands_fictional_no_own_names") {
+    throw new BrandInputError(FICTIONAL_OWN_NAMES, { ownNames: FICTIONAL_OWN_NAMES });
   }
   throw err;
 }
@@ -89,7 +101,7 @@ export async function createBrand(member: Member, raw: BrandInput, opts: { simul
   try {
     return await asUser(member.userId, async (tx) => {
       const [row] = await tx`
-        insert into public.brands ${tx({ ...columns(k), workspace_id: member.workspaceId, created_by: member.userId, is_simulated: opts.simulated ?? false })}
+        insert into public.brands ${tx({ ...columns(k), workspace_id: member.workspaceId, created_by: member.userId, is_fictional: false, is_simulated: opts.simulated ?? false })}
         returning id`;
       await tx`update public.brands set palette = ${tx.json(k.palette)} where id = ${row.id}`;
       await syncBrandContext(tx, row.id);
@@ -109,6 +121,9 @@ export async function updateBrand(member: Member, brandId: string, raw: BrandInp
   const k = validated(raw);
   try {
     return await asUser(member.userId, async (tx) => {
+      const [current] = await tx`select is_fictional from public.brands where id = ${brandId}`;
+      if (!current) return false;
+      if (current.is_fictional && k.ownNames.length > 0) throw new BrandInputError(FICTIONAL_OWN_NAMES, { ownNames: FICTIONAL_OWN_NAMES });
       const cols = columns(k);
       const res = await tx`
         update public.brands set ${tx(cols, Object.keys(cols) as (keyof typeof cols)[])}, palette = ${tx.json(k.palette)}

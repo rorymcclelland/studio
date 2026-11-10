@@ -23,14 +23,14 @@ export function CustomerSummary({ summary, simulated }: { summary: Summary | nul
         </div>
         <p className="mt-1 max-w-prose text-ink-2">
           {simulated
-            ? `Generated for the demo as of ${formatDay(summary?.asOf)}, not real people or sales. Customers carry no names or contact details.`
+            ? `Generated as of ${formatDay(summary?.asOf)}, not real people or sales. Customers carry no names or contact details.`
             : "From this brand's customers and orders. Customers carry no names or contact details."}
         </p>
       </div>
 
       {!summary || summary.customers === 0 ? (
         <EmptyState title="No customers or orders yet">
-          The demo brands come with simulated customers and orders. Importing your own is a later step.
+          The demo brands come with simulated customers and orders, and a brand of your own can generate some. Importing your own is a later step.
         </EmptyState>
       ) : (
         <>

@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Suspense } from "react";
 import { requireMember } from "@/lib/auth/session";
 import { listBrands } from "@/lib/brands/repo";
+import { ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { Pill } from "@/components/ui/pill";
@@ -20,18 +21,34 @@ async function BrandsPageContent() {
   const brands = await listBrands(member.userId, member.workspaceId);
   return (
     <div className="space-y-10">
-      <div>
-        <h1 className="text-title font-strong">Brands</h1>
-        <p className="mt-2 max-w-prose text-lg text-ink-2">
-          Each brand&apos;s kit is what keeps every agent on-brand: its voice, colours, rules and legal lines, with its
-          products and customers.
-        </p>
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="text-title font-strong">Brands</h1>
+          <p className="mt-2 max-w-prose text-lg text-ink-2">
+            Each brand&apos;s kit is what keeps every agent on-brand: its voice, colours, rules and legal lines, with its
+            products and customers.
+          </p>
+        </div>
+        {/* D-1: start a brand of your own, whether or not the workspace has brands. */}
+        <ButtonLink href="/brands/new" data-new-brand="" variant={brands.length === 0 ? "quiet" : "primary"} className="shrink-0 self-start">
+          New brand
+        </ButtonLink>
       </div>
 
       {brands.length === 0 ? (
-        <EmptyState title="No brands yet" headingLevel={2} action={<AddDemoBrands />}>
-          Add the two fictional demo brands to try Studio: an outdoor clothing brand and a personal finance app, each
-          with a full brand kit, about 20 products and 2,000 simulated customers with two years of orders.
+        <EmptyState
+          title="No brands yet"
+          headingLevel={2}
+          action={
+            <div className="flex flex-col items-start gap-3 sm:flex-row">
+              <ButtonLink href="/brands/new">New brand</ButtonLink>
+              <AddDemoBrands variant="quiet" />
+            </div>
+          }
+        >
+          Start a brand of your own with its name, then fill in its kit. Or add the two fictional demo brands to try
+          Studio: an outdoor clothing brand and a personal finance app, each with a full brand kit, about 20 products and
+          2,000 simulated customers with two years of orders.
         </EmptyState>
       ) : (
         <>
@@ -47,6 +64,7 @@ async function BrandsPageContent() {
                     <span className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
                       <span className="min-w-0 text-xl font-strong tracking-tight wrap-anywhere">{b.name}</span>
                       {b.isSimulated && <Pill tone="review">Simulated data</Pill>}
+                      {b.isFictional && <Pill tone="neutral">Demo brand</Pill>}
                     </span>
                     {b.category && <span className="text-ink-2 wrap-anywhere">{b.category}</span>}
                   </span>

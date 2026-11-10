@@ -215,6 +215,8 @@ async function selectRuns(tx: Tx, where: postgres.Fragment, limit: number): Prom
     left join lateral (
       select coalesce(
         case when r.input ->> 'campaignId' ~ ${UUID_SQL} then (r.input ->> 'campaignId')::uuid end,
+        -- D-4: Suggest lines (the Tagline agent) names its campaign inside the input's campaign.
+        case when r.input #>> '{campaign,campaignId}' ~ ${UUID_SQL} then (r.input #>> '{campaign,campaignId}')::uuid end,
         case when r.input ->> 'questionId' ~ ${UUID_SQL} then (
           select ql.campaign_id from public.performance_questions q join public.launches ql on ql.id = q.launch_id
           where q.id = (r.input ->> 'questionId')::uuid

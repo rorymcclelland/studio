@@ -63,7 +63,7 @@ async function readBrief(ctx: StepContext): Promise<Prepared> {
     const start = imageryStart.safeParse(run?.input);
     if (!start.success) return { result: { ok: false, message: "The run's input is not a picture request." }, raw: run?.input ?? {}, summary: null };
     const [c] = await tx`
-      select c.id, c.brand_id, c.status, c.approved_version, b.name, b.category, b.tone_words, b.do_rules, b.dont_rules, b.palette, v.brief
+      select c.id, c.brand_id, c.status, c.approved_version, b.name, b.own_names, b.category, b.tone_words, b.do_rules, b.dont_rules, b.palette, v.brief
       from public.campaigns c join public.brands b on b.id = c.brand_id
       left join public.brief_versions v on v.campaign_id = c.id and v.version = ${start.data.version}
       where c.id = ${start.data.campaignId}`;
@@ -97,6 +97,7 @@ async function readBrief(ctx: StepContext): Promise<Prepared> {
       dontRules: c.dont_rules as string[],
       finance: isFinanceCategory(c.category as string),
       brandName: c.name as string,
+      ownNames: (c.own_names ?? []) as string[],
       realNames,
       places: places.map((p) => p.region as string),
     });

@@ -96,11 +96,14 @@ let ids: {
   waiting: string;
 };
 
-/** A Quillmoor brand with its demo languages; `simulated` as the demo loader marks its brands (is_simulated). */
-async function brandFor(m: Member, slug: string, simulated: boolean) {
+/**
+ * A Quillmoor brand with its demo languages; `demo` as the demo loader marks its brands (D-2, Sprint 10b: is_fictional
+ * and is_simulated both true). A person's own brand is neither.
+ */
+async function brandFor(m: Member, slug: string, demo: boolean) {
   return asUser(m.userId, async (tx) => {
-    const [br] = await tx`insert into public.brands (workspace_id, name, slug, legal_lines, created_by, is_simulated)
-      values (${m.workspaceId}, ${QUILLMOOR.kit.name}, ${slug}, ${QUILLMOOR.kit.legalLines}, ${m.userId}, ${simulated}) returning id`;
+    const [br] = await tx`insert into public.brands (workspace_id, name, slug, legal_lines, created_by, is_simulated, is_fictional)
+      values (${m.workspaceId}, ${QUILLMOOR.kit.name}, ${slug}, ${QUILLMOOR.kit.legalLines}, ${m.userId}, ${demo}, ${demo}) returning id`;
     await insertDemoLanguages(tx, m, br.id as string, "quillmoor");
     return br.id as string;
   });
@@ -516,6 +519,7 @@ describe("C7-3 the launch pack", () => {
     expect(readme).toContain(`- Legal lines written for the demo: 30 files have French, German and Spanish legal lines that say so in the manifests. ${WRITTEN_FOR_DEMO}`);
   });
 
+  // D-2 (Sprint 10b): the README's claim reads is_fictional; a real brand with simulated data is tests/lib/own-names.test.ts.
   it("review fix 6: the README says the brand is fictional only for a simulated demo brand, and the legal lines only where the brand has them", async () => {
     const { files } = await mainZip();
     const readme = strFromU8(files["README.txt"]);

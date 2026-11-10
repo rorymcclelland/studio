@@ -33,6 +33,8 @@ export const imageryInput = z.object({
   finance: z.boolean(),
   // For the checks only, never put in the prompt (so the model has no name to write).
   brandName: z.string().max(80),
+  /** D-2 (Sprint 10b): the brand's own names, such as a parent brand's; taken out like its name. None when left out. */
+  ownNames: z.array(z.string().max(80)).max(5).optional(),
   realNames: z.array(z.string().max(80)).max(200),
   places: z.array(z.string().max(80)).max(30),
 });
@@ -167,7 +169,9 @@ const colourWordsOf = (input: Pick<ImageryInput, "palette">) => input.palette.ma
 export function forImageModel(input: ImageryInput): ImageryInput {
   const ordinary = colourWordsOf(input);
   // Cut to the input's limits after the swap, which can lengthen a text by a few characters.
-  const clean = (max: number) => (t: string) => withoutNames(withoutBrandName(t, input.brandName, ordinary), input.realNames).slice(0, max);
+  const names = [input.brandName, ...(input.ownNames ?? [])];
+  const clean = (max: number) => (t: string) =>
+    withoutNames(names.reduce((out, n) => withoutBrandName(out, n, ordinary), t), input.realNames).slice(0, max);
   return {
     ...input,
     brief: {
@@ -205,8 +209,19 @@ export function promptProblems(input: ImageryInput, p: ImageryOutput["prompts"][
   }
   const brand = input.brandName.trim() ? (brandNameIn(both, input.brandName, colourWordsOf(input)) ?? (containsTerm(both, input.brandName) ? input.brandName : null)) : null;
   if (brand) problems.push(`${where} names the brand ("${brand}"); a picture never shows the brand's name, so leave it out`);
+  // D-2: the brand's own names, such as a parent brand's, are kept out like its name (rule 8).
+  const ownFound: string[] = [];
+  for (const own of input.ownNames ?? []) {
+    if (!own.trim()) continue;
+    const found = brandNameIn(both, own, colourWordsOf(input)) ?? (containsTerm(both, own) ? own : null);
+    if (found) {
+      ownFound.push(own.toLowerCase());
+      problems.push(`${where} names "${own}", one of the brand's own names; a picture never shows the brand's names, so leave it out`);
+    }
+  }
   for (const name of undeclaredNames(both, [], { brandName: "", category: "", products: [], places: input.places })) {
     if (input.realNames.some((r) => r.toLowerCase() === name.toLowerCase())) continue;
+    if (ownFound.includes(name.toLowerCase())) continue;
     problems.push(`${where} names "${name}"; write no names of people, companies, products or brands, and no capitalised words except at a sentence start`);
   }
   if (input.finance) {

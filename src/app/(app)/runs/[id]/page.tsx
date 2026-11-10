@@ -140,7 +140,8 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
 
 /** The run's result. Tagline runs show the chosen line; other agents link to what they made, or summarise it. */
 function RunResult({ agent, output }: { agent: string; output: Record<string, unknown> }) {
-  if (agent === "tagline") {
+  // D-4: a Suggest lines run (the Tagline agent with a campaign) has no chosen tagline; it shows its summary and link below.
+  if (agent === "tagline" && typeof output.tagline === "string") {
     return (
       <Card as="section" tone="good" aria-labelledby="result" className="bg-good-soft">
         <h2 id="result" className="font-semibold text-good-ink">

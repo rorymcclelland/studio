@@ -4,6 +4,7 @@ import {
   CHANNEL_LIMITS,
   evidencePool,
   fieldsOf,
+  LINE_CHANNELS,
   MODEL_COPY,
   SEARCH_DESCRIPTIONS,
   SEARCH_HEADLINES,
@@ -36,6 +37,8 @@ export const copyInput = z.object({
   bannedTerms: z.array(z.string()),
   evidenceClaims: z.array(z.string()),
   realNames: z.array(z.string()).default([]),
+  /** D-2 (Sprint 10b): the brand's own names, such as a parent brand's, which the words may use like its name. */
+  ownNames: z.array(z.string().max(80)).max(5).default([]),
   products: z.array(z.string()).max(40),
   places: z.array(z.string()).max(30),
   /** Shown so the model leaves them out; code attaches them to every set. */
@@ -51,6 +54,8 @@ export const copyInput = z.object({
   }),
   write: z.array(job).min(1).max(15),
   replace: z.object({ channel: z.enum(COPY_CHANNELS), audience: z.string(), copy: z.record(z.string(), z.unknown()) }).optional(),
+  /** D-4: the signed-off version's campaign line, the headline of every paid-social and display set; null when it has none. */
+  line: z.string().nullable().default(null),
 });
 export type CopyInput = z.infer<typeof copyInput>;
 
@@ -78,7 +83,9 @@ export function rulesFromInput(input: CopyInput): CopyRules {
     bannedTerms: input.bannedTerms,
     evidenceClaims: input.evidenceClaims,
     realNames: input.realNames,
+    ownNames: input.ownNames,
     legalLines: input.legalLines,
+    line: input.line,
     pool: evidencePool([
       ...input.brief.insights.flatMap((i) => i.evidence),
       ...input.brief.audiences.map((a) => ({ title: a.segment, text: a.facts })),
@@ -86,7 +93,15 @@ export function rulesFromInput(input: CopyInput): CopyRules {
   };
 }
 
-const firstText = (channel: CopyChannel, copy: AnyCopy) => fieldsOf(channel, copy)[0]?.text.trim().toLowerCase() ?? "";
+/**
+ * The field that tells alternatives apart: the first (the headline), or with a campaign line, which every
+ * paid-social and display set shares as its headline (D-4), the body.
+ */
+function distinctField(channel: CopyChannel, copy: AnyCopy, line: string | null): { label: string; text: string } {
+  const fields = fieldsOf(channel, copy);
+  const f = line && LINE_CHANNELS.includes(channel) ? (fields.find((x) => x.field === "body") ?? fields[0]) : fields[0];
+  return { label: f?.label ?? "", text: f?.text.trim().toLowerCase() ?? "" };
+}
 
 /** Code checks on a reply: what was asked for, in the brief's audiences, and every set's words (S5-2). */
 export function checkCopy(input: CopyInput, output: CopyOutput): string[] {
@@ -122,8 +137,8 @@ export function checkCopy(input: CopyInput, output: CopyOutput): string[] {
     const got = groups.get(`${j.channel}|${j.audience}`) ?? [];
     if (got.length !== j.sets) problems.push(`${j.channel} for ${j.audience} has ${got.length} set${got.length === 1 ? "" : "s"}; write exactly ${j.sets}`);
     if (got.length > 1) {
-      const firsts = got.map((s) => firstText(s.channel, s.copy));
-      const field = fieldsOf(j.channel, got[0].copy)[0].label;
+      const firsts = got.map((s) => distinctField(s.channel, s.copy, input.line).text);
+      const field = distinctField(j.channel, got[0].copy, input.line).label;
       if (new Set(firsts).size < firsts.length) problems.push(`the ${j.channel} sets for ${j.audience} repeat a ${field}; make each alternative different`);
     }
   }
@@ -133,8 +148,9 @@ export function checkCopy(input: CopyInput, output: CopyOutput): string[] {
     for (const s of output.sets) {
       if (s.channel !== r.channel) continue;
       const before = JSON.stringify(r.copy).toLowerCase();
-      const same = JSON.stringify(s.copy).toLowerCase() === before || firstText(s.channel, s.copy) === firstText(r.channel, r.copy as AnyCopy);
-      if (same) problems.push(`the new words repeat the ${fieldsOf(r.channel, r.copy as AnyCopy)[0].label} of the set they replace; write different words`);
+      const field = distinctField(r.channel, r.copy as AnyCopy, input.line);
+      const same = JSON.stringify(s.copy).toLowerCase() === before || distinctField(s.channel, s.copy, input.line).text === field.text;
+      if (same) problems.push(`the new words repeat the ${field.label} of the set they replace; write different words`);
     }
   }
   return problems;
@@ -156,12 +172,14 @@ const LABELS = {
   banned: "Banned terms",
   claims: "Claims that need evidence",
   real: "Real companies never to name",
+  own: "The brand's own names (may be used like its name)",
   products: "Products",
   places: "Places",
   legal: "Legal lines (code adds these under every set; never write them)",
   brief: "Brief",
   write: "Write",
   replace: "Set to replace",
+  line: "Campaign line (every paid-social and display headline is exactly this)",
 } as const;
 
 /** Reads a Copy prompt back into its input (the mock answer, and tests reading what the model was given). */
@@ -184,12 +202,14 @@ export function readCopyInput(prompt: string): CopyInput | null {
     bannedTerms: read(LABELS.banned),
     evidenceClaims: read(LABELS.claims),
     realNames: read(LABELS.real),
+    ownNames: read(LABELS.own),
     products: read(LABELS.products),
     places: read(LABELS.places),
     legalLines: read(LABELS.legal),
     brief: read(LABELS.brief),
     write: read(LABELS.write),
     replace: read(LABELS.replace),
+    line: read(LABELS.line),
   });
   return parsed.success ? parsed.data : null;
 }
@@ -215,11 +235,13 @@ export const copyAgent = defineAgent({
     "- No testimonials: no quotation marks around anyone's words, no customer speaking (no \"I\", \"me\" or \"my\" outside a call to action), no \"customers say\", no names after a dash, no ratings.",
     "- Do not write the legal lines; code adds them under every set.",
     "- Out-of-home is not written yet; it is never in the list to write.",
+    "If a campaign line is given, every paid-social and display headline is exactly that line, word for word, with the same capitals and punctuation (it is the brand's own words, already checked). Alternatives then differ in their bodies. Search headlines, email and app push are written as usual.",
     'Reply with JSON only, in exactly this shape: {"sets": [{"channel": "paid social", "audience": "A1", "copy": {"headline": "...", "body": "...", "cta": "..."}}, {"channel": "search", "audience": "A1", "copy": {"headlines": ["...", "...", "..."], "descriptions": ["...", "..."]}}, {"channel": "email", "audience": "A1", "copy": {"subject": "...", "preview": "..."}}, {"channel": "app push", "audience": "A1", "copy": {"title": "...", "body": "..."}}]}',
   ].join("\n"),
   buildPrompt: (input) =>
     [
       input.replace ? REPLACE_MARKER : MARKER,
+      ...(input.line ? [`${LABELS.line}: ${JSON.stringify(input.line)}`] : []),
       `${LABELS.brand}: ${JSON.stringify(input.brandName)}`,
       `${LABELS.voice}: ${JSON.stringify(input.voice)}`,
       `${LABELS.do}: ${JSON.stringify(input.doRules)}`,
@@ -227,6 +249,7 @@ export const copyAgent = defineAgent({
       `${LABELS.banned}: ${JSON.stringify(input.bannedTerms)}`,
       `${LABELS.claims}: ${JSON.stringify(input.evidenceClaims)}`,
       `${LABELS.real}: ${JSON.stringify(input.realNames)}`,
+      ...(input.ownNames.length ? [`${LABELS.own}: ${JSON.stringify(input.ownNames)}`] : []),
       `${LABELS.products}: ${JSON.stringify(input.products)}`,
       `${LABELS.places}: ${JSON.stringify(input.places)}`,
       `${LABELS.legal}: ${JSON.stringify(input.legalLines)}`,
@@ -308,12 +331,15 @@ function mockCopy(input: CopyInput): CopyOutput {
     const options = templates(j.channel, j.audience);
     let start = 0;
     if (input.replace) {
-      const current = firstText(j.channel, input.replace.copy as AnyCopy);
-      const at = options.findIndex((o) => firstText(j.channel, o) === current);
+      const current = distinctField(j.channel, input.replace.copy as AnyCopy, input.line).text;
+      const at = options.findIndex((o) => distinctField(j.channel, o, input.line).text === current);
       start = at + 1;
     }
     for (let i = 0; i < j.sets; i++) {
-      sets.push({ channel: j.channel, audience: j.audience, copy: options[(start + i) % options.length] } as ModelCopySet);
+      const copy = options[(start + i) % options.length];
+      // D-4: with a campaign line, it is every paid-social and display headline; the bodies still differ.
+      const lined = input.line && LINE_CHANNELS.includes(j.channel) ? { ...copy, headline: input.line } : copy;
+      sets.push({ channel: j.channel, audience: j.audience, copy: lined } as ModelCopySet);
     }
   }
   return { sets };

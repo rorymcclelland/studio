@@ -46,7 +46,7 @@ export async function requestSignoff(
     await expireStaleSignoffs(tx);
     const [c] = await tx`
       select c.id, c.brand_id, c.objective, c.current_version, c.status, c.approved_version,
-        b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+        b.name as brand_name, b.own_names, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
       from public.campaigns c join public.brands b on b.id = c.brand_id
       where c.id = ${campaignId} for update of c`;
     if (!c) throw new CampaignError("That campaign isn't in your workspace.");
@@ -56,7 +56,15 @@ export async function requestSignoff(
     if (c.approved_version === c.current_version) throw new SignoffError("This version is already signed off.");
     const [v] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
     const brief = storedBrief.parse(v.brief);
-    const kit: KitLists = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims, realNames: await realNamesFor(tx, c.brand_id) };
+    const kit: KitLists = {
+      legalLines: c.legal_lines,
+      bannedTerms: c.banned_terms,
+      dontRules: c.dont_rules,
+      evidenceClaims: c.evidence_claims,
+      realNames: await realNamesFor(tx, c.brand_id),
+      brandName: c.brand_name,
+      ownNames: c.own_names ?? [],
+    };
     const problems = evidenceProblems(brief, await contextById(tx, c.brand_id), kit, { objective: c.objective, allowUnsourcedNumbers: true });
     if (problems.length) throw new BriefEditError(problems);
     const [a] = await tx`

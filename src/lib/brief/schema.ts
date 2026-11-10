@@ -17,8 +17,16 @@ export const KPI_METRICS = [
   "reach",
 ] as const;
 
-export const BRIEF_SECTIONS = ["title", "summary", "story", "insights", "audiences", "channels", "kpi"] as const;
+export const BRIEF_SECTIONS = ["title", "line", "summary", "story", "insights", "audiences", "channels", "kpi"] as const;
 export type BriefSection = (typeof BRIEF_SECTIONS)[number];
+
+/**
+ * D-4 (Sprint 10b): the campaign's line, the headline of every paid-social and
+ * display ad. 30 characters at most, so it fits every headline limit (paid
+ * social 40, display 30, search 30).
+ */
+export const CAMPAIGN_LINE_MIN = 3;
+export const CAMPAIGN_LINE_MAX = 30;
 
 const str = (min: number, max: number, label: string) =>
   z.string().trim().min(min, `${label} can't be empty.`).max(max, `${label} must be ${max} characters or fewer.`);
@@ -26,6 +34,15 @@ const str = (min: number, max: number, label: string) =>
 /** The parts the model writes. `cites` and `segmentRef` hold tags (model) or item ids (stored). */
 export const briefCore = z.object({
   title: str(3, 100, "The title"),
+  /** D-4: optional; a person's words (typed, or picked from the Tagline agent's suggestions), never the Brief agent's. */
+  line: z
+    .string()
+    .trim()
+    .min(CAMPAIGN_LINE_MIN, `The campaign line must be at least ${CAMPAIGN_LINE_MIN} characters.`)
+    .max(CAMPAIGN_LINE_MAX, `The campaign line must be ${CAMPAIGN_LINE_MAX} characters or fewer.`)
+    // Review fix N5: one line of plain text, as every headline shows it.
+    .regex(/^[^\p{Cc}\p{Zl}\p{Zp}]*$/u, "The campaign line must be one line, with no tabs, line breaks or control characters.")
+    .optional(),
   summary: str(20, 600, "The summary"),
   story: str(20, 1200, "The story"),
   insights: z

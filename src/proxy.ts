@@ -5,14 +5,19 @@ import { NextResponse, type NextRequest } from "next/server";
 // before the page runs; rewriting to a path no route matches makes Next.js
 // answer with its not-found page and a 404 status. P9-3 adds a campaign's
 // Performance view, and U10-2 its other stage pages.
-const RECORD_PAGE = /^\/(?:(?:brands|runs|campaigns)\/([^/]+)(?:\/edit)?|campaigns\/([^/]+)\/(?:brief|audience|creative|launch|performance))\/?$/;
+// Review fix N2: a brand's Generate simulated data page (D-3) is a record page too.
+const RECORD_PAGE = /^\/(?:(?:brands|runs|campaigns)\/([^/]+)(?:\/edit)?|campaigns\/([^/]+)\/(?:brief|audience|creative|launch|performance)|brands\/([^/]+)\/simulated-data)\/?$/;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
+// D-1 (Sprint 10b): pages that sit where a record id would, and are not records.
+const NOT_RECORDS = new Set(["/brands/new"]);
+
 export function malformedRecordPath(pathname: string): boolean {
+  if (NOT_RECORDS.has(pathname.replace(/\/$/, ""))) return false;
   const m = RECORD_PAGE.exec(pathname);
   if (!m) return false;
   try {
-    return !UUID.test(decodeURIComponent(m[1] ?? m[2]));
+    return !UUID.test(decodeURIComponent(m[1] ?? m[2] ?? m[3]));
   } catch {
     return true; // not even valid percent-encoding
   }

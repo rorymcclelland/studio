@@ -338,6 +338,14 @@ ${storiesHtml}
   return { html, markdown: md.join("\n").replace(/\n{3,}/g, "\n\n"), videos };
 }
 
+/** The --sprint value: a sprint number (10), or a named sprint such as "10b"; null for anything else. */
+export function sprintArg(raw) {
+  const v = (raw ?? "").trim();
+  if (/^\d+$/.test(v)) return Number(v) || null;
+  if (/^\d+[a-z]$/.test(v)) return v;
+  return null;
+}
+
 function arg(name) {
   const i = process.argv.indexOf(`--${name}`);
   return i > 0 ? process.argv[i + 1] : undefined;
@@ -345,10 +353,10 @@ function arg(name) {
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? "").href) {
   const results = arg("results");
-  const sprint = Number(arg("sprint"));
+  const sprint = sprintArg(arg("sprint"));
   const out = arg("out");
   if (!results || !sprint || !out) {
-    console.error("Usage: node scripts/demo-page.mjs --results <results folder> --sprint <N> --out <folder> [--md <file>]");
+    console.error("Usage: node scripts/demo-page.mjs --results <results folder> --sprint <N, or a name such as 10b> --out <folder> [--md <file>]");
     process.exit(1);
   }
   const readJson = (f) => (existsSync(join(results, f)) ? JSON.parse(readFileSync(join(results, f), "utf8")) : null);

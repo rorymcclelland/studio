@@ -45,7 +45,7 @@ export default function WelcomePage() {
       <main id="main" className="mx-auto max-w-5xl space-y-10 px-4 pt-6 pb-16 sm:px-8">
         <Card size="hero">
           <p className="flex flex-wrap gap-2">
-            <Pill tone="review">Fictional brands</Pill>
+            <Pill tone="review">Fictional demo brands</Pill>
             <Pill tone="review">Simulated data</Pill>
           </p>
           <h1 className="mt-4 max-w-3xl text-display font-strong">A multi-agent campaign studio for marketing teams</h1>
@@ -134,7 +134,7 @@ export default function WelcomePage() {
           <Card>
             <h2 className="text-xl font-strong tracking-tight">What to expect inside</h2>
             <ul className="mt-2 list-disc space-y-1.5 pl-5 text-ink-2 marker:text-ink-2">
-              <li>The brands are fictional, and their customers and orders are simulated: segment sizes and sales figures are generated for the demo. Market notes come from real web pages and link to them.</li>
+              <li>The demo brands are fictional, and their customers and orders are simulated: segment sizes and sales figures are generated for the demo. A brand you add yourself may be real; any customers and orders Studio generates for it are simulated and labelled so. Market notes come from real web pages and link to them.</li>
               <li>Every agent run keeps its trail: inputs, outputs, model, tokens, cost and time.</li>
               <li>AI spend is capped each day, and runs stop at the cap.</li>
               <li>Each invited person gets their own workspace, with the demo brands one click away.</li>

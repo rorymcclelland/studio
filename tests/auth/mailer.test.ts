@@ -102,7 +102,9 @@ describe("N-3 mailer", () => {
       expect(part).toContain("multi-agent campaign studio");
       expect(part).toContain("works once");
       expect(part).toContain("15 minutes");
-      expect(part).toContain("fictional brands");
+      expect(part).toContain("fictional demo brands or a brand you add yourself");
+      expect(part).toContain("Any customer data Studio generates is simulated.");
+      expect(part).not.toMatch(/creative for fictional brands/);
       expect(part).not.toContain(String.fromCharCode(0x2014)); // no em dash
     }
     expect(e.html).toContain('lang="en-GB"');

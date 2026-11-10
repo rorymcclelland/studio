@@ -2,7 +2,7 @@
 
 A multi-agent campaign studio for marketing teams. Three squads of AI agents (Strategy, Creative and Performance) share one Business Context store and take a campaign from a one-line objective to on-brand creative that stays above its performance threshold. A person approves every consequential move.
 
-**About this project.** Studio is a demonstration, built to show how a team of AI agents can take on marketing production safely, and it has no commercial aim: it is not for sale, and it is not offered as a service. The idea was inspired by multi-agent campaign platforms I saw while working at Elsewhen. Studio was built independently, after I left, and uses none of Elsewhen's code, data, or designs. All brands and figures in the app are fictional or simulated.
+**About this project.** Studio is a demonstration, built to show how a team of AI agents can take on marketing production safely, and it has no commercial aim: it is not for sale, and it is not offered as a service. The idea was inspired by multi-agent campaign platforms I saw while working at Elsewhen. Studio was built independently, after I left, and uses none of Elsewhen's code, data, or designs. The demo brands are fictional and their figures simulated. A person may add their own real brand to their own workspace; any customer data Studio generates for it is simulated and labelled so.
 
 **Status: Sprint 9 of 12 delivered (Performance I: simulator and monitor).** What works today:
 
@@ -54,7 +54,7 @@ CI runs all of these on every push. A git pre-commit hook and Claude Code hooks 
 
 ## Project rules
 
-Honest by default; fictional brands only; people approve consequential actions; every agent run is traceable; spend is capped; secrets stay out of the repo; tenancy from day one; the image model never draws text. In full in `CLAUDE.md`.
+Honest by default; fictional brands in seeds, demo data, tests and screenshots, while a person may add their own real brand; people approve consequential actions; every agent run is traceable; spend is capped; secrets stay out of the repo; tenancy from day one; the image model never draws text. In full in `CLAUDE.md`.
 
 ## Docs
 

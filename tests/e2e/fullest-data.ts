@@ -12,7 +12,11 @@
 //   the inbox, moved to simulated day 14, one alert marked as seen, and two
 //   questions asked.
 // - Two audiences (Quillmoor): signed off with a second audience, 24 ads.
-// - Waiting for sign-off (Fernhollow): version 1 sent, personas and test plan.
+// - Waiting for sign-off (Fernhollow): a campaign line typed (version 2), a
+//   completed Suggest lines run for version 2 with its three lines (written
+//   straight to the database, plainly labelled as a fixture: no model was
+//   called), version 2 sent, personas and test plan (Sprint 10b QA finding 5,
+//   so the Brief stage is measured with a line and its suggestions).
 // - Early (Quillmoor): version 1, a draft.
 // - A tagline run waiting for a choice.
 // Each part is found by its objective (or brand name) and reused when it is
@@ -63,6 +67,9 @@ export const TWO_AUDIENCES_OBJECTIVE = "Bring lapsed savers and new savers to th
 export const WAITING_OBJECTIVE = "Win lapsed walkers back before winter, waiting for sign-off (length budgets)";
 export const EARLY_OBJECTIVE = "Bring new savers to the Plus plan, the brief only (length budgets)";
 export const TAGLINE_BRAND = "Larkspur Fells";
+/** D-4 (Sprint 10b): the waiting campaign's line, typed, and its three suggestions, near the 30-character limit. Fictional words only (rule 2). */
+export const WAITING_LINE = "Out on the fells before frost";
+export const WAITING_SUGGESTIONS = ["Back on the ridge before dusk", "Warm through the first cold", "Wrapped up for the high tops"];
 /** The runs list is measured full: U10-8's case 2 uses 60 runs, past the list's 50. */
 export const RUNS = 60;
 export const QUESTIONS = [MOCK_CPA_QUESTION, "What did our rivals spend?"];
@@ -106,6 +113,11 @@ async function findWaiting(sql: Sql): Promise<string | null> {
     select c.id from public.campaigns c
     where c.objective = ${WAITING_OBJECTIVE} and c.status = 'awaiting_signoff'
       and exists (select 1 from public.test_plans t where t.campaign_id = c.id)
+      and exists (select 1 from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version and v.brief ->> 'line' = ${WAITING_LINE})
+      and exists (
+        select 1 from public.agent_runs r
+        where r.agent = 'tagline' and r.status = 'completed' and r.input #>> '{campaign,campaignId}' = c.id::text
+          and (r.input #>> '{campaign,version}')::int = c.current_version)
     order by c.created_at desc limit 1`;
   return (c?.id as string) ?? null;
 }
@@ -259,14 +271,38 @@ export async function buildTwoAudiences(page: Page, sql: Sql): Promise<string> {
   return id;
 }
 
-/** Fernhollow, version 1 sent for sign-off, with its personas and test plan. Returns its id. */
+/**
+ * Fernhollow with a campaign line (version 2) and a completed Suggest lines run for that version, version 2 sent
+ * for sign-off, with its personas and test plan. Returns its id.
+ */
 export async function buildWaiting(page: Page, sql: Sql): Promise<string> {
   const found = await findWaiting(sql);
   if (found) return found;
-  await step(page, "Fullest data: a Fernhollow brief waiting for sign-off, with its personas and test plan", async () => {
+  await step(page, "Fullest data: a Fernhollow brief with a campaign line and three suggested lines, waiting for sign-off, with its personas and test plan", async () => {
     const path = await newCampaign(page, "Fernhollow Outfitters", WAITING_OBJECTIVE);
+    // D-4: the line, typed, makes version 2.
+    await page.getByRole("button", { name: "Edit the campaign line" }).click();
+    await page.getByRole("textbox", { name: "Campaign line", exact: true }).fill(WAITING_LINE);
+    await page.getByRole("button", { name: "Save the campaign line" }).click();
+    await expect(toast(page, "Saved as version 2.")).toBeVisible();
+    // A Suggest lines run for version 2, completed with three lines, in the shape startSuggestLines() makes
+    // (src/lib/brief/line.ts) and the Tagline agent returns. A fixture: no model was called, and it costs nothing.
+    const { userId, workspaceId } = await devWorkspace(sql);
+    const campaignId = idOf(path);
+    const [v] = await sql`select brief from public.brief_versions where campaign_id = ${campaignId} and version = 2`;
+    const input = {
+      brandName: "Fernhollow Outfitters",
+      campaign: { campaignId, version: 2, title: String(v.brief.title).slice(0, 100), story: String(v.brief.story ?? "").slice(0, 1200), audiences: [], voice: "" },
+    };
+    await sql`
+      insert into public.agent_runs (workspace_id, agent, agent_version, status, input, output, created_by, created_at, updated_at, completed_at, label)
+      values (${workspaceId}, 'tagline', 1, 'completed', ${sql.json(input)}, ${sql.json({ taglines: WAITING_SUGGESTIONS })}, ${userId},
+              now(), now(), now(), 'Fernhollow Outfitters: suggest lines (fixture run, no model was called)')`;
+    await page.reload();
+    await settle(page);
+    await expect(page.locator("[data-line-suggestion]").filter({ visible: true })).toHaveCount(3);
     const signoff = page.locator("[data-signoff-panel]").filter({ visible: true });
-    await signoff.getByRole("button", { name: "Send version 1 for sign-off" }).click();
+    await signoff.getByRole("button", { name: "Send version 2 for sign-off" }).click();
     await expect(toast(page, "Sent for sign-off")).toBeVisible();
     // The personas and the test plan are on the Audience stage.
     await openStage(page, "audience", path);

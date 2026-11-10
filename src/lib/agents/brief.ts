@@ -82,7 +82,9 @@ export const briefAgent = defineAgent({
   description: "Turns a campaign objective and the brand's context into an evidenced brief.",
   input: briefInput,
   start: briefStart,
-  output: briefCore,
+  // D-4: the campaign line is a person's (typed, or picked from the Tagline agent's suggestions); a line in
+  // the reply is dropped, and a revision keeps the version's own line (brief-workflow.ts).
+  output: briefCore.omit({ line: true }),
   instructions: [
     "You are a senior campaign strategist on the Strategy squad. You write clear, evidenced campaign briefs.",
     "You are given a brand, an objective and numbered context items (C1, C2, ...) from the brand's Business Context store.",

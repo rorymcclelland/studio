@@ -18,6 +18,8 @@ type Prepared =
       campaignId: string;
       brandId: string;
       baseVersion: number;
+      /** D-4: the base version's campaign line, kept in a revision (the Brief agent never writes one). */
+      line: string | null;
       input: BriefInput;
       /** Tag to context item id. */
       refs: Record<string, string>;
@@ -78,10 +80,12 @@ export async function executeBriefRun(ctx: StepContext, step: StepTools): Promis
           result = { ok: false, message: "This brief changed since the revision was asked for. Open the latest version and ask again." };
         } else {
           let revise: BriefInput["revise"];
+          let line: string | null = null;
           const extra: GatheredItem[] = [];
           if (start.mode === "revise") {
             const [v] = await tx`select brief from public.brief_versions where campaign_id = ${c.id} and version = ${start.baseVersion}`;
             const current = storedBrief.parse(v.brief);
+            line = current.line ?? null;
             // Items the current brief cites that the gather did not pick still go in the prompt.
             const known = new Set(gathered.items.map((i) => i.id));
             const missing = [...new Set([...current.insights.flatMap((i) => i.cites), ...current.audiences.map((a) => a.segmentRef)])].filter((id) => !known.has(id));
@@ -98,6 +102,7 @@ export async function executeBriefRun(ctx: StepContext, step: StepTools): Promis
             campaignId: c.id,
             brandId: c.brand_id,
             baseVersion: c.current_version,
+            line,
             refs: Object.fromEntries(items.map((i) => [i.ref, i.id])),
             input: {
               brandName: gathered.brand.name,
@@ -142,7 +147,9 @@ export async function executeBriefRun(ctx: StepContext, step: StepTools): Promis
   }
 
   return step.run("save", async () => {
-    const brief = toStored(written.output, prepared.refs, prepared.input.kit);
+    const { line: _dropped, ...core } = written.output;
+    void _dropped;
+    const brief = toStored({ ...core, ...(prepared.line ? { line: prepared.line } : {}) }, prepared.refs, prepared.input.kit);
     const href = `/campaigns/${prepared.campaignId}`;
     if (prepared.start.mode === "draft") {
       try {
