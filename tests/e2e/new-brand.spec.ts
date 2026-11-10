@@ -332,8 +332,9 @@ test.describe("Sprint 10b: a new brand of your own, with simulated data, in a ne
         await g.waitForURL(/\/brands\/[0-9a-f-]{36}\/edit$/);
         await settle(g);
         await expect(g.getByRole("heading", { level: 1, name: "Edit brand kit" })).toBeVisible();
-        await expect(g.getByLabel("Name", { exact: true })).toHaveValue(BRIGHTWATER.name);
-        await expect(g.getByLabel("Category", { exact: true })).toHaveValue(BRIGHTWATER.category);
+        // Next keeps the New brand page hidden in the document after the move, so look only at what is shown.
+        await expect(g.getByLabel("Name", { exact: true }).filter({ visible: true })).toHaveValue(BRIGHTWATER.name);
+        await expect(g.getByLabel("Category", { exact: true }).filter({ visible: true })).toHaveValue(BRIGHTWATER.category);
         // D-2: the kit editor has the brand's own names, and a person's own brand is not a demo brand.
         await expect(g.getByRole("group", { name: "Also known as" })).toBeVisible();
         await expect(g.getByRole("button", { name: "Add an own name" })).toBeVisible();
