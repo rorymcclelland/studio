@@ -80,8 +80,18 @@ test("S4-1 #1-#3, S4-2 and S4-4: sign-off through the inbox, with personas and a
   await openSignoffReviews(card);
   await expect(card).toContainText("out of 5 overall");
   await expect(card.getByRole("list", { name: "Hypotheses" })).toBeVisible();
-  const items = await visible(page, "[data-inbox-item]").count();
-  await expect(visible(page, "[data-nav-count]")).toHaveText(`${items > 99 ? "99+" : items} ${items === 1 ? "item" : "items"} waiting`);
+  // The nav count and the list are compared from one full page load: a link click can keep the layout's earlier
+  // count, and parallel specs (home-work U10-5.7) add run choices to this workspace while this one runs.
+  await expect
+    .poll(async () => {
+      await page.reload();
+      await expect(page.getByRole("heading", { name: "Approvals", level: 1 })).toBeVisible();
+      const items = await visible(page, "[data-inbox-item]").count();
+      const shown = ((await visible(page, "[data-nav-count]").textContent()) ?? "").trim();
+      return shown === `${items > 99 ? "99+" : items} ${items === 1 ? "item" : "items"} waiting`;
+    }, { message: "the nav count matches the inbox", timeout: 30_000 })
+    .toBe(true);
+  await openSignoffReviews(card);
   await checkLayoutAndContrast(page, "/approvals with a sign-off");
 
   // Reject: a reason is required, then the brief is a draft again with the reason shown.
