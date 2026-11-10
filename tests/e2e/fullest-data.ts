@@ -309,7 +309,7 @@ export async function ensureExtras(page: Page, sql: Sql, data: FullestData): Pro
   const [seg] = await sql`select count(*)::int as n from public.context_items where brand_id = ${data.quillmoor} and kind = 'segment' and source = 'Audience agent'`;
   if (seg.n === 0) {
     await step(page, "Fullest data: Find audiences on Quillmoor", async () => {
-      await page.goto(`/brands/${data.quillmoor}`);
+      await page.goto(`/brands/${data.quillmoor}?tab=audience`);
       await settle(page);
       const segments = page.getByRole("region", { name: "Segments" }).filter({ visible: true });
       await segments.getByRole("button", { name: "Find audiences" }).click();
@@ -319,7 +319,7 @@ export async function ensureExtras(page: Page, sql: Sql, data: FullestData): Pro
   const [notes] = await sql`select count(*)::int as n from public.context_items where brand_id = ${data.quillmoor} and source = 'Market agent'`;
   if (notes.n === 0) {
     await step(page, "Fullest data: refresh Quillmoor's market notes", async () => {
-      await page.goto(`/brands/${data.quillmoor}`);
+      await page.goto(`/brands/${data.quillmoor}?tab=audience`);
       await settle(page);
       const section = page.locator("section:has(h2#market)").filter({ visible: true });
       await section.getByRole("button", { name: "Refresh market notes" }).click();

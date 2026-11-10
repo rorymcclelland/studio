@@ -38,7 +38,9 @@
 //   audience (segments and market notes), voice (voice and visual), legal
 //   (legal and languages) and products (products and data), each tab's
 //   content in [role=tabpanel]. If U10-7 names them differently, change the
-//   paths here with it.
+//   paths here with it. (Answer B1) The kit editor's Save brand kit and the
+//   languages page's Save languages each sit in a [data-save-bar] that stays
+//   on screen. tests/e2e/brand-page.spec.ts has U10-7's whole interface.
 // - U10-8: the runs list shows at most one page of runs, with "Older runs".
 // ----------------------------------------------------------------------------
 
@@ -103,8 +105,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/brands/${d.fernhollow}`,
     signedIn: true,
     mainAction: { css: "[data-new-campaign]", what: "New campaign, beside the brand's campaigns" },
-    lengthUntil: { story: "U10-7", why: "products, charts and the open new-campaign form are shown in full (audit: 11.7 screens at 375 px)" },
-    mainActionUntil: { story: "U10-7", why: "the campaign form is always open; Write the brief is 1.65 screens down" },
   },
   {
     key: "brand-quillmoor",
@@ -112,8 +112,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/brands/${d.quillmoor}`,
     signedIn: true,
     mainAction: { css: "[data-new-campaign]", what: "New campaign, beside the brand's campaigns" },
-    lengthUntil: { story: "U10-7", why: "10 segment cards and market notes in full (audit: 18.2 screens at 375 px)" },
-    mainActionUntil: { story: "U10-7", why: "there is no New campaign button yet" },
   },
   ...(["audience", "voice", "legal", "products"] as const).map(
     (tab): PageBudget => ({
@@ -122,8 +120,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
       path: (d) => `/brands/${d.quillmoor}?tab=${tab}`,
       signedIn: true,
       mainAction: { css: "[role=tabpanel]", what: `the ${tab} tab's content` },
-      lengthUntil: { story: "U10-7", why: "the brand page has no tabs yet" },
-      mainActionUntil: { story: "U10-7", why: "the brand page has no tabs yet" },
     }),
   ),
   {
@@ -132,10 +128,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/brands/${d.fernhollow}/edit`,
     signedIn: true,
     mainAction: { css: "main button", text: "Save brand kit", what: "Save brand kit" },
-    lengthUntil: {
-      story: "unassigned",
-      why: "7.2 screens at 375 px and 5.2 at 1440 px in the audit (75 controls, a full-width input and Remove button per list item); U10-1 only makes Save sticky, and no Sprint 10 story shortens the form",
-    },
   },
   {
     key: "brand-languages",
@@ -143,7 +135,6 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: (d) => `/brands/${d.fernhollow}/languages`,
     signedIn: true,
     mainAction: { css: "main button", text: "Save languages", what: "Save languages" },
-    mainActionUntil: { story: "unassigned", why: "Save languages is at the end of the form, 3.4 screens down at 375 px (audit), and no Sprint 10 story moves it" },
   },
   {
     key: "campaigns",

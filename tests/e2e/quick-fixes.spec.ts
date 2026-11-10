@@ -215,6 +215,9 @@ test(
             await page.goto(path);
             await settle(page);
             const list = page.locator("[data-campaign-list]").filter({ visible: true });
+            // U10-7: the brand page shows its 3 most recent campaigns, and the rest on "Show all N campaigns" (seven
+            // states here, so it is always there).
+            if (where === "the brand page") await page.getByRole("button", { name: /^Show all \d+ campaigns$/ }).click();
             for (const key of Object.keys(STATUS_LABELS) as StatusKey[]) {
               const row = list.locator("li").filter({ has: page.locator(`a[href="/campaigns/${campaigns![key]}"]`) });
               await expect(row, key).toHaveCount(1);

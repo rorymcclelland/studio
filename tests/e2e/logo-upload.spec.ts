@@ -117,7 +117,8 @@ test("F-10: logo upload accepts SVG and PNG, refuses hostile files with the reas
 
 test("S5-3 Q7: the brand page says which open font draws each brand font", async ({ page }) => {
   const id = await demoBrandId(page, "Fernhollow Outfitters");
-  await page.goto(`/brands/${id}`);
+  // U10-7: the fonts are on the brand page's Voice and visual tab.
+  await page.goto(`/brands/${id}?tab=voice`);
   await settle(page);
   const notes = page.locator("[data-font-note]");
   await expect(notes).toHaveText([

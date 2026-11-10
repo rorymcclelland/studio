@@ -19,7 +19,8 @@ test("S4-3: refresh market notes, see their sources and dates, and confirm a sec
   test.setTimeout(240_000);
   await signIn(page);
   const quillmoor = await demoBrandId(page, "Quillmoor Money");
-  await page.goto(`/brands/${quillmoor}`);
+  // U10-7: the market notes are on the brand page's Audience tab.
+  await page.goto(`/brands/${quillmoor}?tab=audience`);
   await settle(page);
 
   // First refresh. A re-run of this spec within a day is asked to confirm; it does.

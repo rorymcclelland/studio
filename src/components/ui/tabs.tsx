@@ -7,6 +7,11 @@
 // Every panel is server-rendered and stays in the page; the unselected ones
 // are hidden, so an element in one (a chart's table alternative) can still
 // be referred to. Built from the segmented nav's parts.
+//
+// U10-7: `selected` sets the tab shown first (by id; an unknown id shows the
+// first), and `onChange` reports each new selection, so a page can keep the
+// tab in its address. `layout="grid"` sets the tabs out two to a row on a
+// phone, for labels too long to fit on one line.
 import { useId, useRef, useState } from "react";
 import { cx } from "./cx";
 
@@ -21,14 +26,39 @@ export type TabItem = {
   panelFocusable?: boolean;
 };
 
-export function Tabs({ items, labelledBy, className }: { items: TabItem[]; labelledBy: string; className?: string }) {
+export function Tabs({
+  items,
+  labelledBy,
+  className,
+  selected: initial,
+  onChange,
+  layout = "inline",
+}: {
+  items: TabItem[];
+  labelledBy: string;
+  className?: string;
+  /** The id of the tab shown first, and later whenever it changes; the first tab when missing or unknown. */
+  selected?: string;
+  /** Called with the id of each newly selected tab. */
+  onChange?: (id: string) => void;
+  /** "grid": two tabs to a row on narrow screens, one row from the sm breakpoint. */
+  layout?: "inline" | "grid";
+}) {
   const base = useId();
-  const [selected, setSelected] = useState(0);
+  const indexOf = (id: string | undefined) => Math.max(0, items.findIndex((t) => t.id === id));
+  const [selected, setSelected] = useState(() => indexOf(initial));
+  // A new `selected` from the page (a link to another tab of a page that was kept) moves the selection.
+  const [seen, setSeen] = useState(initial);
+  if (initial !== seen) {
+    setSeen(initial);
+    setSelected(indexOf(initial));
+  }
   const tabs = useRef<(HTMLButtonElement | null)[]>([]);
   const tabId = (i: number) => `${base}-tab-${items[i].id}`;
   const panelId = (i: number) => `${base}-panel-${items[i].id}`;
 
   const select = (i: number) => {
+    if (i !== selected) onChange?.(items[i].id);
     setSelected(i);
     tabs.current[i]?.focus();
   };
@@ -42,7 +72,15 @@ export function Tabs({ items, labelledBy, className }: { items: TabItem[]; label
 
   return (
     <div className={cx("space-y-4", className)}>
-      <div role="tablist" aria-labelledby={labelledBy} className="flex w-max max-w-full gap-1 rounded-full bg-surface-2 p-1" onKeyDown={onKeyDown}>
+      <div
+        role="tablist"
+        aria-labelledby={labelledBy}
+        className={cx(
+          "gap-1 bg-surface-2 p-1",
+          layout === "grid" ? "grid grid-cols-2 rounded-card sm:flex sm:w-max sm:max-w-full sm:rounded-full" : "flex w-max max-w-full rounded-full",
+        )}
+        onKeyDown={onKeyDown}
+      >
         {items.map((t, i) => (
           <button
             key={t.id}
@@ -57,7 +95,8 @@ export function Tabs({ items, labelledBy, className }: { items: TabItem[]; label
             tabIndex={i === selected ? 0 : -1}
             onClick={() => select(i)}
             className={cx(
-              "inline-flex min-h-9 items-center rounded-full px-4 text-sm font-semibold whitespace-nowrap transition-colors motion-reduce:transition-none",
+              "inline-flex min-h-9 items-center rounded-full text-sm font-semibold transition-colors motion-reduce:transition-none",
+              layout === "grid" ? "justify-center px-3 py-1 text-center sm:px-4 sm:whitespace-nowrap" : "px-4 whitespace-nowrap",
               i === selected ? "bg-surface text-ink" : "text-ink-2 hover:text-ink",
             )}
             {...t.tabData}

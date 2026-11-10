@@ -187,6 +187,7 @@ export async function expectedStops(page: Page): Promise<number> {
     let n = 0;
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
       if (el.getClientRects().length === 0) continue; // not rendered
+      if (el.getAttribute("tabindex") === "-1") continue; // a roving tabindex's other tabs (U10-7): Tab skips them
       const closed = el.closest("details:not([open])");
       if (closed && el.tagName !== "SUMMARY") continue;
       if (el.closest("[popover]:not(:popover-open)")) continue;

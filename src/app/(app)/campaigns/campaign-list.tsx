@@ -8,7 +8,7 @@ import { formatWhen } from "@/lib/format";
 const L = CAMPAIGN_STATUS_LABELS;
 
 /** The pill's colour only supports the words (U10-1): running, waiting for a person, being written, or none of these. */
-function statusTone(label: string): PillTone {
+export function statusTone(label: string): PillTone {
   if (label.startsWith("Live")) return "good";
   if (label === L.waiting || label === L.launchWaiting) return "review";
   if (label === L.writing) return "active";

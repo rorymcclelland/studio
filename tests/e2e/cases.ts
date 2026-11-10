@@ -93,6 +93,7 @@ export const STORIES: Story[] = [
   { sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" },
   { sprint: 10, id: "U10-4", title: "Performance: what needs action first" },
   { sprint: 10, id: "U10-5", title: "Home leads with work" },
+  { sprint: 10, id: "U10-7", title: "The brand page: campaigns first, reference data on request" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
@@ -286,6 +287,20 @@ const HOME_LIB = "tests/lib/home-work.test.ts";
 const HOME_FLOWS = "tests/flows/home-work.test.ts";
 const HOME_JOURNEY =
   "A new invitee's own workspace (the owner invites them on /invites and they accept), so nothing other specs leave waiting in the dev workspace is on its home. Its work is written to the database as the app leaves it (tests/e2e/home-fixture.ts): a sign-off and a launch waiting, three live campaigns (two with unseen alerts) and one ended with an unseen alert; and a real tagline run, started from the demo card at the bottom of home, waits for a choice.";
+
+// U10-7 The brand page: campaigns first, reference data on request: the browser tests (Quillmoor for the new
+// campaign and its segments, Fernhollow only read), the pure tab parser, and U10-6's budgets for every tab
+// (case 6). Answer B1 (9 November) folds in the kit editor and the languages page as cases 7 and 8. No table and no
+// loader change, so nothing in tests/db or tests/flows. The interface is at the top of the spec.
+const BRAND_PAGE_SPEC = "brand-page.spec.ts";
+const BRAND_TABS_LIB = "tests/lib/brand-tabs.test.ts";
+/** U10-7's pages in tests/e2e/page-budgets.ts: the brand page and its four tabs with Quillmoor's 10 segments and market notes. */
+const BRAND_BUDGET_PAGES = ["brand-fernhollow", "brand-quillmoor", "brand-quillmoor-audience", "brand-quillmoor-voice", "brand-quillmoor-legal", "brand-quillmoor-products"];
+const budgetChecks = (keys: string[]): Check[] =>
+  keys.flatMap((key): Check[] => [
+    { kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px` },
+    { kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #2: the main action of ${key} is within 1.5 screens at 375 px` },
+  ]);
 
 // BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
 // mock model (the unit and regression tests, and the evals in CI's first job); the real models
@@ -1808,7 +1823,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: QUICK_FIXES_SPEC,
         title: "U10-1 #3: each campaign status shows on /campaigns and on the brand page, one campaign per state",
-        note: "The seven campaigns are written to the database as the app leaves them (status-fixture.ts); building a live one through the UI takes minutes and the list reads only these rows. The queries behind the list are the flows test.",
+        note: "The seven campaigns are written to the database as the app leaves them (status-fixture.ts); building a live one through the UI takes minutes and the list reads only these rows. The queries behind the list are the flows test. The brand page shows its 3 most recent campaigns (U10-7), so the test opens Show all N campaigns there first.",
       },
       { kind: "ci", file: STATUS_LIB, test: "U10-1 #3 the status a campaign shows in lists" },
       { kind: "ci", file: STATUS_FLOWS, test: "U10-1 #3 listCampaigns() reads each campaign's status facts" },
@@ -2410,6 +2425,119 @@ export const CASES: Case[] = [
       },
       { kind: "ci", file: HOME_LIB, test: "U10-5 #7 the inbox's order: what has an Approve button first, newest first, then the run choices, newest first" },
       { kind: "ci", file: HOME_FLOWS, test: "U10-5 #1 homeNeedsFor() lists the approvals waiting and the unseen alerts per live campaign, each linked to its place" },
+    ],
+  },
+  // U10-7 The brand page: campaigns first, reference data on request
+  {
+    id: "U10-7.1",
+    sprint: 10,
+    story: "U10-7",
+    words: "At 375 px, the brand page's first screen shows the brand's campaigns with their real status (U10-1) and objective, and a \"New campaign\" button.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #1: at 375 px the brand page's first screen shows its campaigns with their status and objective, and New campaign",
+        note: "On Quillmoor, after case 2's test has started a campaign from its brand page, at 375 px and 1440 px: the first campaign row (its status in U10-1's words, its objective) and New campaign are wholly within the first screen, above the tabs; case 2's campaign shows Draft, never \"Draft v1\", with its objective. U10-6 measures the same button's depth with the fullest data (case 6).",
+      },
+    ],
+  },
+  {
+    id: "U10-7.2",
+    sprint: 10,
+    story: "U10-7",
+    words: "\"New campaign\" opens the form, and submitting it works as it does today.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #2: New campaign opens the form, and submitting it writes the brief as today",
+        note: "On Quillmoor at 1440 px with the mock Brief agent: the form is closed until the button is pressed (aria-expanded), then submitting opens the campaign's overview and version 1 is written.",
+      },
+    ],
+  },
+  {
+    id: "U10-7.3",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "Each tab (Audience: segments and market notes; Voice and visual: the kit summary, linking to the kit editor; Legal and languages; Products and data: products, charts) shows its own section and is in the URL; a shared link opens that tab, and an unknown tab shows the first.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #3: each tab shows its own section and is in the URL; a shared link opens that tab, and an unknown tab shows the first",
+        note: "On Fernhollow, only read. Each ?tab= address opens its tab with its section and the others hidden; choosing a tab puts it in the URL and a reload keeps it, with a search's ?q= kept. The failure path: no tab, an unknown one, one in the wrong case and an old run's #segments or #market link all show Audience. Rule 1: Products and data says Simulated data once for its customers and orders, not on every figure.",
+      },
+      { kind: "ci", file: BRAND_TABS_LIB, test: "U10-7 #3 the brand page's tabs and their address" },
+    ],
+  },
+  {
+    id: "U10-7.4",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "A segment card shows its name, size and one-line definition until it is opened. Nothing is shown twice: the repeated badge sentences go. Rule 1: \"Simulated data\" once per section rather than on every card. Rule 2: market notes may still name real companies, with their sources.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #4: a segment card shows its name, size and one-line definition until opened, and nothing is shown twice",
+        note: "Quillmoor's Audience tab at 375 px, with its segments from the Audience agent and its market notes (made if missing). Tagged @brand-kit so it runs after audience.spec and market.spec, which replace them. Our reading of \"one-line definition\": one sentence. Opening a card is in place, by keyboard, and shows the rest of its facts and Remove.",
+      },
+    ],
+  },
+  {
+    id: "U10-7.5",
+    sprint: 10,
+    story: "U10-7",
+    words: "The brand page's tabs work by keyboard and have the right roles.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #5: the brand page's tabs work by keyboard with the right roles, and axe finds nothing",
+        note: "The tabs pattern U10-4 built (src/components/ui/tabs.tsx): one named tablist, arrows (wrapping), Home and End select and put the tab in the URL, Tab reaches the panel; axe finds nothing with each tab selected, and every tab has AA contrast and no sideways scroll at 375 px and 1440 px.",
+      },
+    ],
+  },
+  {
+    id: "U10-7.6",
+    sprint: 10,
+    story: "U10-7",
+    words: "With Quillmoor's 10 segments and market notes, every tab of the brand page is within budget (U10-6).",
+    checks: budgetChecks(BRAND_BUDGET_PAGES),
+  },
+  {
+    id: "U10-7.7",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) The kit editor has compact list rows and is within its length budget, and Save brand kit is visible without scrolling at 375 px and 1440 px, and stays reachable.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #7: the kit editor is within its length budget, and Save brand kit is on screen without scrolling at 375 px and 1440 px",
+        note: "Fernhollow's kit, only read, at both widths: Save in its save bar is on screen and uncovered at the top and at the bottom of the form (a sticky bar does it; so does anything else that keeps it there), and the page is within U10-6's budget, measured as page-length.spec measures it.",
+      },
+      ...budgetChecks(["brand-kit-editor"]),
+    ],
+  },
+  {
+    id: "U10-7.8",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) The brand languages page is the same: within its length budget, with Save languages visible without scrolling at 375 px and 1440 px; and saving still works.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #8: the languages page is within its length budget, Save languages is on screen without scrolling at 375 px and 1440 px, and saving still works",
+        note: "Quillmoor's languages, tagged @brand-kit: at 375 px Spanish is left out and saved from where the change was made, the reload shows it, and the demo languages are put back. U10-6 measures Fernhollow's languages page with the fullest data.",
+      },
+      ...budgetChecks(["brand-languages"]),
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

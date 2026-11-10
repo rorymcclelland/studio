@@ -23,7 +23,9 @@
 // (tests/lib/cases.test.ts checks that every page has both). The length tests
 // of U10-2's overview and stage pages carry U10-2.6 too (U10-2 case 6: each
 // stage page within its budget with the audit's fullest data); the Creative
-// stage's are U10-3's and Performance's U10-4's, by their markers.
+// stage's are U10-3's and Performance's U10-4's, by their markers. The brand
+// page's and its tabs' tests carry U10-7.6 (U10-7 case 6), and the kit
+// editor's and the languages page's carry U10-7.7 and U10-7.8 (answer B1).
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { ensureExtras, fullestData } from "./fullest-data";
@@ -154,28 +156,28 @@ test.describe("U10-6 every page, with the audit's fullest data", () => {
   test("U10-6 #1: brands is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brands");
   });
-  test("U10-6 #1: brand-fernhollow is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-fernhollow is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-fernhollow");
   });
-  test("U10-6 #1: brand-quillmoor is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-quillmoor is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-quillmoor");
   });
-  test("U10-6 #1: brand-quillmoor-audience is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-quillmoor-audience is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-quillmoor-audience");
   });
-  test("U10-6 #1: brand-quillmoor-voice is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-quillmoor-voice is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-quillmoor-voice");
   });
-  test("U10-6 #1: brand-quillmoor-legal is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-quillmoor-legal is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-quillmoor-legal");
   });
-  test("U10-6 #1: brand-quillmoor-products is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-quillmoor-products is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-quillmoor-products");
   });
-  test("U10-6 #1: brand-kit-editor is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-kit-editor is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.7" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-kit-editor");
   });
-  test("U10-6 #1: brand-languages is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: brand-languages is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.8" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-languages");
   });
   test("U10-6 #1: campaigns is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
@@ -246,28 +248,28 @@ test.describe("U10-6 every page, with the audit's fullest data", () => {
   test("U10-6 #2: the main action of brands is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brands");
   });
-  test("U10-6 #2: the main action of brand-fernhollow is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-fernhollow is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-fernhollow");
   });
-  test("U10-6 #2: the main action of brand-quillmoor is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-quillmoor is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-quillmoor");
   });
-  test("U10-6 #2: the main action of brand-quillmoor-audience is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-quillmoor-audience is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-quillmoor-audience");
   });
-  test("U10-6 #2: the main action of brand-quillmoor-voice is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-quillmoor-voice is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-quillmoor-voice");
   });
-  test("U10-6 #2: the main action of brand-quillmoor-legal is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-quillmoor-legal is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-quillmoor-legal");
   });
-  test("U10-6 #2: the main action of brand-quillmoor-products is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-quillmoor-products is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-quillmoor-products");
   });
-  test("U10-6 #2: the main action of brand-kit-editor is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-kit-editor is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.7" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-kit-editor");
   });
-  test("U10-6 #2: the main action of brand-languages is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of brand-languages is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.8" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-languages");
   });
   test("U10-6 #2: the main action of campaigns is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {

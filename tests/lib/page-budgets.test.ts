@@ -165,8 +165,8 @@ describe("U10-6 the budgets table", () => {
       ...(b.lengthUntil?.story === "unassigned" ? [`${b.key}: length`] : []),
       ...(b.mainActionUntil?.story === "unassigned" ? [`${b.key}: main action`] : []),
     ]);
-    // Answer B1 (9 November) gave the approvals inbox to U10-5.
-    expect(unassigned).toEqual(["brand-kit-editor: length", "brand-languages: main action", "campaigns: length"]);
+    // Answer B1 (9 November) gave the approvals inbox to U10-5, and the kit editor and languages page to U10-7.
+    expect(unassigned).toEqual(["campaigns: length"]);
   });
 
   it("the pages already within budget today carry no marker, so their tests must pass now", () => {
@@ -176,6 +176,16 @@ describe("U10-6 the budgets table", () => {
       // U10-5: home leads with Needs you.
       "home",
       "brands",
+      // U10-7: the brand page opens on its campaigns, with its reference data in tabs; answer B1 gave it the kit
+      // editor (compact rows) and the languages page (Save always on screen).
+      "brand-fernhollow",
+      "brand-quillmoor",
+      "brand-quillmoor-audience",
+      "brand-quillmoor-voice",
+      "brand-quillmoor-legal",
+      "brand-quillmoor-products",
+      "brand-kit-editor",
+      "brand-languages",
       // U10-2: the campaign's overview and its Brief, Audience and Launch stages fit their budgets.
       "campaign-live",
       "campaign-live-brief",

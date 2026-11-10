@@ -12,14 +12,16 @@ test("Find audiences adds labelled, simulated, removable segments", async ({ pag
   test.setTimeout(120_000);
   await signIn(page);
   const quillmoor = await demoBrandId(page, "Quillmoor Money");
-  await page.goto(`/brands/${quillmoor}`);
+  // U10-7: the segments are on the brand page's Audience tab.
+  await page.goto(`/brands/${quillmoor}?tab=audience`);
   await settle(page);
 
   const segments = page.getByRole("region", { name: "Segments" }).filter({ visible: true });
   // The customer summary's segments are there before any run, and can't be removed.
   const system = segments.locator("[data-segment=system]");
   await expect(system.first()).toContainText("From the customer summary");
-  await expect(system.first()).toContainText("Simulated data");
+  // Rule 1: the section says Simulated data once, not every card (U10-7).
+  await expect(segments.getByText("Simulated data", { exact: true })).toHaveCount(1);
   await expect(system.getByRole("button", { name: /^Remove/ })).toHaveCount(0);
 
   await segments.getByRole("button", { name: "Find audiences" }).click();
@@ -30,10 +32,12 @@ test("Find audiences adds labelled, simulated, removable segments", async ({ pag
   const agent = segments.locator("[data-segment=agent]");
   const n = await agent.count();
   expect(n).toBeGreaterThan(0);
+  // U10-7: who proposed it is in the card's details, opened in place.
   for (const s of await agent.all()) {
+    await s.locator("[data-segment-open]").click();
     await expect(s.getByText("Proposed by the Audience agent", { exact: true })).toBeVisible();
-    await expect(s.getByText("Simulated data", { exact: true })).toBeVisible();
   }
+  await expect(segments.getByText("Simulated data", { exact: true })).toBeVisible();
   await expect(segments.getByRole("button", { name: "Find audiences" })).toBeEnabled();
 
   for (const width of [375, 1440]) {

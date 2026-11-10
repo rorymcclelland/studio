@@ -278,7 +278,7 @@ describe("the case list", () => {
     const order = CASES.map((c) => c.story);
     expect(order.lastIndexOf("U10-1")).toBeLessThan(order.indexOf("U10-6"));
     expect(STORIES.find((s) => s.id === "U10-6")).toEqual({ sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" });
-    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "U10-4", "U10-5", "BUG-4", "BUG-11"]);
+    expect(STORIES.filter((s) => s.sprint === 10).map((s) => s.id)).toEqual(["U10-1", "U10-6", "U10-2", "U10-3", "U10-4", "U10-5", "U10-7", "BUG-4", "BUG-11"]);
   });
 
   it("has every agreed U10-2 case, once each, in order, after U10-6's, checked as the refinement says", async () => {
@@ -475,6 +475,98 @@ describe("the case list", () => {
     expect(order.lastIndexOf("U10-4")).toBeLessThan(order.indexOf("U10-5"));
     expect(order.lastIndexOf("U10-5")).toBeLessThan(order.indexOf("BUG-4"));
     expect(STORIES.find((s) => s.id === "U10-5")).toEqual({ sprint: 10, id: "U10-5", title: "Home leads with work" });
+  });
+
+  it("has every agreed U10-7 case, once each, in order, after U10-5's, checked as the refinement says, with the kit editor and languages from answer B1", async () => {
+    const u107 = CASES.filter((c) => c.story === "U10-7");
+    // 1 to 6 as refined; 7 and 8 are answer B1 (9 November 2026), which folds the kit editor and the languages page into U10-7.
+    expect(u107.map((c) => c.id)).toEqual(Array.from({ length: 8 }, (_, i) => `U10-7.${i + 1}`));
+    for (const c of u107) expect(c.sprint, c.id).toBe(10);
+    for (const id of ["U10-7.7", "U10-7.8"]) expect(CASES.find((c) => c.id === id)!.words, id).toMatch(/^\(B1, /);
+    // The refinement: a browser test for every case; CI for 3 (the tab parser); 6 is U10-6's budgets for every tab.
+    expect(u107.map(caseKind)).toEqual(Array(8).fill("browser"));
+    const SPEC = "brand-page.spec.ts";
+    const LIB = "tests/lib/brand-tabs.test.ts";
+    const PAGE_LENGTH = "page-length.spec.ts";
+    const browserOf = (id: string) => CASES.find((c) => c.id === id)!.checks.filter((x) => x.kind === "browser") as { spec: string; title: string }[];
+    const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
+    for (const id of ["U10-7.1", "U10-7.2", "U10-7.3", "U10-7.4", "U10-7.5"]) expect(browserOf(id).map((x) => x.spec), id).toEqual([SPEC]);
+    expect(ciIn("U10-7.3", LIB)).toBe(true);
+    // Case 6: both of U10-6's tests for the brand page and each of its four tabs, with Quillmoor's segments and market notes.
+    const brandKeys = ["brand-fernhollow", "brand-quillmoor", "brand-quillmoor-audience", "brand-quillmoor-voice", "brand-quillmoor-legal", "brand-quillmoor-products"];
+    const budgetTitles = (keys: string[]) =>
+      keys.flatMap((k) => [`U10-6 #1: ${k} is within its length budget at 375 px and 1440 px`, `U10-6 #2: the main action of ${k} is within 1.5 screens at 375 px`]);
+    expect(browserOf("U10-7.6").map((x) => x.spec)).toEqual(Array(brandKeys.length * 2).fill(PAGE_LENGTH));
+    expect(browserOf("U10-7.6").map((x) => x.title)).toEqual(budgetTitles(brandKeys));
+    // Cases 7 and 8 (B1): this spec's test of Save at both widths, and U10-6's budgets for the page.
+    expect(browserOf("U10-7.7").map((x) => [x.spec, x.title])).toEqual([
+      [SPEC, "U10-7 #7: the kit editor is within its length budget, and Save brand kit is on screen without scrolling at 375 px and 1440 px"],
+      ...budgetTitles(["brand-kit-editor"]).map((t) => [PAGE_LENGTH, t]),
+    ]);
+    expect(browserOf("U10-7.8").map((x) => [x.spec, x.title])).toEqual([
+      [SPEC, "U10-7 #8: the languages page is within its length budget, Save languages is on screen without scrolling at 375 px and 1440 px, and saving still works"],
+      ...budgetTitles(["brand-languages"]).map((t) => [PAGE_LENGTH, t]),
+    ]);
+    // U10-7 adds no table and no loader, so nothing against the database; nothing needs real AI output.
+    expect(u107.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && (x.file.startsWith("tests/db/") || x.file.startsWith("tests/flows/")))).toBe(false);
+    expect(u107.flatMap((c) => c.checks).some((x) => x.kind === "hand" || x.kind === "withdrawn")).toBe(false);
+    // Only the tests that would race audience.spec and market.spec (4) or change a kit (8) run in the brand-kit project;
+    // none is marked as an expected failure.
+    const spec = read(`tests/e2e/${SPEC}`);
+    expect(spec).not.toMatch(/test\.fail\(|test\.fixme\(|test\.skip\(\s*true/);
+    for (const c of u107) {
+      for (const x of browserOf(c.id).filter((y) => y.spec === SPEC)) {
+        const at = declaredAt(spec, x.title);
+        expect(at, x.title).toBeGreaterThan(-1);
+        const tagged = spec.slice(at, spec.indexOf("async (", at)).includes("@brand-kit");
+        expect(tagged, c.id).toBe(c.id === "U10-7.4" || c.id === "U10-7.8");
+      }
+    }
+    // The builder's interface is at the top of the spec, with the exact words and hooks.
+    const head = spec.slice(0, spec.indexOf("import "));
+    expect(head).toContain("---------------------------------------------------------------- interface");
+    for (const words of [
+      "src/lib/brands/tabs.ts",
+      "parseBrandTab",
+      "brandTabHref",
+      "?tab=<id>",
+      "Audience",
+      "Voice and visual",
+      "Legal and languages",
+      "Products and data",
+      "data-brand-campaigns",
+      "data-brand-campaign=",
+      "data-campaign-objective",
+      "data-new-campaign",
+      "New campaign",
+      "data-brand-tabs",
+      "data-brand-tab=",
+      "data-brand-tabpanel=",
+      "data-segment-card",
+      "data-segment-size",
+      "data-segment-definition",
+      "data-segment-details",
+      "data-segment-open",
+      "data-save-bar",
+      "Save brand kit",
+      "Save languages",
+      "src/components/ui/tabs.tsx",
+    ]) {
+      expect(head, words).toContain(words);
+    }
+    // U10-6 measures the brand page's New campaign button and each tab's panel; the kit editor and languages page are
+    // U10-7's by answer B1, so no page is left over budget with no story but the campaigns list (U10-8's by B1).
+    const { budgetFor } = await import("../e2e/page-budgets");
+    for (const key of ["brand-fernhollow", "brand-quillmoor"]) expect(budgetFor(key).mainAction, key).toMatchObject({ css: "[data-new-campaign]" });
+    for (const key of brandKeys.slice(2)) expect(budgetFor(key).mainAction, key).toMatchObject({ css: "[role=tabpanel]" });
+    for (const key of ["brand-kit-editor", "brand-languages"]) {
+      const b = budgetFor(key);
+      for (const u of [b.lengthUntil, b.mainActionUntil]) if (u) expect(u.story, key).toBe("U10-7");
+    }
+    const order = CASES.map((c) => c.story);
+    expect(order.lastIndexOf("U10-5")).toBeLessThan(order.indexOf("U10-7"));
+    expect(order.lastIndexOf("U10-7")).toBeLessThan(order.indexOf("BUG-4"));
+    expect(STORIES.find((s) => s.id === "U10-7")).toEqual({ sprint: 10, id: "U10-7", title: "The brand page: campaigns first, reference data on request" });
   });
 
   it("has every agreed BUG-4 and BUG-11 case, once each, in order, after F-23's: CI with the mock model, and the real models in an eval run", () => {

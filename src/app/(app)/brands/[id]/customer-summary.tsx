@@ -9,18 +9,18 @@ function formatDay(iso: string | undefined): string {
   return new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric", timeZone: "UTC" });
 }
 
-/** Rule 1: every customer and order figure of a simulated brand carries this label. */
-function Simulated({ simulated }: { simulated: boolean }) {
-  return simulated ? <Pill tone="review">Simulated data</Pill> : null;
-}
 
 export function CustomerSummary({ summary, simulated }: { summary: Summary | null; simulated: boolean }) {
   return (
     <section aria-labelledby="customers" className="space-y-4">
       <div>
-        <h2 id="customers" className="text-2xl font-strong tracking-tight">
-          Customers and orders
-        </h2>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+          <h2 id="customers" className="text-2xl font-strong tracking-tight">
+            Customers and orders
+          </h2>
+          {/* Rule 1: once for the section, which every figure in it shares (U10-7), not on each figure. */}
+          {simulated && <Pill tone="review">Simulated data</Pill>}
+        </div>
         <p className="mt-1 max-w-prose text-ink-2">
           {simulated
             ? `Generated for the demo as of ${formatDay(summary?.asOf)}, not real people or sales. Customers carry no names or contact details.`
@@ -35,19 +35,17 @@ export function CustomerSummary({ summary, simulated }: { summary: Summary | nul
       ) : (
         <>
           <dl className="grid grid-cols-1 gap-3 min-[30rem]:grid-cols-2 lg:grid-cols-4">
-            <Stat label="Customers" value={formatCount(summary.customers)} simulated={simulated} />
-            <Stat label="Orders" value={formatCount(summary.orders)} note={simulated ? "in the 24 months to the data date" : "in the last 24 months"} simulated={simulated} />
+            <Stat label="Customers" value={formatCount(summary.customers)} />
+            <Stat label="Orders" value={formatCount(summary.orders)} note={simulated ? "in the 24 months to the data date" : "in the last 24 months"} />
             <Stat
               label="Repeat-purchase rate"
               value={formatShare(summary.repeatRate)}
               note="of customers ordered twice or more"
-              simulated={simulated}
             />
             <Stat
               label="Lapsed customers"
               value={formatCount(summary.lapsed)}
               note={`no order in 12 months (${formatShare(summary.lapsed / summary.customers)})`}
-              simulated={simulated}
             />
           </dl>
 
@@ -57,10 +55,10 @@ export function CustomerSummary({ summary, simulated }: { summary: Summary | nul
 
           <div className="grid gap-3 md:grid-cols-2">
             <Card data-figure="Customers by region">
-              <BarList title="Customers by region" id="by-region" items={summary.byRegion} total={summary.customers} simulated={simulated} />
+              <BarList title="Customers by region" id="by-region" items={summary.byRegion} total={summary.customers} />
             </Card>
             <Card data-figure="Customers by age band">
-              <BarList title="Customers by age band" id="by-age" items={summary.byAgeBand} total={summary.customers} simulated={simulated} />
+              <BarList title="Customers by age band" id="by-age" items={summary.byAgeBand} total={summary.customers} />
             </Card>
           </div>
         </>
@@ -69,27 +67,21 @@ export function CustomerSummary({ summary, simulated }: { summary: Summary | nul
   );
 }
 
-function Stat({ label, value, note, simulated }: { label: string; value: string; note?: string; simulated: boolean }) {
+function Stat({ label, value, note }: { label: string; value: string; note?: string }) {
   return (
     <div data-figure={label} className="flex min-w-0 flex-col gap-2 rounded-card bg-surface p-5">
       <dt className="font-medium text-ink-2">{label}</dt>
       <dd className="text-3xl font-strong tracking-tight tabular-nums">{value}</dd>
       {note && <dd className="text-sm text-ink-2">{note}</dd>}
-      <dd className="mt-auto pt-1">
-        <Simulated simulated={simulated} />
-      </dd>
     </div>
   );
 }
 
-function FigureHeading({ id, title, simulated }: { id: string; title: string; simulated: boolean }) {
+function FigureHeading({ id, title }: { id: string; title: string }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-      <h3 id={id} className="text-lg font-strong">
-        {title}
-      </h3>
-      <Simulated simulated={simulated} />
-    </div>
+    <h3 id={id} className="text-lg font-strong">
+      {title}
+    </h3>
   );
 }
 
@@ -98,18 +90,16 @@ function BarList({
   id,
   items,
   total,
-  simulated,
 }: {
   title: string;
   id: string;
   items: { label: string; count: number }[];
   total: number;
-  simulated: boolean;
 }) {
   const max = Math.max(1, ...items.map((i) => i.count));
   return (
     <div>
-      <FigureHeading id={id} title={title} simulated={simulated} />
+      <FigureHeading id={id} title={title} />
       <ul aria-labelledby={id} className="mt-4 space-y-3">
         {items.map((i) => (
           <li key={i.label}>
@@ -142,7 +132,7 @@ function OrdersByMonth({ months, simulated }: { months: { month: string; count: 
     `Quietest: ${formatMonth(quietest.month, "long")}, ${formatCount(quietest.count)} orders. Every month is in the table that follows.`;
   return (
     <div>
-      <FigureHeading id="by-month" title="Orders by month" simulated={simulated} />
+      <FigureHeading id="by-month" title="Orders by month" />
       <div role="img" aria-label={label} className="mt-5">
         <div className="flex h-40 items-end gap-[3px] border-b border-line sm:gap-1.5">
           {months.map((m) => (

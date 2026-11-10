@@ -9,6 +9,7 @@ import { Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useLeaveGuard } from "@/components/use-leave-guard";
 import { parseBrandInput } from "@/lib/brands/schema";
+import { brandTabHref } from "@/lib/brands/tabs";
 import { saveBrand, type BrandDraft } from "../../actions";
 
 type ListKey = "toneWords" | "doRules" | "dontRules" | "legalLines" | "bannedTerms" | "evidenceClaims";
@@ -175,17 +176,18 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
       setErrors({});
       setBaseline(input);
       toast({ message: res.done, tone: "good" });
-      leaveTo(`/brands/${brandId}`);
+      // U10-7: back to the brand page's Voice and visual tab, where most of the kit shows.
+      leaveTo(brandTabHref(brandId, "voice"));
     });
   }
 
   return (
     // Controls scrolled into view by focus stop above the sticky save bar, not under it.
-    <div className="space-y-8 [&_:is(input,textarea,select,button,a)]:scroll-mb-36">
+    <div className="space-y-4 [&_:is(input,textarea,select,button,a)]:scroll-mb-36">
       {lead}
-      <form id={formId} onSubmit={onSubmit} noValidate className="space-y-6" aria-describedby={formError ? "form-error" : undefined}>
+      <form id={formId} onSubmit={onSubmit} noValidate className="space-y-4" aria-describedby={formError ? "form-error" : undefined}>
         <Section id="identity" title="Identity" intro="How the brand is named and described to agents.">
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid gap-5 md:grid-cols-3">
             <Field id={fieldId("name")} label="Name" hint="As customers see it." error={errors.name}>
               <Input
                 value={draft.name}
@@ -228,10 +230,10 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
               label="Description"
               hint="One or two sentences. Up to 500 characters."
               error={errors.description}
-              className="md:col-span-2"
+              className="md:col-span-3"
             >
               <Textarea
-                rows={3}
+                rows={2}
                 value={draft.description}
                 onChange={(e) => {
                   set("description", e.target.value);
@@ -263,7 +265,7 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
             error={errors.voiceNotes}
           >
             <Textarea
-              rows={4}
+              rows={3}
               value={draft.voiceNotes}
               onChange={(e) => {
                 set("voiceNotes", e.target.value);
@@ -271,34 +273,36 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
               }}
             />
           </Field>
-          <ListField
-            field="doRules"
-            label="Do"
-            itemLabel="Do rule"
-            hint="Up to 20 rules, 300 characters each."
-            max={20}
-            long
-            rows={draft.doRules}
-            errors={errors}
-            onChange={(v) => set("doRules", v)}
-            clearError={clearError}
-            clearListErrors={clearListErrors}
-            focusLater={focusLater}
-          />
-          <ListField
-            field="dontRules"
-            label="Don't"
-            itemLabel="Don't rule"
-            hint="Up to 20 rules, 300 characters each."
-            max={20}
-            long
-            rows={draft.dontRules}
-            errors={errors}
-            onChange={(v) => set("dontRules", v)}
-            clearError={clearError}
-            clearListErrors={clearListErrors}
-            focusLater={focusLater}
-          />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ListField
+              field="doRules"
+              label="Do"
+              itemLabel="Do rule"
+              hint="Up to 20 rules, 300 characters each."
+              max={20}
+              long
+              rows={draft.doRules}
+              errors={errors}
+              onChange={(v) => set("doRules", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+            <ListField
+              field="dontRules"
+              label="Don't"
+              itemLabel="Don't rule"
+              hint="Up to 20 rules, 300 characters each."
+              max={20}
+              long
+              rows={draft.dontRules}
+              errors={errors}
+              onChange={(v) => set("dontRules", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+          </div>
         </Section>
 
         <Section id="visual" title="Visual" intro="The colours and type every design uses.">
@@ -310,7 +314,8 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
             clearListErrors={clearListErrors}
             focusLater={focusLater}
           />
-          <div className="grid gap-6 md:grid-cols-2">
+          {/* Answer B1: the two fonts share a row at every width. */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-6">
             <Field id={fieldId("fontPrimary")} label="Primary font" hint="For headings." error={errors.fontPrimary}>
               <Input
                 value={draft.fontPrimary}
@@ -349,38 +354,40 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
             clearListErrors={clearListErrors}
             focusLater={focusLater}
           />
-          <ListField
-            field="bannedTerms"
-            label="Banned terms"
-            itemLabel="Banned term"
-            hint="Words or phrases agents must never use. Up to 50, 80 characters each."
-            max={50}
-            rows={draft.bannedTerms}
-            errors={errors}
-            onChange={(v) => set("bannedTerms", v)}
-            clearError={clearError}
-            clearListErrors={clearListErrors}
-            focusLater={focusLater}
-          />
-          <ListField
-            field="evidenceClaims"
-            label="Claims that need evidence"
-            itemLabel="Claim"
-            hint="Claims agents may only make with proof, such as “lightest”. Up to 20, 120 characters each."
-            max={20}
-            rows={draft.evidenceClaims}
-            errors={errors}
-            onChange={(v) => set("evidenceClaims", v)}
-            clearError={clearError}
-            clearListErrors={clearListErrors}
-            focusLater={focusLater}
-          />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ListField
+              field="bannedTerms"
+              label="Banned terms"
+              itemLabel="Banned term"
+              hint="Words or phrases agents must never use. Up to 50, 80 characters each."
+              max={50}
+              rows={draft.bannedTerms}
+              errors={errors}
+              onChange={(v) => set("bannedTerms", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+            <ListField
+              field="evidenceClaims"
+              label="Claims that need evidence"
+              itemLabel="Claim"
+              hint="Claims agents may only make with proof, such as “lightest”. Up to 20, 120 characters each."
+              max={20}
+              rows={draft.evidenceClaims}
+              errors={errors}
+              onChange={(v) => set("evidenceClaims", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+          </div>
         </Section>
       </form>
 
       {/* Stays in view while editing, at every width (U10-1). On a phone it is
           one short line of status above the buttons, so it hides little of the form. */}
-      <div className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card bg-surface px-4 py-3 shadow-lg ring-1 shadow-ink/10 ring-line sm:flex-nowrap sm:p-4 sm:px-6">
+      <div data-save-bar="" className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card bg-surface px-4 py-3 shadow-lg ring-1 shadow-ink/10 ring-line sm:flex-nowrap sm:p-4 sm:px-6">
         <div className="min-w-0 basis-full text-sm sm:flex-1 sm:basis-auto">
           {formError ? (
             <p id="form-error" role="alert" className="font-medium text-attention-ink">
@@ -407,7 +414,7 @@ export function BrandEditor({ brandId, initial, lead }: { brandId: string; initi
 
 function Section({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
   return (
-    <Card as="section" aria-labelledby={id} className="space-y-6">
+    <Card as="section" aria-labelledby={id} className="space-y-4">
       <div>
         <h2 id={id} className="text-2xl font-strong tracking-tight">
           {title}
@@ -456,25 +463,26 @@ function ListField({
       id={fieldId(field)}
       tabIndex={-1}
       aria-describedby={cx(`${field}-hint`, listError && `${field}-error`)}
-      className="min-w-0 space-y-3"
+      className="min-w-0 space-y-2"
     >
       <legend className="font-semibold">{label}</legend>
-      <p id={`${field}-hint`} className="-mt-1.5 text-sm text-ink-2">
+      <p id={`${field}-hint`} className="-mt-1 text-sm text-ink-2">
         {hint}
       </p>
       {items.length === 0 && <p className="text-ink-2">None yet.</p>}
-      <ol className="space-y-3">
+      {/* Answer B1: compact rows. Short items size to their words and share a row; rules and legal lines take one each. */}
+      <ol className={long ? "space-y-2" : "flex flex-wrap gap-2"}>
         {items.map((row, i) => {
           const path = `${field}.${i}`;
           const id = fieldId(path);
           const err = errors[path];
           const Control = long ? Textarea : Input;
           return (
-            <li key={row.key} className="min-w-0">
-              <div className="flex items-start gap-2">
+            <li key={row.key} className={long ? "min-w-0" : "max-w-full min-w-0"}>
+              <div className="flex items-start gap-1.5">
                 <Control
                   id={id}
-                  {...(long ? { rows: 1, className: "min-h-11 field-sizing-content" } : {})}
+                  {...(long ? { rows: 1, className: "min-h-11 field-sizing-content" } : { className: "w-auto! min-w-16 field-sizing-content" })}
                   aria-label={`${itemLabel} ${i + 1}`}
                   aria-invalid={err ? true : undefined}
                   aria-describedby={err ? `${id}-error` : undefined}
@@ -552,7 +560,7 @@ function PaletteField({
         Up to 12 colours, each with a name and a hex value such as #3F5B3A.
       </p>
       {colours.length === 0 && <p className="text-ink-2">None yet.</p>}
-      <ol className="space-y-3">
+      <ol className="grid gap-2 lg:grid-cols-2">
         {colours.map((c, i) => {
           const nameId = fieldId(`palette.${i}.name`);
           const hexId = fieldId(`palette.${i}.hex`);
@@ -560,17 +568,17 @@ function PaletteField({
           const hexErr = errors[`palette.${i}.hex`];
           return (
             <li key={c.key} className="min-w-0">
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-1.5">
                 {/* The swatch shows the brand's own colour, which is data, not a design token. */}
                 <span
                   aria-hidden
                   className={cx(
-                    "mt-0.5 size-10 shrink-0 rounded-field ring-1 ring-line ring-inset",
+                    "size-11 shrink-0 rounded-field ring-1 ring-line ring-inset",
                     !HEX.test(c.hex.trim()) && "bg-surface-2",
                   )}
                   style={HEX.test(c.hex.trim()) ? { backgroundColor: c.hex.trim() } : undefined}
                 />
-                <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,6.5rem)] gap-1.5">
                   <Input
                     id={nameId}
                     aria-label={`Colour ${i + 1} name`}
@@ -609,12 +617,12 @@ function PaletteField({
                 />
               </div>
               {nameErr && (
-                <p id={`${nameId}-error`} role="alert" className="mt-1.5 pl-12 text-sm font-medium text-attention-ink">
+                <p id={`${nameId}-error`} role="alert" className="mt-1.5 pl-12.5 text-sm font-medium text-attention-ink">
                   {nameErr}
                 </p>
               )}
               {hexErr && (
-                <p id={`${hexId}-error`} role="alert" className="mt-1.5 pl-12 text-sm font-medium text-attention-ink">
+                <p id={`${hexId}-error`} role="alert" className="mt-1.5 pl-12.5 text-sm font-medium text-attention-ink">
                   {hexErr}
                 </p>
               )}
@@ -642,11 +650,18 @@ function PaletteField({
   );
 }
 
+/** A compact remove control beside its row (answer B1): a cross on screen, "Remove <label>" to a screen reader. */
 function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="quiet" size="sm" className="mt-1 px-3" onClick={onClick}>
-      Remove<span className="sr-only"> {label}</span>
-    </Button>
+    <button
+      type="button"
+      title={`Remove ${label}`}
+      onClick={onClick}
+      className="mt-1 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-lg leading-none font-semibold text-ink transition-colors hover:bg-primary-soft/60 motion-reduce:transition-none"
+    >
+      <span aria-hidden>×</span>
+      <span className="sr-only">Remove {label}</span>
+    </button>
   );
 }
 

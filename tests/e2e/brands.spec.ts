@@ -81,7 +81,8 @@ test.describe("S2-3 #1: editing the kit", { tag: "@brand-kit" }, () => {
     await page.getByRole("button", { name: "Save brand kit" }).click();
 
     await expect(page.locator("[data-toast]").filter({ hasText: "Brand kit saved for Quillmoor Money." })).toBeVisible();
-    await expect(page).toHaveURL(new RegExp(`/brands/${quillmoor}$`));
+    // U10-7: saving returns to the brand page's Voice and visual tab, where the tone words and Don't are.
+    await expect(page).toHaveURL(new RegExp(`/brands/${quillmoor}\\?tab=voice$`));
     for (const pass of ["after saving", "after a reload"]) {
       const tone = page.getByRole("list", { name: "Tone words" });
       await expect(tone.getByText(word, { exact: true }), pass).toBeVisible();
@@ -208,7 +209,7 @@ test.describe("S2-3 #3: unsaved changes", { tag: "@brand-kit" }, () => {
     const saved = `${(await notes.inputValue()).replace(/ Saved at \d+\.$/, "")} Saved at ${Date.now()}.`;
     await notes.fill(saved);
     await page.getByRole("button", { name: "Save brand kit" }).click();
-    await expect(page).toHaveURL(new RegExp(`/brands/${quillmoor}$`));
+    await expect(page).toHaveURL(new RegExp(`/brands/${quillmoor}\\?tab=voice$`));
     await page.goBack();
     await expect(page).toHaveURL(/\/edit$/);
     // The kept editor shows what was saved, not the kit from before the save.
@@ -221,15 +222,19 @@ test.describe("S2-3 #3: unsaved changes", { tag: "@brand-kit" }, () => {
 });
 
 test.describe("S2-3 #5: simulated data is labelled", () => {
-  test("every customer and order figure of a simulated brand says Simulated data", async ({ page }) => {
-    await page.goto(`/brands/${fernhollow}`);
+  test("every customer and order figure of a simulated brand is labelled Simulated data, once for the section", async ({ page }) => {
+    // U10-7: the figures are on the Products and data tab, and the label is said once for the section that holds them
+    // all (rule 1, once per section), not on each figure.
+    await page.goto(`/brands/${fernhollow}?tab=products`);
     await settle(page);
     const section = page.getByRole("region", { name: "Customers and orders" });
     const figures = section.locator("[data-figure]");
     // Customers, orders, repeat rate, lapsed, orders by month, regions, age bands.
     await expect(figures).toHaveCount(7);
+    await expect(section.getByText("Simulated data", { exact: true })).toHaveCount(1);
+    await expect(section.getByText("Simulated data", { exact: true })).toBeVisible();
     for (const f of await figures.all()) {
-      await expect(f.getByText("Simulated data", { exact: true }), (await f.getAttribute("data-figure"))!).toBeVisible();
+      await expect(f.getByText("Simulated data", { exact: true }), (await f.getAttribute("data-figure"))!).toHaveCount(0);
     }
     await expect(section.getByText("2,000", { exact: true })).toBeVisible();
     // The chart has a text alternative and every month in a table.

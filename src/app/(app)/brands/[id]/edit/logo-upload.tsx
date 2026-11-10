@@ -92,7 +92,7 @@ export function LogoUpload({ brandId, brandName, initial }: { brandId: string; b
   }
 
   return (
-    <Card as="section" aria-labelledby={`${id}-title`} className="space-y-6" data-logo-upload="">
+    <Card as="section" aria-labelledby={`${id}-title`} className="space-y-4" data-logo-upload="">
       <div>
         <h2 id={`${id}-title`} className="text-2xl font-strong tracking-tight">
           Logo
@@ -103,7 +103,7 @@ export function LogoUpload({ brandId, brandName, initial }: { brandId: string; b
         </p>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2" data-logo-preview="">
+      <div className="grid grid-cols-2 gap-3" data-logo-preview="">
         <Preview label="On a light background" dark={false} name={brandName} logo={logo} has={has} />
         <Preview label="On a dark background" dark name={brandName} logo={logo} has={has} />
       </div>
@@ -155,12 +155,12 @@ function Preview({ label, dark, name, logo, has }: { label: string; dark: boolea
     <figure className="min-w-0">
       <div
         className={cx(
-          "grid h-28 place-items-center rounded-field p-4 ring-1 ring-inset",
+          "grid h-20 place-items-center rounded-field p-3 ring-1 ring-inset sm:h-28 sm:p-4",
           dark ? "bg-ink ring-ink" : "bg-surface ring-line",
         )}
       >
         {has ? (
-          <BrandLogo name={name} svg={logo.svg} pngSrc={logo.pngSrc} decorative={dark} className="h-16 w-auto max-w-full object-center" />
+          <BrandLogo name={name} svg={logo.svg} pngSrc={logo.pngSrc} decorative={dark} className="h-10 w-auto max-w-full object-center sm:h-16" />
         ) : (
           <span className={cx("text-sm", dark ? "text-surface" : "text-ink-2")}>No logo yet</span>
         )}
