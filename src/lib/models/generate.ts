@@ -228,6 +228,18 @@ export type GenerateResult = {
 
 const ATTEMPTS = 2; // one retry (S1-4 #5)
 const TIMEOUT_MS = 60_000;
+
+/**
+ * Claude 5.5 models think before answering unless told not to, and the thinking
+ * counts towards maxOutputTokens. Each agent's limit is sized for its JSON alone,
+ * so on 10 November 2026 thinking used up the limit and replies were cut off mid-JSON
+ * ("The reply was not valid JSON"). Studio's agents answer in one structured step,
+ * so thinking is turned off: Haiku honours "disabled", and for Sonnet the provider
+ * sends its lowest setting (no thinking before the answer).
+ */
+export function textProviderOptions(provider: string) {
+  return provider === "anthropic" ? { anthropic: { thinking: { type: "disabled" as const } } } : undefined;
+}
 const SEARCH_TIMEOUT_MS = 180_000;
 const IMAGE_TIMEOUT_MS = 120_000;
 // A 1K picture is about 1,400 input tokens to Claude (width x height / 750); estimated generously. A 2K
@@ -278,6 +290,7 @@ export async function generate(input: GenerateInput): Promise<GenerateResult> {
           instructions: input.instructions,
           ...(messages ? { messages } : { prompt: input.prompt }),
           maxOutputTokens: cfg.maxOutputTokens,
+          ...(textProviderOptions(cfg.provider) ? { providerOptions: textProviderOptions(cfg.provider) } : {}),
           ...(tools ? { tools } : {}),
           maxRetries: 0,
           abortSignal: AbortSignal.timeout(timeout),
