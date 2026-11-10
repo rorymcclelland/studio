@@ -32,7 +32,7 @@ export function CampaignList({
       {campaigns.map((c) => {
         const status = campaignStatusLabel(c);
         return (
-          <li key={c.id} className="border-line not-first:border-t">
+          <li key={c.id} className="border-line not-first:border-t" data-campaign-row={c.id}>
             <Link
               href={`/campaigns/${c.id}`}
               className="flex flex-wrap items-center gap-x-4 gap-y-1.5 px-5 py-4 hover:bg-surface-2 sm:px-6"

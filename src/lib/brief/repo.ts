@@ -1,5 +1,8 @@
 import { createRun, type Member, type SendEvent, StartRunError } from "@/lib/agents/runs";
+import type postgres from "postgres";
 import { asUser, type Tx } from "@/lib/db/scoped";
+import { campaignName } from "@/lib/home/needs";
+import { CAMPAIGNS_PAGE_SIZE, type CampaignFilterKey, type CampaignFilters } from "@/lib/campaigns/list-filters";
 import { changedSections, evidenceProblems, kitListsFor, type KitLists, unsourcedNumbers } from "./checks";
 import { contextById, realNamesFor } from "./gather";
 import { BRIEF_SECTIONS, briefCore, storedBrief, type BriefSection, type StoredBrief } from "./schema";
@@ -78,22 +81,91 @@ export type CampaignSummary = {
   updatedAt: Date;
 };
 
-export async function listCampaigns(userId: string, brandId?: string): Promise<CampaignSummary[]> {
-  if (brandId !== undefined && !UUID.test(brandId)) return [];
-  const rows = await asUser(userId, (tx) => tx`
+/** The columns a campaigns list reads, with each campaign's current title and its launches. */
+async function selectCampaigns(tx: Tx, where: postgres.Fragment, limit: number): Promise<CampaignSummary[]> {
+  const rows = await tx`
     select c.id, c.objective, c.status, c.current_version, c.updated_at, b.id as brand_id, b.name as brand_name,
       (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title,
       coalesce((select jsonb_agg(jsonb_build_object('status', l.status, 'simDay', l.sim_day))
                 from public.launches l where l.campaign_id = c.id), '[]'::jsonb) as launches
     from public.campaigns c join public.brands b on b.id = c.brand_id
-    where ${brandId === undefined ? tx`true` : tx`c.brand_id = ${brandId}`}
-    order by c.updated_at desc
-    limit 100`);
+    where ${where}
+    order by c.updated_at desc, c.id desc
+    limit ${limit}`;
   return rows.map((r) => ({
     id: r.id, objective: r.objective, status: r.status, currentVersion: r.current_version,
     launches: (r.launches as { status: string; simDay: number | string }[]).map((l) => ({ status: l.status, simDay: Number(l.simDay) })),
     brand: { id: r.brand_id, name: r.brand_name }, title: r.title, updatedAt: r.updated_at,
   }));
+}
+
+export async function listCampaigns(userId: string, brandId?: string): Promise<CampaignSummary[]> {
+  if (brandId !== undefined && !UUID.test(brandId)) return [];
+  return asUser(userId, (tx) => selectCampaigns(tx, brandId === undefined ? tx`true` : tx`c.brand_id = ${brandId}`, 100));
+}
+
+/** U10-8: every campaign in the reader's workspace, by name (campaignName's rule), for the runs list's Campaign filter. */
+export async function listCampaignOptions(userId: string): Promise<{ id: string; name: string }[]> {
+  const rows = await asUser(userId, (tx) => tx`
+    select c.id, c.objective,
+      (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title
+    from public.campaigns c
+    order by c.updated_at desc, c.id desc
+    limit 1000`);
+  return rows.map((r) => ({ id: r.id as string, name: campaignName({ title: r.title as string | null, objective: r.objective as string }) }));
+}
+
+/** U10-8 (answer B1): a page of the campaigns list. `older` is the cursor for the next page (the last campaign's id), or null. */
+export type CampaignsPage = { campaigns: CampaignSummary[]; older: string | null; ignored: CampaignFilterKey[] };
+
+/**
+ * The state a campaign's row shows, in SQL, with campaignStatusKey's precedence (src/lib/campaigns/list-filters.ts),
+ * so a status filter pages correctly.
+ */
+const statusKeySql = (tx: Tx) => tx`
+  case
+    when exists (select 1 from public.launches l where l.campaign_id = c.id and l.status = 'live') then 'live'
+    when exists (select 1 from public.launches l where l.campaign_id = c.id and l.status = 'awaiting_approval') then 'launchWaiting'
+    when exists (select 1 from public.launches l where l.campaign_id = c.id and l.status = 'ended') then 'ended'
+    when c.status = 'drafting' or c.current_version = 0 then 'writing'
+    when c.status = 'awaiting_signoff' then 'waiting'
+    when c.status = 'approved' then 'signedOff'
+    else 'draft'
+  end`;
+
+/**
+ * U10-8 (answer B1): a page of campaigns, filtered by brand and status, after the campaign `before` (by updated_at,
+ * then id), through asUser() (rule 7). A brand that isn't the reader's is not applied and is reported in `ignored`;
+ * a cursor that isn't one of the reader's campaigns gives the first page.
+ */
+export async function listCampaignsPage(
+  userId: string,
+  query: { filters: CampaignFilters; before: string | null },
+  pageSize = CAMPAIGNS_PAGE_SIZE,
+): Promise<CampaignsPage> {
+  const brandId = query.filters.brand !== null && UUID.test(query.filters.brand) ? query.filters.brand.toLowerCase() : null;
+  const beforeId = query.before !== null && UUID.test(query.before) ? query.before.toLowerCase() : null;
+  const status = query.filters.status;
+  const size = Math.max(1, Math.floor(pageSize));
+  return asUser(userId, async (tx) => {
+    const ignored: CampaignFilterKey[] = [];
+    let brand: string | null = null;
+    if (query.filters.brand !== null) {
+      const [b] = brandId ? await tx`select id from public.brands where id = ${brandId}` : [];
+      if (b) brand = b.id as string;
+      else ignored.push("brand");
+    }
+    const [cursor] = beforeId ? await tx`select id from public.campaigns where id = ${beforeId}` : [];
+    const conditions = [
+      brand ? tx`c.brand_id = ${brand}` : null,
+      status !== null ? tx`${statusKeySql(tx)} = ${status}` : null,
+      cursor ? tx`(c.updated_at, c.id) < (select p.updated_at, p.id from public.campaigns p where p.id = ${cursor.id as string})` : null,
+    ].filter((c) => c !== null);
+    const where = conditions.reduce((acc, c) => tx`${acc} and ${c}`, tx`true`);
+    const rows = await selectCampaigns(tx, where, size + 1);
+    const campaigns = rows.slice(0, size);
+    return { campaigns, older: rows.length > size ? campaigns[campaigns.length - 1].id : null, ignored };
+  });
 }
 
 export type Proposal = {

@@ -94,6 +94,7 @@ export const STORIES: Story[] = [
   { sprint: 10, id: "U10-4", title: "Performance: what needs action first" },
   { sprint: 10, id: "U10-5", title: "Home leads with work" },
   { sprint: 10, id: "U10-7", title: "The brand page: campaigns first, reference data on request" },
+  { sprint: 10, id: "U10-8", title: "The runs list: filters, the campaign, and every run reachable" },
   { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
   { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
 ];
@@ -301,6 +302,18 @@ const budgetChecks = (keys: string[]): Check[] =>
     { kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px` },
     { kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #2: the main action of ${key} is within 1.5 screens at 375 px` },
   ]);
+
+// U10-8 The runs list: filters, the campaign, and every run reachable: the browser tests (a new invitee's own
+// workspace with 60 runs and 25 campaigns written to the database), the pure filters, addresses, cost heading and
+// step numbers, and the paging queries against plain Postgres (outside tests/db, as every Sprint 10 flow: U10-8 adds
+// no table). Answer B1 (9 November) folds in the campaigns list as case 6, with U10-6's budgets for it. The agreed
+// extras are folded into the cases: the simulated label once in the cost heading into 3, the hostile filters into 1
+// and the bad cursor into 2. The interface is at the top of the spec.
+const RUNS_SPEC = "runs-list.spec.ts";
+const RUNS_LIB = "tests/lib/runs-list.test.ts";
+const RUNS_FLOWS = "tests/flows/runs-list.test.ts";
+const RUNS_JOURNEY =
+  "A new invitee's own workspace (the owner invites them on /invites and they accept), so nothing other specs make in the dev workspace is on its lists. Its runs and campaigns are written to the database as the app leaves them (tests/e2e/runs-fixture.ts): 60 finished runs a second apart (the 50th and 51st at the same moment), each with a simulated cost, and 25 campaigns over two fictional brands; and in the dev workspace a campaign and a run whose ids are another workspace's.";
 
 // BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
 // mock model (the unit and regression tests, and the evals in CI's first job); the real models
@@ -2538,6 +2551,107 @@ export const CASES: Case[] = [
         note: "Quillmoor's languages, tagged @brand-kit: at 375 px Spanish is left out and saved from where the change was made, the reload shows it, and the demo languages are put back. U10-6 measures Fernhollow's languages page with the fullest data.",
       },
       ...budgetChecks(["brand-languages"]),
+    ],
+  },
+  // U10-8 The runs list: filters, the campaign, and every run reachable
+  {
+    id: "U10-8.1",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "Filtering the runs list by campaign, agent or status shows only the matching runs, and the filters survive a reload because they are in the address. Unknown or garbage filter values show all runs with a plain note, never an error; the filters go through asUser() (rule 7).",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #1: filtering by campaign, agent or status shows only the matching runs, and the filters survive a reload",
+        note: `${RUNS_JOURNEY} Each filter from the form (status at 375 px), then all three from a shared address shown in the form, then Clear filters. The failure path: garbage in every filter shows the first page with "Filters not recognised, so not applied: campaign, agent and status."; an unknown agent beside a known status applies the status; a filter no run matches says "No runs match these filters".`,
+      },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #1 the runs list's filters and their address" },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #1 listRunsPage() filters by campaign, agent and status" },
+    ],
+  },
+  {
+    id: "U10-8.2",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "With 60 runs, \"Older runs\" shows runs 51 to 60, and none is shown twice or missed: the page is found by a stable cursor (the last run shown, by created_at then id), not an offset. A bad cursor shows the first page.",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #2: with 60 runs, Older runs shows runs 51 to 60, none shown twice or missed, and a bad cursor shows the first page",
+        note: "At 1440 px and 375 px, on the invitee's 60 runs: the first page's 50 and the second page's 10 are all 60 in order, once each, the tie at the boundary included, and a reload keeps the second page. The failure path: a garbage cursor, an offset (\"50\") and another workspace's run id each show the first page.",
+      },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #2 with 60 runs, the second page is runs 51 to 60, none twice or missed, by created_at then id" },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #2 a bad cursor shows the first page" },
+    ],
+  },
+  {
+    id: "U10-8.3",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "Each row of the runs list names its campaign, or \"No campaign\" for the tagline demo. The simulated cost label appears once, in the cost column's heading, not on every row (rule 1: still said wherever a simulated cost is shown).",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #3: each row names its campaign, or No campaign for the tagline demo, and the simulated label is once, in the cost heading, at 375 px and 1440 px",
+        note: "Every row of the first page at both widths, its campaign and its cost; \"(simulated)\" is in the page's visible text once, in the heading, and the note on what simulated means stays below the table. AA contrast and no sideways scroll at both widths.",
+      },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #3 each run names its campaign, or none" },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 the simulated cost label, once, in the cost column's heading" },
+    ],
+  },
+  {
+    id: "U10-8.4",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "Another workspace's runs never appear, whatever the filters, including another workspace's campaign id in the address (rule 7).",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #4: another workspace's runs and campaign never appear, whatever the filters, including its campaign id in the address",
+        note: "The dev workspace's campaign id in the invitee's address is not applied (\"Filter not recognised, so not applied: campaign.\") and its name is nowhere; the form offers only the invitee's campaigns; six filtered and paged addresses show only the invitee's runs; the run naming the dev workspace's campaign says No campaign.",
+      },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #4 another workspace's runs never appear, whatever the filters" },
+    ],
+  },
+  {
+    id: "U10-8.5",
+    sprint: 10,
+    story: "U10-8",
+    words: "A run trail's steps are numbered without gaps (the shown steps are numbered 1 to n), or the gap is explained.",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #5: a run trail's steps are numbered without gaps",
+        note: "An Imagery run whose steps are recorded at seq 1, 2, 3, 5 and 7 (as Imagery's reserved slots leave them), opened from the filtered list at 1440 px and 375 px, reads Step 1 to Step 5 in seq order. We chose to number the shown steps, the refinement's first option, so no gap needs explaining.",
+      },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #5 the run trail's steps are numbered without gaps" },
+    ],
+  },
+  {
+    id: "U10-8.6",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) The campaigns list gets filters (brand and status) and paging like the runs list: with the suite's campaigns it is within its length budget at 375 px and 1440 px, and filtering and \"Older campaigns\" work.",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #6: the campaigns list is within its length budget at 375 px and 1440 px, and filtering and Older paging work",
+        note: "On the invitee's 25 campaigns at both widths: a page of 20 within the budget, measured as page-length.spec measures it, then Older campaigns shows the other 5; brand and status from the form, kept by a reload; garbage filters noted, a garbage cursor and a status no campaign has. U10-6 measures the list after the whole suite (its \"campaigns\" page) with the dev workspace's campaigns.",
+      },
+      ...budgetChecks(["campaigns"]),
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #6 the campaigns list's filters and their address" },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #6 listCampaignsPage() filters by brand and status and pages by a stable cursor" },
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

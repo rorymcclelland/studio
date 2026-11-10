@@ -46,9 +46,11 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await caption(page, "A signed-off Quillmoor brief, then Make creative (simulated pictures)");
   await page.goto("/campaigns");
   await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
-  await page.getByLabel("Objective").fill(OBJECTIVE);
-  await page.getByRole("button", { name: "Write the brief" }).click();
+  // U10-8: the list's filters have a Brand too, so the form is found by its region.
+  const form = page.getByRole("region", { name: "New campaign" });
+  await form.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
+  await form.getByLabel("Objective").fill(OBJECTIVE);
+  await form.getByRole("button", { name: "Write the brief" }).click();
   // It opens on the overview (U10-2); the brief and its sign-off are on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
   const campaignPath = new URL(page.url()).pathname;

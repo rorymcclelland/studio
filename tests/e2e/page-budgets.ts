@@ -41,7 +41,10 @@
 //   paths here with it. (Answer B1) The kit editor's Save brand kit and the
 //   languages page's Save languages each sit in a [data-save-bar] that stays
 //   on screen. tests/e2e/brand-page.spec.ts has U10-7's whole interface.
-// - U10-8: the runs list shows at most one page of runs, with "Older runs".
+// - U10-8: the runs list shows at most one page of runs (50), with "Older runs".
+//   (Answer B1) The campaigns list shows at most one page of campaigns (20),
+//   with "Older campaigns", and its filters. tests/e2e/runs-list.spec.ts has
+//   U10-8's whole interface.
 // ----------------------------------------------------------------------------
 
 export type Width = 375 | 1440;
@@ -142,10 +145,7 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: () => "/campaigns",
     signedIn: true,
     mainAction: { css: "[data-campaign-list]", what: "the list of campaigns" },
-    lengthUntil: {
-      story: "unassigned",
-      why: "1.8 screens with the audit's 4 campaigns, but after the whole suite there are about 35, at roughly 110 px a row on a phone, and the list has no paging; no Sprint 10 story pages or shortens it",
-    },
+    // Answer B1 (9 November): U10-8 pages the campaigns list (20 a page, with its filters), so it fits.
   },
   {
     key: "campaign-live",
@@ -246,7 +246,7 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: () => "/runs",
     signedIn: true,
     mainAction: { css: 'main a[href^="/runs/"]', what: "the first run" },
-    lengthUntil: { story: "U10-8", why: "the list shows 50 runs at once with every cost labelled (about 7 screens at 375 px); U10-8 pages it" },
+    // U10-8: 50 runs a page, with "Older runs", and the simulated label once in the cost heading, so it fits.
   },
   { key: "run-trail", name: "A run's trail (Imagery)", path: (d) => `/runs/${d.imageryRun}`, signedIn: true, mainAction: { css: "h2", text: "Result", what: "the result" } },
   { key: "run-awaiting", name: "Run waiting for a choice (tagline)", path: (d) => `/runs/${d.taglineRun}`, signedIn: true, mainAction: { css: 'input[type="radio"]', what: "the choice" } },

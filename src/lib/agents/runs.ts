@@ -1,6 +1,8 @@
+import type postgres from "postgres";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { campaignName, type CampaignRef } from "@/lib/home/needs";
 import { getAgent } from "./registry";
+import { RUNS_PAGE_SIZE, type RunFilterKey, type RunFilters } from "./run-list";
 
 export class StartRunError extends Error {}
 export class ApprovalError extends Error {}
@@ -202,9 +204,9 @@ export type RunSummary = {
 /** The id pattern Postgres's uuid accepts here, so a malformed id in a run's input is never cast. */
 const UUID_SQL = "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$";
 
-export async function listRuns(userId: string, limit = 50, brandId?: string): Promise<RunSummary[]> {
-  if (brandId !== undefined && !UUID.test(brandId)) return [];
-  const rows = await asUser(userId, (tx) => tx`
+/** The runs a list shows, with their costs and the campaign each names, newest first (created_at, then id). */
+async function selectRuns(tx: Tx, where: postgres.Fragment, limit: number): Promise<RunSummary[]> {
+  const rows = await tx`
     select r.id, r.agent, r.label, r.status, r.input, r.created_at,
       coalesce((select sum(l.cost_pence) from public.usage_ledger l where l.run_id = r.id), 0)::text as cost_pence,
       coalesce((select sum(l.cost_pence) filter (where l.provider = 'mock') from public.usage_ledger l where l.run_id = r.id), 0)::text as simulated_pence,
@@ -221,13 +223,53 @@ export async function listRuns(userId: string, limit = 50, brandId?: string): Pr
     ) named on true
     left join public.campaigns c on c.id = named.id
     left join public.brief_versions v on v.campaign_id = c.id and v.version = c.current_version
-    where ${brandId === undefined ? tx`true` : tx`r.brand_id = ${brandId}`}
-    order by r.created_at desc
-    limit ${limit}`);
+    where ${where}
+    order by r.created_at desc, r.id desc
+    limit ${limit}`;
   return rows.map(({ campaign_id, campaign_objective, campaign_title, ...r }) => ({
     ...(r as unknown as Omit<RunSummary, "campaign">),
     campaign: campaign_id ? { id: campaign_id as string, name: campaignName({ title: campaign_title as string | null, objective: campaign_objective as string }) } : null,
   }));
+}
+
+export async function listRuns(userId: string, limit = 50, brandId?: string): Promise<RunSummary[]> {
+  if (brandId !== undefined && !UUID.test(brandId)) return [];
+  return asUser(userId, (tx) => selectRuns(tx, brandId === undefined ? tx`true` : tx`r.brand_id = ${brandId}`, limit));
+}
+
+/** U10-8: a page of the runs list. `older` is the cursor for the next page (the last run's id), or null. */
+export type RunsPage = { runs: RunSummary[]; older: string | null; ignored: RunFilterKey[] };
+
+/**
+ * U10-8: a page of runs, filtered by campaign, agent and status, after the run `before` (a cursor: the last run
+ * shown, by created_at then id). Everything is read through asUser() (rule 7): a campaign that isn't the reader's
+ * is not applied and is reported in `ignored`; a cursor that isn't one of the reader's runs gives the first page.
+ */
+export async function listRunsPage(userId: string, query: { filters: RunFilters; before: string | null }, pageSize = RUNS_PAGE_SIZE): Promise<RunsPage> {
+  const { agent, status } = query.filters;
+  const campaignId = query.filters.campaign !== null && UUID.test(query.filters.campaign) ? query.filters.campaign.toLowerCase() : null;
+  const beforeId = query.before !== null && UUID.test(query.before) ? query.before.toLowerCase() : null;
+  const size = Math.max(1, Math.floor(pageSize));
+  return asUser(userId, async (tx) => {
+    const ignored: RunFilterKey[] = [];
+    let campaign: string | null = null;
+    if (query.filters.campaign !== null) {
+      const [c] = campaignId ? await tx`select id from public.campaigns where id = ${campaignId}` : [];
+      if (c) campaign = c.id as string;
+      else ignored.push("campaign");
+    }
+    const [cursor] = beforeId ? await tx`select id from public.agent_runs where id = ${beforeId}` : [];
+    const conditions = [
+      campaign ? tx`c.id = ${campaign}` : null,
+      agent !== null ? tx`r.agent = ${agent}` : null,
+      status !== null ? tx`r.status::text = ${status}` : null,
+      cursor ? tx`(r.created_at, r.id) < (select b.created_at, b.id from public.agent_runs b where b.id = ${cursor.id as string})` : null,
+    ].filter((c) => c !== null);
+    const where = conditions.reduce((acc, c) => tx`${acc} and ${c}`, tx`true`);
+    const rows = await selectRuns(tx, where, size + 1);
+    const runs = rows.slice(0, size);
+    return { runs, older: rows.length > size ? runs[runs.length - 1].id : null, ignored };
+  });
 }
 
 export type Decision =

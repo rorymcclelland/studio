@@ -36,10 +36,12 @@ async function newFernhollowCampaign(page: Page): Promise<string> {
   await demoBrandId(page, "Fernhollow Outfitters");
   await page.goto("/campaigns");
   await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: "Fernhollow Outfitters" });
-  await page.getByLabel("Objective").fill(OBJECTIVE);
-  await expect(page.getByText(`${OBJECTIVE.length} of 300 characters`)).toBeVisible();
-  await page.getByRole("button", { name: "Write the brief" }).click();
+  // U10-8: the list's filters have a Brand too, so the form is found by its region.
+  const form = page.getByRole("region", { name: "New campaign" });
+  await form.getByLabel("Brand").selectOption({ label: "Fernhollow Outfitters" });
+  await form.getByLabel("Objective").fill(OBJECTIVE);
+  await expect(form.getByText(`${OBJECTIVE.length} of 300 characters`)).toBeVisible();
+  await form.getByRole("button", { name: "Write the brief" }).click();
   // It opens on the overview (U10-2); the brief is on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
   const path = new URL(page.url()).pathname;
@@ -161,14 +163,15 @@ test("the objective is checked: too short is refused with the reason", async ({ 
   await demoBrandId(page, "Fernhollow Outfitters");
   await page.goto("/campaigns");
   await settle(page);
-  const objective = page.getByLabel("Objective");
+  const form = page.getByRole("region", { name: "New campaign" });
+  const objective = form.getByLabel("Objective");
   // The browser's own minimum is bypassed, so the server's message shows.
   await objective.evaluate((el) => el.removeAttribute("minlength"));
   await objective.evaluate((el) => el.removeAttribute("required"));
   await objective.fill("Too short");
-  await expect(page.getByText("9 of 300 characters, at least 10 needed")).toBeVisible();
-  await page.getByRole("button", { name: "Write the brief" }).click();
-  await expect(page.getByRole("alert").filter({ hasText: "at least 10 characters" })).toBeVisible();
+  await expect(form.getByText("9 of 300 characters, at least 10 needed")).toBeVisible();
+  await form.getByRole("button", { name: "Write the brief" }).click();
+  await expect(form.getByRole("alert").filter({ hasText: "at least 10 characters" })).toBeVisible();
   await expect(page).toHaveURL(/\/campaigns$/);
 });
 

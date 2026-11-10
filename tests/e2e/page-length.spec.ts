@@ -26,6 +26,7 @@
 // stage's are U10-3's and Performance's U10-4's, by their markers. The brand
 // page's and its tabs' tests carry U10-7.6 (U10-7 case 6), and the kit
 // editor's and the languages page's carry U10-7.7 and U10-7.8 (answer B1).
+// The campaigns list's carry U10-8.6 (answer B1 gave the list to U10-8).
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import postgres from "postgres";
 import { ensureExtras, fullestData } from "./fullest-data";
@@ -180,7 +181,7 @@ test.describe("U10-6 every page, with the audit's fullest data", () => {
   test("U10-6 #1: brand-languages is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-7.8" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "brand-languages");
   });
-  test("U10-6 #1: campaigns is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: campaigns is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-8.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "campaigns");
   });
   test("U10-6 #1: campaign-live is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
@@ -272,7 +273,7 @@ test.describe("U10-6 every page, with the audit's fullest data", () => {
   test("U10-6 #2: the main action of brand-languages is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-7.8" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "brand-languages");
   });
-  test("U10-6 #2: the main action of campaigns is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {
+  test("U10-6 #2: the main action of campaigns is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }, { type: "case", description: "U10-8.6" }] }, async ({ page, browser }) => {
     await checkMainAction(page, browser, "campaigns");
   });
   test("U10-6 #2: the main action of campaign-live is within 1.5 screens at 375 px", { annotation: [{ type: "case", description: "U10-6.2" }] }, async ({ page, browser }) => {

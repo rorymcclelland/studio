@@ -228,8 +228,9 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await page.getByRole("list", { name: "Runs inside this run" }).getByRole("link", { name: "Imagery agent" }).click();
   await expect(page.getByText("Part of a Make creative run.")).toBeVisible();
 
-  // The run list names the Make creative run by its workflow name, not its key.
-  await page.goto("/runs");
+  // The run list names the Make creative run by its workflow name, not its key (U10-8: filtered to Make creative
+  // runs, as the list shows 50 a page).
+  await page.goto("/runs?agent=creative");
   await settle(page);
   await expect(page.getByRole("cell", { name: "Make creative", exact: true }).first()).toBeVisible();
   await page.goto(path);

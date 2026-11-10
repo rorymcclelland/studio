@@ -219,9 +219,19 @@ test(
             // states here, so it is always there).
             if (where === "the brand page") await page.getByRole("button", { name: /^Show all \d+ campaigns$/ }).click();
             for (const key of Object.keys(STATUS_LABELS) as StatusKey[]) {
+              // U10-8: /campaigns shows 20 a page, and other specs add campaigns while this runs, so each state is
+              // found with the list's own filters (the status keys are the same words); the label is still the row's.
+              if (where === "/campaigns") {
+                await page.goto(`/campaigns?brand=${fernhollow}&status=${key}`);
+                await settle(page);
+              }
               const row = list.locator("li").filter({ has: page.locator(`a[href="/campaigns/${campaigns![key]}"]`) });
               await expect(row, key).toHaveCount(1);
               await expect(row.locator("[data-campaign-status]"), key).toHaveText(STATUS_LABELS[key]);
+            }
+            if (where === "/campaigns") {
+              await page.goto(path);
+              await settle(page);
             }
             // BUG-13: no list says "Draft vN" any more.
             await expect(list).not.toContainText(/Draft v\d/);

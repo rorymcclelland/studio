@@ -315,9 +315,11 @@ export async function newCampaign(page: Page, brand: "Fernhollow Outfitters" | "
   await demoBrandId(page, brand);
   await page.goto("/campaigns");
   await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: brand });
-  await page.getByLabel("Objective").fill(objective);
-  await page.getByRole("button", { name: "Write the brief" }).click();
+  // U10-8: the list's filters have a Brand too, so the form is found by its region.
+  const form = page.getByRole("region", { name: "New campaign" });
+  await form.getByLabel("Brand").selectOption({ label: brand });
+  await form.getByLabel("Objective").fill(objective);
+  await form.getByRole("button", { name: "Write the brief" }).click();
   // A new campaign opens on its overview (U10-2, answer Q2).
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
   const path = new URL(page.url()).pathname;

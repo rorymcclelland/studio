@@ -165,8 +165,9 @@ describe("U10-6 the budgets table", () => {
       ...(b.lengthUntil?.story === "unassigned" ? [`${b.key}: length`] : []),
       ...(b.mainActionUntil?.story === "unassigned" ? [`${b.key}: main action`] : []),
     ]);
-    // Answer B1 (9 November) gave the approvals inbox to U10-5, and the kit editor and languages page to U10-7.
-    expect(unassigned).toEqual(["campaigns: length"]);
+    // Answer B1 (9 November) gave the approvals inbox to U10-5, the kit editor and languages page to U10-7, and the
+    // campaigns list to U10-8, so none is left.
+    expect(unassigned).toEqual([]);
   });
 
   it("the pages already within budget today carry no marker, so their tests must pass now", () => {
@@ -186,6 +187,8 @@ describe("U10-6 the budgets table", () => {
       "brand-quillmoor-products",
       "brand-kit-editor",
       "brand-languages",
+      // U10-8 (answer B1): the campaigns list shows 20 a page, with its filters.
+      "campaigns",
       // U10-2: the campaign's overview and its Brief, Audience and Launch stages fit their budgets.
       "campaign-live",
       "campaign-live-brief",
@@ -204,6 +207,8 @@ describe("U10-6 the budgets table", () => {
       "campaign-early-brief",
       // U10-5: the inbox lists what has an Approve button before the run choices (Rory, 9 November 2026).
       "approvals",
+      // U10-8: the runs list shows 50 a page, with "Older runs".
+      "runs",
       "run-trail",
       "run-awaiting",
       "invites",
