@@ -27,7 +27,7 @@ async function RunsPageContent({ searchParams }: { searchParams: PageProps<"/run
   const member = await requireMember();
   const [page, campaigns] = await Promise.all([
     listRunsPage(member.userId, { filters: parsed.filters, before: parsed.before }),
-    listCampaignOptions(member.userId),
+    listCampaignOptions(member.userId, parsed.filters.campaign),
   ]);
   const { runs, older } = page;
   // The page's own check (a campaign that isn't the reader's) joins the address's.

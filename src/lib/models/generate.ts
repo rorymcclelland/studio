@@ -93,8 +93,11 @@ export type SpendMeterReading = {
  */
 export async function spendMeterReading(userId: string, workspaceId: string): Promise<SpendMeterReading> {
   return asUser(userId, async (tx) => {
+    // The app-wide figures are read only for the owner, so a guest's page never asks for them.
+    const [who] = await tx`select public.current_user_email() as email`;
+    const owner = isOwnerEmail(who.email);
     const [r] = await tx`
-      select public.current_user_email() as email,
+      select
         coalesce((select sum(l.cost_pence) from public.usage_ledger l
                   where l.workspace_id = ${workspaceId}
                     and l.created_at >= (date_trunc('day', now() at time zone 'Europe/London') at time zone 'Europe/London')), 0) as ws_charged,
@@ -103,9 +106,8 @@ export async function spendMeterReading(userId: string, workspaceId: string): Pr
                     and l.created_at >= (date_trunc('day', now() at time zone 'Europe/London') at time zone 'Europe/London')), 0) as ws_simulated,
         (select count(*)::integer from public.spend_reservations s
          where s.workspace_id = ${workspaceId} and s.created_at > now() - ${RESERVATION_LIFETIME}::interval) as ws_running,
-        m.charged_pence, m.simulated_pence, m.calls_running
-      from public.spend_meter_today() m`;
-    const owner = isOwnerEmail(r.email);
+        ${owner ? tx`m.charged_pence, m.simulated_pence, m.calls_running` : tx`null as charged_pence, null as simulated_pence, null as calls_running`}
+      ${owner ? tx`from public.spend_meter_today() m` : tx``}`;
     return owner
       ? { owner, chargedPence: Number(r.charged_pence), simulatedPence: Number(r.simulated_pence), callsInFlight: Number(r.calls_running), capPence: dailyCapPence() }
       : { owner, chargedPence: Number(r.ws_charged), simulatedPence: Number(r.ws_simulated), callsInFlight: Number(r.ws_running), capPence: workspaceCapPence() };

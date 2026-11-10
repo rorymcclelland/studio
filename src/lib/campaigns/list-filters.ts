@@ -55,7 +55,30 @@ export function parseCampaignFilters(params: SearchParams): { filters: CampaignF
     if (STATUS_KEYS.includes(status)) filters.status = status as CampaignStatusKey;
     else ignored.push("status");
   }
-  return { filters, before: uuidOrNull(firstParam(params, "before")), ignored };
+  return { filters, before: campaignCursorOrNull(firstParam(params, "before")), ignored };
+}
+
+/**
+ * The campaigns list's cursor: the last row's position, `<updated_at in microseconds since 1970>_<campaign id>`.
+ * A campaign's updated_at moves whenever it changes, so the cursor carries the position it was shown at rather
+ * than looking it up again (which could repeat page 1 or skip campaigns that changed in between).
+ */
+export type CampaignCursor = { micros: string; id: string };
+
+const CURSOR = /^(\d{1,18})_([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i;
+
+export function campaignCursor(c: CampaignCursor): string {
+  return `${c.micros}_${c.id}`;
+}
+
+/** A well-formed cursor in lower case, or null (a bare id, or anything else, gives the first page). */
+export function campaignCursorOrNull(value: string | null): string | null {
+  return value !== null && CURSOR.test(value) ? value.toLowerCase() : null;
+}
+
+export function parseCampaignCursor(value: string | null): CampaignCursor | null {
+  const m = value === null ? null : CURSOR.exec(value);
+  return m ? { micros: m[1], id: m[2].toLowerCase() } : null;
 }
 
 /** The campaigns list's address for these filters, and the page after `before`. */

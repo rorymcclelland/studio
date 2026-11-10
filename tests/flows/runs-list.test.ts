@@ -390,10 +390,11 @@ describe("U10-8 #6 listCampaignsPage() filters by brand and status and pages by 
     throw new Error("The cursor isn't moving");
   };
 
-  it("the first page is the 20 most recently updated; Older is the 20th's id; the second is the other 5, the tie at the boundary included", async () => {
+  it("the first page is the 20 most recently updated; Older is the 20th's position; the second is the other 5, the tie at the boundary included", async () => {
     const first = await listCampaignsPage(a.userId, { filters: NO_CAMPAIGN_FILTERS, before: null });
     expect(ids(first.campaigns)).toEqual(ids(aCampaigns.slice(0, 20)));
-    expect(first.older).toBe(aCampaigns[19].id);
+    // Review fix: the cursor is the 20th campaign's position (updated_at in microseconds, then its id), not a lookup.
+    expect(first.older).toBe(`${aCampaigns[19].at.getTime() * 1000}_${aCampaigns[19].id}`);
     expect(first.ignored).toEqual([]);
     const second = await listCampaignsPage(a.userId, { filters: NO_CAMPAIGN_FILTERS, before: first.older });
     expect(ids(second.campaigns)).toEqual(ids(aCampaigns.slice(20)));
@@ -443,9 +444,25 @@ describe("U10-8 #6 listCampaignsPage() filters by brand and status and pages by 
       expect(page.ignored, brand).toEqual(["brand"]);
       expect(ids(page.campaigns), brand).toEqual(ids(first.campaigns));
     }
-    for (const before of ["not-a-uuid", "20", randomUUID(), bCampaigns[0].id]) {
+    // A bare campaign id (the old cursor's shape) is not a position, so it gives the first page too.
+    for (const before of ["not-a-uuid", "20", randomUUID(), bCampaigns[0].id, aCampaigns[3].id, `x_${aCampaigns[3].id}`, `1_not-a-uuid`]) {
       const page = await listCampaignsPage(a.userId, { filters: NO_CAMPAIGN_FILTERS, before });
       expect(ids(page.campaigns), before).toEqual(ids(first.campaigns));
     }
+  });
+});
+
+// Review fix (should-fix 1). Last in the file, as it changes a campaign's updated_at for real.
+describe("U10-8 #6 the campaigns list's Older page holds when the cursor's campaign changes in between", () => {
+  it("touching the last campaign on page 1 neither repeats page 1 nor skips page 2", async () => {
+    const first = await listCampaignsPage(a.userId, { filters: NO_CAMPAIGN_FILTERS, before: null });
+    expect(ids(first.campaigns)).toEqual(ids(aCampaigns.slice(0, 20)));
+    // A new brief version, a sign-off decision or an expiry moves updated_at to now (the touch trigger).
+    await getSql()`update public.campaigns set objective = objective where id = ${aCampaigns[19].id}`;
+    const [moved] = await getSql()`select updated_at from public.campaigns where id = ${aCampaigns[19].id}`;
+    expect((moved.updated_at as Date).getTime()).toBeGreaterThan(aCampaigns[0].at.getTime());
+    const second = await listCampaignsPage(a.userId, { filters: NO_CAMPAIGN_FILTERS, before: first.older });
+    expect(ids(second.campaigns)).toEqual(ids(aCampaigns.slice(20)));
+    expect(second.older).toBeNull();
   });
 });

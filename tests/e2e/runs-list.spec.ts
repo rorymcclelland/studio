@@ -46,6 +46,7 @@
 // URL parameters:
 //   /runs       ?campaign=<campaign id>&agent=<agent key>&status=<run status>&before=<run id>
 //   /campaigns  ?brand=<brand id>&status=<campaign status key>&before=<campaign id>
+//   (Review fix, 10 November: the campaigns cursor is now the last row's position, <updated_at in microseconds>_<campaign id>.)
 //   Missing or empty is no filter. A value Studio doesn't recognise is not applied and is named in the
 //   plain note; the other filters still apply. `before` is a cursor: the id of the last row shown on the
 //   page before (never an offset); a malformed one, or one not in the reader's workspace, shows the first
@@ -575,7 +576,9 @@ test.describe("U10-8 the runs list and the campaigns list, for a new invitee's w
           await expect(g.getByRole("region", { name: "New campaign" }).getByLabel("Brand")).toHaveCount(1);
           const older = g.locator("a[data-older-campaigns]");
           await expect(older).toHaveText("Older campaigns");
-          await expect(older).toHaveAttribute("href", `/campaigns?before=${campaigns[CAMPAIGN_PAGE - 1].id}`);
+          // Review fix: the cursor is the 20th campaign's position (updated_at in microseconds, then its id).
+          const last = campaigns[CAMPAIGN_PAGE - 1];
+          await expect(older).toHaveAttribute("href", `/campaigns?before=${last.at.getTime() * 1000}_${last.id}`);
           await older.click();
           await g.waitForURL(/[?&]before=/);
           await settle(g);

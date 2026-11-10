@@ -38,6 +38,8 @@ import { CAMPAIGN_STATUS_LABELS, campaignStatusLabel, type CampaignStatusFacts }
 import { formatCost, formatPence } from "@/lib/format";
 
 const CAMPAIGN = "c0000000-0000-4000-8000-000000000001";
+/** A campaigns-list cursor: a position (updated_at in microseconds, then the campaign id). */
+const CURSOR = `1762740000123456_${CAMPAIGN}`;
 const RUN = "a0000000-0000-4000-8000-000000000060";
 const BRAND = "b0000000-0000-4000-8000-000000000002";
 const AGENTS = ["tagline", "brief", "copy", "imagery", "persona", "testPlan", "creative", "pictureCheck"] as const;
@@ -275,17 +277,19 @@ describe("U10-8 #6 the campaigns list's filters and their address", () => {
   });
 
   it("a bad cursor is dropped quietly, and the first page shows", () => {
-    expect(parseCampaignFilters({ before: CAMPAIGN }).before).toBe(CAMPAIGN);
-    for (const value of [...GARBAGE, "20", "2"]) expect(parseCampaignFilters({ before: value }), JSON.stringify(value)).toEqual({ filters: { brand: null, status: null }, before: null, ignored: [] });
+    // Review fix: the cursor is a position, `<updated_at in microseconds>_<campaign id>`; a bare id is not one.
+    expect(parseCampaignFilters({ before: CURSOR }).before).toBe(CURSOR);
+    expect(parseCampaignFilters({ before: CURSOR.toUpperCase() }).before).toBe(CURSOR);
+    for (const value of [...GARBAGE, "20", "2", CAMPAIGN, `_${CAMPAIGN}`, `1.5_${CAMPAIGN}`, `-1_${CAMPAIGN}`, `1_${CAMPAIGN}_1`]) expect(parseCampaignFilters({ before: value }), JSON.stringify(value)).toEqual({ filters: { brand: null, status: null }, before: null, ignored: [] });
   });
 
   it("the address: /campaigns, then brand, status and before, in that order, and it round-trips", () => {
     expect(campaignsHref({})).toBe("/campaigns");
     expect(campaignsHref({ brand: null, status: null }, null)).toBe("/campaigns");
     expect(campaignsHref({ status: "waiting" })).toBe("/campaigns?status=waiting");
-    expect(campaignsHref({ status: "live", brand: BRAND }, CAMPAIGN)).toBe(`/campaigns?brand=${BRAND}&status=live&before=${CAMPAIGN}`);
-    const url = new URL(campaignsHref({ brand: BRAND, status: "launchWaiting" }, CAMPAIGN), "http://studio.test");
-    expect(parseCampaignFilters(Object.fromEntries(url.searchParams))).toEqual({ filters: { brand: BRAND, status: "launchWaiting" }, before: CAMPAIGN, ignored: [] });
+    expect(campaignsHref({ status: "live", brand: BRAND }, CURSOR)).toBe(`/campaigns?brand=${BRAND}&status=live&before=${CURSOR}`);
+    const url = new URL(campaignsHref({ brand: BRAND, status: "launchWaiting" }, CURSOR), "http://studio.test");
+    expect(parseCampaignFilters(Object.fromEntries(url.searchParams))).toEqual({ filters: { brand: BRAND, status: "launchWaiting" }, before: CURSOR, ignored: [] });
   });
 
   it("the plain note, in the runs list's words", () => {

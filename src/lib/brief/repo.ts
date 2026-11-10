@@ -2,7 +2,7 @@ import { createRun, type Member, type SendEvent, StartRunError } from "@/lib/age
 import type postgres from "postgres";
 import { asUser, type Tx } from "@/lib/db/scoped";
 import { campaignName } from "@/lib/home/needs";
-import { CAMPAIGNS_PAGE_SIZE, type CampaignFilterKey, type CampaignFilters } from "@/lib/campaigns/list-filters";
+import { CAMPAIGNS_PAGE_SIZE, campaignCursor, parseCampaignCursor, type CampaignFilterKey, type CampaignFilters } from "@/lib/campaigns/list-filters";
 import { changedSections, evidenceProblems, kitListsFor, type KitLists, unsourcedNumbers } from "./checks";
 import { contextById, realNamesFor } from "./gather";
 import { BRIEF_SECTIONS, briefCore, storedBrief, type BriefSection, type StoredBrief } from "./schema";
@@ -83,8 +83,14 @@ export type CampaignSummary = {
 
 /** The columns a campaigns list reads, with each campaign's current title and its launches. */
 async function selectCampaigns(tx: Tx, where: postgres.Fragment, limit: number): Promise<CampaignSummary[]> {
+  return (await selectCampaignRows(tx, where, limit)).map((r) => r.summary);
+}
+
+/** As selectCampaigns, with each row's position (updated_at in microseconds, exact) for the list's cursor. */
+async function selectCampaignRows(tx: Tx, where: postgres.Fragment, limit: number): Promise<{ summary: CampaignSummary; micros: string }[]> {
   const rows = await tx`
     select c.id, c.objective, c.status, c.current_version, c.updated_at, b.id as brand_id, b.name as brand_name,
+      (extract(epoch from c.updated_at) * 1000000)::bigint::text as updated_micros,
       (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title,
       coalesce((select jsonb_agg(jsonb_build_object('status', l.status, 'simDay', l.sim_day))
                 from public.launches l where l.campaign_id = c.id), '[]'::jsonb) as launches
@@ -93,9 +99,12 @@ async function selectCampaigns(tx: Tx, where: postgres.Fragment, limit: number):
     order by c.updated_at desc, c.id desc
     limit ${limit}`;
   return rows.map((r) => ({
-    id: r.id, objective: r.objective, status: r.status, currentVersion: r.current_version,
-    launches: (r.launches as { status: string; simDay: number | string }[]).map((l) => ({ status: l.status, simDay: Number(l.simDay) })),
-    brand: { id: r.brand_id, name: r.brand_name }, title: r.title, updatedAt: r.updated_at,
+    micros: r.updated_micros as string,
+    summary: {
+      id: r.id, objective: r.objective, status: r.status, currentVersion: r.current_version,
+      launches: (r.launches as { status: string; simDay: number | string }[]).map((l) => ({ status: l.status, simDay: Number(l.simDay) })),
+      brand: { id: r.brand_id, name: r.brand_name }, title: r.title, updatedAt: r.updated_at,
+    },
   }));
 }
 
@@ -104,18 +113,29 @@ export async function listCampaigns(userId: string, brandId?: string): Promise<C
   return asUser(userId, (tx) => selectCampaigns(tx, brandId === undefined ? tx`true` : tx`c.brand_id = ${brandId}`, 100));
 }
 
-/** U10-8: every campaign in the reader's workspace, by name (campaignName's rule), for the runs list's Campaign filter. */
-export async function listCampaignOptions(userId: string): Promise<{ id: string; name: string }[]> {
-  const rows = await asUser(userId, (tx) => tx`
-    select c.id, c.objective,
-      (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title
-    from public.campaigns c
-    order by c.updated_at desc, c.id desc
-    limit 1000`);
+/**
+ * U10-8: the reader's campaigns by name (campaignName's rule), most recently changed first, for the runs list's
+ * Campaign filter. At most 1,000; `include` (the campaign the list is filtered by) is added when it is older than
+ * those, so the select still shows the filter that is applied.
+ */
+export async function listCampaignOptions(userId: string, include: string | null = null): Promise<{ id: string; name: string }[]> {
+  const extra = include !== null && UUID.test(include) ? include.toLowerCase() : null;
+  const rows = await asUser(userId, async (tx) => {
+    const select = (where: postgres.Fragment, limit: number) => tx`
+      select c.id, c.objective,
+        (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title
+      from public.campaigns c
+      where ${where}
+      order by c.updated_at desc, c.id desc
+      limit ${limit}`;
+    const newest = await select(tx`true`, 1000);
+    if (extra === null || newest.some((r) => r.id === extra)) return newest;
+    return [...newest, ...(await select(tx`c.id = ${extra}`, 1))];
+  });
   return rows.map((r) => ({ id: r.id as string, name: campaignName({ title: r.title as string | null, objective: r.objective as string }) }));
 }
 
-/** U10-8 (answer B1): a page of the campaigns list. `older` is the cursor for the next page (the last campaign's id), or null. */
+/** U10-8 (answer B1): a page of the campaigns list. `older` is the cursor for the next page (the last campaign's position, campaignCursor), or null. */
 export type CampaignsPage = { campaigns: CampaignSummary[]; older: string | null; ignored: CampaignFilterKey[] };
 
 /**
@@ -134,9 +154,9 @@ const statusKeySql = (tx: Tx) => tx`
   end`;
 
 /**
- * U10-8 (answer B1): a page of campaigns, filtered by brand and status, after the campaign `before` (by updated_at,
+ * U10-8 (answer B1): a page of campaigns, filtered by brand and status, after the position `before` (by updated_at,
  * then id), through asUser() (rule 7). A brand that isn't the reader's is not applied and is reported in `ignored`;
- * a cursor that isn't one of the reader's campaigns gives the first page.
+ * a cursor that isn't well formed gives the first page.
  */
 export async function listCampaignsPage(
   userId: string,
@@ -144,7 +164,7 @@ export async function listCampaignsPage(
   pageSize = CAMPAIGNS_PAGE_SIZE,
 ): Promise<CampaignsPage> {
   const brandId = query.filters.brand !== null && UUID.test(query.filters.brand) ? query.filters.brand.toLowerCase() : null;
-  const beforeId = query.before !== null && UUID.test(query.before) ? query.before.toLowerCase() : null;
+  const cursor = parseCampaignCursor(query.before);
   const status = query.filters.status;
   const size = Math.max(1, Math.floor(pageSize));
   return asUser(userId, async (tx) => {
@@ -155,16 +175,23 @@ export async function listCampaignsPage(
       if (b) brand = b.id as string;
       else ignored.push("brand");
     }
-    const [cursor] = beforeId ? await tx`select id from public.campaigns where id = ${beforeId}` : [];
+    // The cursor is only a position (a time and an id), compared under RLS, so another workspace's id reveals nothing.
     const conditions = [
       brand ? tx`c.brand_id = ${brand}` : null,
       status !== null ? tx`${statusKeySql(tx)} = ${status}` : null,
-      cursor ? tx`(c.updated_at, c.id) < (select p.updated_at, p.id from public.campaigns p where p.id = ${cursor.id as string})` : null,
+      cursor
+        ? tx`(c.updated_at, c.id) < (timestamptz 'epoch' + ${cursor.micros}::bigint * interval '1 microsecond', ${cursor.id}::uuid)`
+        : null,
     ].filter((c) => c !== null);
     const where = conditions.reduce((acc, c) => tx`${acc} and ${c}`, tx`true`);
-    const rows = await selectCampaigns(tx, where, size + 1);
-    const campaigns = rows.slice(0, size);
-    return { campaigns, older: rows.length > size ? campaigns[campaigns.length - 1].id : null, ignored };
+    const rows = await selectCampaignRows(tx, where, size + 1);
+    const shown = rows.slice(0, size);
+    const last = shown[shown.length - 1];
+    return {
+      campaigns: shown.map((r) => r.summary),
+      older: rows.length > size ? campaignCursor({ micros: last.micros, id: last.summary.id }) : null,
+      ignored,
+    };
   });
 }
 
