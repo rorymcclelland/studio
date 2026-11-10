@@ -163,3 +163,13 @@ This is a hand check, because CI runs the mock model.
 | Q1 | Cut line: Suggest lines first, then the Japan regions | As recommended |
 | Q2 | Cookpad's simulated customers use Japan's regions | D-3 offers UK and Japan's regions; Japan's 8 regions must be built (no longer on the cut line) |
 | Q3 | Not answered | Rory drives on his own login unless he says otherwise |
+
+### Sign-off and release approval (Rory, 10 November, 09:42)
+
+Rory approved in advance the sign-off, the production database change and the merge for both Sprint 10 and Sprint 10b ("Approved - signed-off"). Claude proceeds without stopping at each point, on these conditions; any one of them failing means stopping and asking Rory:
+- CI is fully green, and the QA and the review find no blocker;
+- the migration matches the tested schema on a Neon trial branch (fingerprint);
+- the deploy shows no production errors;
+- nothing is cut or changed beyond the agreed cut line (Suggest lines first).
+
+Rory still gets each demo page before its merge and can hold it. `DAILY_CAP_PENCE` was raised to 500 in Vercel by Rory at 09:43 (production and preview), for 10 and 11 November.
