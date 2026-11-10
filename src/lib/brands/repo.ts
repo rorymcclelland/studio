@@ -19,9 +19,9 @@ export type Brand = BrandKit & {
   logoAssetId: string | null;
   /** Where the PNG logo is served from (/assets/[id]), or null. */
   logoPngSrc: string | null;
-  /** D-2 (decision 0028): the brand's data is simulated (the demo brands, or a brand given simulated data). */
+  /** D-2 (decision 0029): the brand's data is simulated (the demo brands, or a brand given simulated data). */
   isSimulated: boolean;
-  /** D-2 (decision 0028): the brand is invented (the demo brands). A person's own brand is not. */
+  /** D-2 (decision 0029): the brand is invented (the demo brands). A person's own brand is not. */
   isFictional: boolean;
   /** When simulated customer data was generated; time windows count back from it. */
   dataAsOf: string | null;

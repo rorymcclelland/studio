@@ -166,7 +166,7 @@ export type PackPlan = {
     brandName: string;
     /** The brand's data is simulated (brands.is_simulated). */
     brandSimulated: boolean;
-    /** D-2 (decision 0028): the brand is invented (brands.is_fictional, the demo brands): the README says it is fictional only then. */
+    /** D-2 (decision 0029): the brand is invented (brands.is_fictional, the demo brands): the README says it is fictional only then. */
     brandFictional: boolean;
     briefTitle: string | null;
     briefVersion: number;

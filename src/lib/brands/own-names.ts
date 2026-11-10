@@ -1,6 +1,6 @@
 import { normaliseKitText } from "@/lib/context/keys";
 
-// Sprint 10b, D-2 (decision 0028): a brand's own names, such as a parent
+// Sprint 10b, D-2 (decision 0029): a brand's own names, such as a parent
 // brand's, may reach its briefs and ads even when the market notes name them.
 // Any other company the notes name is still refused (rule 2's market exception).
 // Pure: no database.

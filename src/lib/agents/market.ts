@@ -44,7 +44,7 @@ export const marketInput = z.object({
   /** QA, Sprint 10b: the country to research in; the United Kingdom for inputs made before. */
   country: z.enum(MARKET_COUNTRIES).default("United Kingdom"),
   /**
-   * D-2 (Sprint 10b, decision 0028): false for a person's own real brand, which the agent may search about by
+   * D-2 (Sprint 10b, decision 0029): false for a person's own real brand, which the agent may search about by
    * its name and its own names. Fictional (the demo brands) when left out: search about the category only.
    */
   fictional: z.boolean().optional(),
@@ -80,7 +80,7 @@ export type MarketOutput = z.infer<typeof marketOutput>;
 
 const MARKER = "Task: research the market for a brand's category.";
 
-/** What to search about (D-2, decision 0028): never a fictional brand itself; a real brand itself as well as its category. */
+/** What to search about (D-2, decision 0029): never a fictional brand itself; a real brand itself as well as its category. */
 export const FICTIONAL_SEARCH = "The brand is fictional: search about the category and its customers, never about the brand.";
 export const REAL_SEARCH =
   "The brand is real: search about the category and its customers, and about the brand itself and its own names (what it has launched, how customers talk about it). Notes may name the brand; list it in `names` like any other name.";

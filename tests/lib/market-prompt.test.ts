@@ -1,4 +1,4 @@
-// Sprint 10b, D-2 (decision 0028): the Market agent and a person's own real
+// Sprint 10b, D-2 (decision 0029): the Market agent and a person's own real
 // brand. For a fictional brand (the demo brands) it searches about the category
 // and its customers, never about the brand, as before. For a real brand
 // (brands.is_fictional false) it may also search about the brand itself and its

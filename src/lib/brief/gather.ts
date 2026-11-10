@@ -89,7 +89,7 @@ export async function contextById(tx: Tx, brandId: string): Promise<EvidenceItem
 
 /**
  * The real companies the brand's market notes name (S4-3, rule 2), less the
- * brand's own name and its own names (D-2, decision 0028): the names a brief or
+ * brand's own name and its own names (D-2, decision 0029): the names a brief or
  * ad may not use.
  */
 export async function realNamesFor(tx: Tx, brandId: string): Promise<string[]> {

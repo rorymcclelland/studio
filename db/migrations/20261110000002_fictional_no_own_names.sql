@@ -1,6 +1,6 @@
 -- Sprint 10b, review fix S1 (rule 2): a fictional demo brand has no own names.
 --
--- Own names (D-2, decision 0028) let a person's own real brand use a parent
+-- Own names (D-2, decision 0029) let a person's own real brand use a parent
 -- brand's name in its briefs and ads. A fictional brand has no real parent, so
 -- an own name on it could only carry a real company's name into the demo
 -- brands' copy. The kit editor hides "Also known as" for a fictional brand and

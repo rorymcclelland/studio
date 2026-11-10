@@ -1,4 +1,4 @@
--- Sprint 10b, D-2 (decision 0028): fictional versus simulated, and a brand's own names.
+-- Sprint 10b, D-2 (decision 0029): fictional versus simulated, and a brand's own names.
 --
 -- brands.is_simulated used to mean two things: "this brand is invented" and
 -- "its data is simulated". From here it means only the second. The new

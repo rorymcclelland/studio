@@ -1,4 +1,4 @@
-# 0028 Rule 2 reworded: a person's own brand may be real; fictional and simulated are separate
+# 0029 Rule 2 reworded: a person's own brand may be real; fictional and simulated are separate
 
 - **Date:** 10 November 2026
 - **Decided by:** Rory (product manager), answer A1 in `docs/refinement/sprint-10b.md`; recorded by Claude as lead engineer

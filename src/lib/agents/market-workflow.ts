@@ -39,7 +39,7 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
               places: places.map((p) => p.region as string),
               country: marketCountry(regions.map((r) => ({ region: r.region as string, customers: r.customers as number }))),
               month: new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "Europe/London" }),
-              // D-2 (decision 0028): a person's own real brand may be searched for by its names.
+              // D-2 (decision 0029): a person's own real brand may be searched for by its names.
               fictional: b.is_fictional as boolean,
               ownNames: b.is_fictional ? [] : ((b.own_names ?? []) as string[]),
             },
