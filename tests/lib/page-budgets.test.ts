@@ -192,6 +192,8 @@ describe("U10-6 the budgets table", () => {
       "campaign-waiting-brief",
       "campaign-early",
       "campaign-early-brief",
+      // U10-5: the inbox lists what has an Approve button before the run choices (Rory, 9 November 2026).
+      "approvals",
       "run-trail",
       "run-awaiting",
       "invites",

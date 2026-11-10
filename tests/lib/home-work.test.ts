@@ -2,14 +2,15 @@
 // in what order, each item's words and where it links (src/lib/home/needs.ts),
 // the live campaigns' share line, a run's campaign name, and (answer B1) the
 // one line a sign-off card in the inbox gives for its personas and test plan
-// (src/lib/approvals/inbox-view.ts). No database, no model. The loader that
+// (src/lib/approvals/inbox-view.ts), with the order the inbox and home list
+// what waits (Rory's decision, 9 November 2026). No database, no model. The loader that
 // reads these facts, and refuses another workspace's (rule 7), is
 // tests/flows/home-work.test.ts; the pages are tests/e2e/home-work.spec.ts,
 // whose header holds the interface.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { REVIEWS_SUMMARY_LABEL, reviewsSummary } from "@/lib/approvals/inbox-view";
+import { hasApprove, inboxOrder, REVIEWS_SUMMARY_LABEL, reviewsSummary, RUN_CHOICES_HEADING } from "@/lib/approvals/inbox-view";
 import { NOTHING_NEEDS_YOU as OVERVIEW_NOTHING } from "@/lib/campaigns/stages";
 import {
   campaignName,
@@ -33,10 +34,11 @@ const RUN = "r1111111-1111-4111-8111-111111111111";
 
 const at = (minutesAgo: number) => new Date(Date.UTC(2026, 10, 9, 12, 0) - minutesAgo * 60_000);
 
+// In the inbox's order (inboxOrder): the launch and the sign-off, newest first, then the run's choice.
 const APPROVALS: HomeApproval[] = [
-  { kind: "run_choice", approvalId: A3, runId: RUN, runLabel: "Larkspur Mill", question: "Which tagline should we use?" },
   { kind: "launch", approvalId: A2, campaign: C2 },
   { kind: "brief_signoff", approvalId: A1, campaign: C1, version: 2 },
+  { kind: "run_choice", approvalId: A3, runId: RUN, runLabel: "Larkspur Mill", question: "Which tagline should we use?" },
 ];
 
 describe("U10-5 #1 what needs you on home: the approvals in the inbox's order, then unseen alerts per campaign, newest first", () => {
@@ -45,7 +47,7 @@ describe("U10-5 #1 what needs you on home: the approvals in the inbox's order, t
       { campaign: C1, unseen: 3, newestAt: at(10) },
       { campaign: C3, unseen: 1, newestAt: at(5) },
     ];
-    expect(homeNeeds(APPROVALS, alerts).map((n) => n.key)).toEqual([`run-choice:${A3}`, `approve-launch:${A2}`, `decide-signoff:${A1}`, `alerts:${C3.id}`, `alerts:${C1.id}`]);
+    expect(homeNeeds(APPROVALS, alerts).map((n) => n.key)).toEqual([`approve-launch:${A2}`, `decide-signoff:${A1}`, `run-choice:${A3}`, `alerts:${C3.id}`, `alerts:${C1.id}`]);
   });
 
   it("a campaign with no unseen alerts has no item, and two with the same newest alert go by campaign id", () => {
@@ -71,9 +73,9 @@ describe("U10-5 #1 what needs you on home: the approvals in the inbox's order, t
 describe("#1 each item's words and where it links", () => {
   it("a sign-off goes to the campaign's Brief stage, where Approve is; a launch to its card in the inbox; a run's choice to the run", () => {
     expect(homeNeeds(APPROVALS, [])).toEqual([
-      { key: `run-choice:${A3}`, kind: "run-choice", text: "Choose on the run: Larkspur Mill", href: `/runs/${RUN}`, campaignId: null },
       { key: `approve-launch:${A2}`, kind: "approve-launch", text: `Approve or refuse the launch (simulated): ${C2.name}`, href: `/approvals#approval-${A2}`, campaignId: C2.id },
       { key: `decide-signoff:${A1}`, kind: "decide-signoff", text: `Decide the sign-off of version 2: ${C1.name}`, href: `/campaigns/${C1.id}/brief`, campaignId: C1.id },
+      { key: `run-choice:${A3}`, kind: "run-choice", text: "Choose on the run: Larkspur Mill", href: `/runs/${RUN}`, campaignId: null },
     ]);
   });
 
@@ -161,6 +163,48 @@ describe("U10-5 #5 the sign-off card's one line for its personas and test plan",
 
   it("the summary's label", () => {
     expect(REVIEWS_SUMMARY_LABEL).toBe("Personas and test plan");
+  });
+});
+
+describe("U10-5 #7 the inbox's order: what has an Approve button first, newest first, then the run choices, newest first", () => {
+  type Item = { kind: "brief_signoff" | "launch" | "run_choice"; id: string; createdAt: Date };
+  const item = (kind: Item["kind"], id: string, minutesAgo: number): Item => ({ kind, id, createdAt: at(minutesAgo) });
+
+  it("run choices newer than every sign-off and launch still come after them (Rory's decision, 9 November 2026)", () => {
+    const items = [
+      item("run_choice", "r1", 1),
+      item("run_choice", "r2", 2),
+      item("launch", "l1", 20),
+      item("run_choice", "r3", 25),
+      item("brief_signoff", "s1", 30),
+      item("brief_signoff", "s2", 10),
+    ];
+    expect(inboxOrder(items).map((i) => i.id)).toEqual(["s2", "l1", "s1", "r1", "r2", "r3"]);
+  });
+
+  it("only sign-offs and launches have an Approve button", () => {
+    expect(["brief_signoff", "launch", "run_choice", "anything"].map(hasApprove)).toEqual([true, true, false, false]);
+  });
+
+  it("two asked for at the same moment go by id, so the order holds between reads", () => {
+    const items = [item("run_choice", "rb", 5), item("launch", "lb", 5), item("run_choice", "ra", 5), item("brief_signoff", "la", 5)];
+    expect(inboxOrder(items).map((i) => i.id)).toEqual(["la", "lb", "ra", "rb"]);
+    expect(inboxOrder([...items].reverse()).map((i) => i.id)).toEqual(["la", "lb", "ra", "rb"]);
+  });
+
+  it("only one group, or none, keeps newest first; it returns a new array and leaves what it is given as it was", () => {
+    const choices = [item("run_choice", "r1", 9), item("run_choice", "r2", 3)];
+    expect(inboxOrder(choices).map((i) => i.id)).toEqual(["r2", "r1"]);
+    expect(inboxOrder([])).toEqual([]);
+    const before = JSON.stringify(choices);
+    expect(inboxOrder(choices)).not.toBe(choices);
+    expect(JSON.stringify(choices)).toBe(before);
+  });
+
+  it("keeps the rest of each item, and the run choices' heading is the agreed words", () => {
+    const [first] = inboxOrder([{ ...item("launch", "l1", 1), question: "Launch (simulated)" }]);
+    expect(first.question).toBe("Launch (simulated)");
+    expect(RUN_CHOICES_HEADING).toBe("Runs waiting for your choice");
   });
 });
 

@@ -4,6 +4,7 @@ import { BriefEditError, CampaignError } from "@/lib/brief/repo";
 import { evidenceProblems, type KitLists } from "@/lib/brief/checks";
 import { contextById, realNamesFor } from "@/lib/brief/gather";
 import { storedBrief } from "@/lib/brief/schema";
+import { inboxOrder } from "./inbox-view";
 import { expireStaleLaunches, launchAdsFor, type LaunchAd, type LaunchAdView } from "@/lib/performance/launch";
 
 // S4-1: the approvals inbox, with brief sign-off as the first gate (rule 3).
@@ -153,7 +154,11 @@ export type InboxItem =
       kpiValue: number;
     };
 
-/** Everything waiting for a person, newest first: open sign-offs and launch requests, and run choices whose run still waits. */
+/**
+ * Everything waiting for a person, in inboxOrder(): open sign-offs and launch requests first, newest first, then run
+ * choices whose run still waits, newest first (Rory's decision, 9 November 2026). The query sorts the same way, so
+ * its limit keeps what has an Approve button.
+ */
 export async function listInbox(userId: string): Promise<InboxItem[]> {
   const rows = await asUser(userId, async (tx) => {
     await expireStaleSignoffs(tx);
@@ -169,10 +174,10 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       left join public.brands b on b.id = c.brand_id
       left join public.launches l on l.approval_id = a.id and a.kind = 'launch'
       where a.status = 'pending' and a.expires_at > now() and (a.kind in ('brief_signoff', 'launch') or r.status = 'awaiting_approval')
-      order by a.created_at desc
+      order by a.kind = 'run_choice', a.created_at desc, a.id
       limit 100`;
   });
-  return Promise.all(
+  const items = await Promise.all(
     rows.map(async (r): Promise<InboxItem> => {
       if (r.kind === "brief_signoff") {
         return {
@@ -191,6 +196,7 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       return { kind: "run_choice", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at, runId: r.run_id, runLabel: r.run_label, agent: r.agent };
     }),
   );
+  return inboxOrder(items);
 }
 
 export async function inboxCount(userId: string): Promise<number> {

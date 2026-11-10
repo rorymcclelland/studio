@@ -246,13 +246,8 @@ export const PAGE_BUDGETS: PageBudget[] = [
     path: () => "/approvals",
     signedIn: true,
     mainAction: { css: "[data-inbox-item] button", text: "Approve", what: "the first Approve" },
-    // Answer B1 (9 November): U10-5 takes the inbox; a sign-off card shows a summary, with its personas and test plan on
-    // request, and the inbox fits its length. The first Approve still comes after the tagline choices the suite leaves
-    // waiting, newest first (2,072 px at 375 px after the full suite, 9 November 2026).
-    mainActionUntil: {
-      story: "U10-5",
-      why: "the first Approve comes after every run choice waiting above it, newest first: 2.6 screens down at 375 px after the whole suite",
-    },
+    // Answer B1 and Rory's decision (both 9 November): a sign-off card shows a summary, with its personas and test plan
+    // on request, and what has an Approve button comes before the run choices the suite leaves waiting.
   },
   {
     key: "runs",

@@ -279,7 +279,8 @@ const ATTENTION_JOURNEY =
 // U10-5 Home leads with work: the browser tests (a new invitee's own workspace, empty and then with its work
 // written to the database, and one real tagline run waiting for a choice), the pure list, words and links, and
 // the loader against plain Postgres (outside tests/db, as every Sprint 10 flow: U10-5 adds no table). Answer B1
-// (9 November) folds the approvals inbox in as cases 5 and 6. The interface is at the top of the spec.
+// (9 November) folds the approvals inbox in as cases 5 and 6; case 7 is Rory's decision of the same day on the
+// inbox's order. The interface is at the top of the spec.
 const HOME_SPEC = "home-work.spec.ts";
 const HOME_LIB = "tests/lib/home-work.test.ts";
 const HOME_FLOWS = "tests/flows/home-work.test.ts";
@@ -2305,7 +2306,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: HOME_SPEC,
         title: "U10-5 #1: with approvals and alerts waiting, home's first screen lists them at 375 px and 1440 px, each linking to its place",
-        note: `${HOME_JOURNEY} Every item is wholly within the first screen at both widths, in order (approvals newest first, then campaigns by their newest unseen alert); the sign-off, launch and run items are followed to their places. Also checks the live campaigns with their simulated day and share, and that the tagline demo is the last card (answer Q4).`,
+        note: `${HOME_JOURNEY} Every item is wholly within the first screen at both widths, in order (the approvals in the inbox's order, then campaigns by their newest unseen alert); the sign-off, launch and run items are followed to their places. Also checks the live campaigns with their simulated day and share, and that the tagline demo is the last card (answer Q4).`,
       },
       { kind: "ci", file: HOME_LIB, test: "U10-5 #1 what needs you on home: the approvals in the inbox's order, then unseen alerts per campaign, newest first" },
       { kind: "ci", file: HOME_LIB, test: "#1 each item's words and where it links" },
@@ -2374,7 +2375,7 @@ export const CASES: Case[] = [
         kind: "browser",
         spec: HOME_SPEC,
         title: "U10-5 #5: a sign-off card in the inbox is a summary, with its personas and test plan on request, and Approve near the top",
-        note: "At 375 px, on the invitee's inbox (a run's choice, a launch and the sign-off): the card is at most one screen tall with its reviews closed (our reading of \"a summary\"), they open with Enter, and approving it removes the item from home. U10-6 measures the inbox with the fullest data (its \"approvals\" page).",
+        note: "At 375 px, on the invitee's inbox (the sign-off, a launch and three runs' choices): the card is at most one screen tall with its reviews closed (our reading of \"a summary\"), they open with Enter, and approving it removes the item from home. U10-6 measures the inbox with the fullest data (its \"approvals\" page).",
       },
       { kind: "ci", file: HOME_LIB, test: "U10-5 #5 the sign-off card's one line for its personas and test plan" },
     ],
@@ -2392,6 +2393,23 @@ export const CASES: Case[] = [
         title: "U10-5 #6: the approvals inbox links a sign-off to the campaign's Brief stage and a launch to its Launch stage",
         note: "Each link is followed, and the stage bar marks that stage as the current one. The specs that found a card by its overview link now use inboxCard() in helpers.ts.",
       },
+    ],
+  },
+  {
+    id: "U10-5.7",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "(Rory's decision, 9 November 2026) The approvals inbox lists what has an Approve button first (sign-offs and launches, newest first), then the run choices in their own group after them, newest first, under \"Runs waiting for your choice\"; home's \"Needs you\" lists the approvals in the same order. With run choices newer than a sign-off, the first card is the sign-off and its Approve is within 1.5 screens at 375 px.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #7: with run choices newer than a sign-off, the inbox's first card is the sign-off, its Approve within 1.5 screens at 375 px, and the run choices follow in their own group",
+        note: `${HOME_JOURNEY} Two more runs' choices are written, newer than everything else. At 375 px and 1440 px every card's place is checked (the sign-off, the launch asked before it, then the three choices newest first under their heading); at 375 px the sign-off's Approve is the first Approve and within 1.5 screens. Home's approvals are in the same order. U10-6 measures the inbox's first Approve after the whole suite (its "approvals" page).`,
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #7 the inbox's order: what has an Approve button first, newest first, then the run choices, newest first" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #1 homeNeedsFor() lists the approvals waiting and the unseen alerts per live campaign, each linked to its place" },
     ],
   },
   // BUG-4 The brief's quantities-in-words check and its prompt agree

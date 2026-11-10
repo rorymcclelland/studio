@@ -6,7 +6,10 @@
 // the bottom (answer Q4). Answer B1 (9 November) folds the approvals inbox in:
 // a sign-off card shows a summary, with its personas and test plan on request,
 // and (U10-2's note) the inbox links each card to the stage where its decision
-// is made, not the campaign's overview.
+// is made, not the campaign's overview. Rory's decision of 9 November orders
+// the inbox: what has an Approve button first (sign-offs and launches, newest
+// first), then the run choices in their own group, newest first; home's "Needs
+// you" keeps the same order, so the two agree.
 //
 // The dev workspace holds whatever other specs leave waiting while this runs,
 // so these tests use a new invitee's own workspace: the owner invites them on
@@ -14,7 +17,8 @@
 // work is written to the database (tests/e2e/home-fixture.ts) and one real
 // tagline run, started from the demo card at the bottom of home, waits for a
 // choice. The cases run in the order that needs (serial): 2, 1, 3 (marks
-// alerts seen), 4, 6, then 5 (approves the sign-off, the failure path's
+// alerts seen), 4, 6, 7 (adds two more run choices, after 4 has counted the
+// recent runs), then 5 (approves the sign-off, the failure path's
 // counterpart: the item leaves home). Home's place in the length budgets is
 // U10-6's "home" page (tests/e2e/page-budgets.ts: [data-needs-you] within 1.5
 // screens at 375 px); the inbox's are its "approvals" page.
@@ -33,6 +37,10 @@
 //    the card still works, and the item leaves home.
 // 6. (B1, U10-2's note) The inbox links a sign-off to the campaign's Brief
 //    stage and a launch to its Launch stage.
+// 7. (Rory's decision, 9 November) With run choices newer than a sign-off, the
+//    inbox's first card is the sign-off and its Approve is within 1.5 screens
+//    at 375 px; the run choices follow under "Runs waiting for your choice",
+//    and home lists the approvals in the same order.
 //
 // ---------------------------------------------------------------- interface
 // What the builder provides. The tests here, tests/lib/home-work.test.ts and
@@ -57,8 +65,9 @@
 //   type HomeNeedKind = "decide-signoff" | "approve-launch" | "run-choice" | "alerts"
 //   type HomeNeed = { key: string; kind: HomeNeedKind; text: string; href: string; campaignId: string | null }
 //   homeNeeds(approvals: readonly HomeApproval[], alerts: readonly CampaignAlerts[]) => HomeNeed[]:
-//     every approval, in the order given (the inbox's: newest first), then one item per campaign with
-//     unseen > 0, newestAt descending, then campaign id ascending; a campaign with 0 unseen has no item.
+//     every approval, in the order given (the inbox's, inboxOrder(): sign-offs and launches newest first, then
+//     run choices newest first), then one item per campaign with unseen > 0, newestAt descending, then
+//     campaign id ascending; a campaign with 0 unseen has no item.
 //       decide-signoff  key "decide-signoff:<approvalId>", "Decide the sign-off of version 2: <name>"
 //                       -> /campaigns/<id>/brief (where Approve is, beside the inbox; rule 3)
 //       approve-launch  key "approve-launch:<approvalId>", "Approve or refuse the launch (simulated): <name>"
@@ -79,10 +88,15 @@
 //       personas > 0, no plan     "3 synthetic personas; no test plan"
 //       no personas, a plan       "A test plan; no persona review"
 //       neither                   "No persona review or test plan"
+//   RUN_CHOICES_HEADING = "Runs waiting for your choice"
+//   hasApprove(kind: string) => boolean: true for "brief_signoff" and "launch" (decided with an Approve button)
+//   inboxOrder<T extends { kind: string; id: string; createdAt: Date }>(items: readonly T[]) => T[] (Rory's
+//     decision, 9 November): a new array, hasApprove() items first, then the rest; within each, createdAt
+//     descending, then id ascending. listInbox() returns its items in this order.
 //
 // src/lib/home/work.ts (NEW, server, through asUser(); rule 7):
 //   homeNeedsFor(userId) => Promise<HomeNeed[]>: homeNeeds() of what listInbox() would list (pending, not
-//     expired; a run choice only while its run awaits approval; newest first; it closes stale sign-offs and
+//     expired; a run choice only while its run awaits approval; in inboxOrder(); it closes stale sign-offs and
 //     launches first, as listInbox does), and, per campaign, the unseen alerts on its live launch (an ended
 //     launch's alerts don't count, as unseenAlertCount), newestAt the newest unseen alert's created_at. Names
 //     by campaignName() from the current brief version's title. Another workspace's approvals and alerts
@@ -122,6 +136,10 @@
 //   In document order: [data-needs-you], [data-home-live] (when shown), Recent runs, [data-tagline-demo].
 //
 // The approvals inbox (src/app/(app)/approvals/page.tsx), every card as today plus:
+//   - (Rory's decision, 9 November) the sign-off and launch cards in one list, <ul data-inbox-approve> named
+//     "Waiting for your approval (N)", in listInbox()'s order; then, when there are any, <section
+//     data-run-choices> with <h2> RUN_CHOICES_HEADING and the run-choice cards in a list named
+//     "Runs waiting for your choice (N)", each card's question an <h3> (id approval-<id>);
 //   - each card <li data-inbox-item="<kind>" data-approval="<approvalId>">, sign-off and launch cards with
 //     data-campaign="<campaignId>" (helpers.ts inboxCard() finds a campaign's card by it);
 //   - the link to the campaign is a[data-inbox-campaign-link]: a sign-off card's
@@ -141,7 +159,7 @@ import postgres from "postgres";
 import { liveLabel } from "@/lib/campaigns/status";
 import { alertsLine } from "@/lib/performance/alerts";
 import { contrastViolations, expectNoHorizontalScroll, inboxCard, settle, signIn, startRunAwaitingApproval, step } from "./helpers";
-import { insertHomeFixture, memberByEmail, removeHomeFixture, type FixtureMember, type HomeFixture, type HomeKey } from "./home-fixture";
+import { insertHomeFixture, insertRunChoices, memberByEmail, removeHomeFixture, type FixtureMember, type HomeFixture, type HomeKey } from "./home-fixture";
 
 type Sql = postgres.Sql;
 type StorageState = Awaited<ReturnType<BrowserContext["storageState"]>>;
@@ -210,14 +228,14 @@ async function expectInFirstScreen(page: Page, el: Locator, what: string) {
 /** The document's top of an element. */
 const topOf = (el: Locator) => el.evaluate((e) => e.getBoundingClientRect().top + window.scrollY);
 
-/** What home must list for the fixture, in order (newest approval first, then campaigns by their newest unseen alert). */
+/** What home must list for the fixture, in order (the sign-off, the older launch, the run's choice, then campaigns by their newest unseen alert). */
 function expectedNeeds(f: HomeFixture): { key: string; kind: string; text: string; href: string; campaign: string | null }[] {
   const n = f.names;
   const c = f.campaigns;
   return [
-    { key: `run-choice:${taglineApproval}`, kind: "run-choice", text: runChoiceText(taglineLabel), href: `/runs/${taglineRun}`, campaign: null },
-    { key: `approve-launch:${f.launchApproval}`, kind: "approve-launch", text: launchText(n.launchWaiting), href: `/approvals#approval-${f.launchApproval}`, campaign: c.launchWaiting },
     { key: `decide-signoff:${f.signoffApproval}`, kind: "decide-signoff", text: signoffText(1, n.waiting), href: `/campaigns/${c.waiting}/brief`, campaign: c.waiting },
+    { key: `approve-launch:${f.launchApproval}`, kind: "approve-launch", text: launchText(n.launchWaiting), href: `/approvals#approval-${f.launchApproval}`, campaign: c.launchWaiting },
+    { key: `run-choice:${taglineApproval}`, kind: "run-choice", text: runChoiceText(taglineLabel), href: `/runs/${taglineRun}`, campaign: null },
     { key: `alerts:${c.liveB}`, kind: "alerts", text: alertsText(f.unseen.liveB, n.liveB), href: `/campaigns/${c.liveB}/performance`, campaign: c.liveB },
     { key: `alerts:${c.liveA}`, kind: "alerts", text: alertsText(f.unseen.liveA, n.liveA), href: `/campaigns/${c.liveA}/performance`, campaign: c.liveA },
   ];
@@ -315,12 +333,12 @@ test.describe("U10-5 home for a new invitee's workspace, then with its work wait
         await g.context().close();
       });
 
-      await step(page, "Their workspace's work is written: a sign-off and a launch waiting, three live campaigns (two with unseen alerts), one ended", async () => {
+      await step(page, "Their workspace's work is written: a sign-off and an older launch waiting, three live campaigns (two with unseen alerts), one ended", async () => {
         fx = await withSql((sql) => insertHomeFixture(sql, guest!, `U10-5 ${Date.now()}`));
       });
 
       for (const viewport of [PHONE, DESKTOP]) {
-        await step(page, `U10-5.1: at ${viewport.width} px, Needs you lists the approvals, newest first, then the unseen alerts per campaign, all in the first screen`, async () => {
+        await step(page, `U10-5.1: at ${viewport.width} px, Needs you lists the approvals in the inbox's order, then the unseen alerts per campaign, all in the first screen`, async () => {
           const g = await guestPage(browser, viewport);
           await openHome(g);
           const want = expectedNeeds(fx!);
@@ -516,6 +534,72 @@ test.describe("U10-5 home for a new invitee's workspace, then with its work wait
         });
       }
       await g.context().close();
+    },
+  );
+
+  test(
+    "U10-5 #7: with run choices newer than a sign-off, the inbox's first card is the sign-off, its Approve within 1.5 screens at 375 px, and the run choices follow in their own group",
+    { annotation: [{ type: "case", description: "U10-5.7" }] },
+    async ({ page, browser }) => {
+      test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed for the invitee's work");
+      expect(fx, "the fixture from case 1's test").not.toBeNull();
+      const f = fx!;
+      let more: { runId: string; approvalId: string }[] = [];
+
+      await step(page, "Two more tagline runs wait for a choice, newer than the sign-off, the launch and the first tagline run", async () => {
+        more = await withSql((sql) => insertRunChoices(sql, guest!, 2));
+      });
+      // Approve-bearing cards newest first (the sign-off, then the launch asked before it), then the run choices, newest first.
+      const approveOrder = () => [f.signoffApproval, f.launchApproval];
+      const choiceOrder = () => [...more.map((m) => m.approvalId), taglineApproval];
+
+      for (const viewport of [PHONE, DESKTOP]) {
+        await step(page, `U10-5.7: at ${viewport.width} px, the sign-off is the first card and the launch the second; the run choices come after, under Runs waiting for your choice`, async () => {
+          const g = await guestPage(browser, viewport);
+          await g.goto("/approvals");
+          await settle(g);
+          const cards = g.locator("[data-inbox-item]");
+          expect(await cards.evaluateAll((xs) => xs.map((x) => x.getAttribute("data-approval")))).toEqual([...approveOrder(), ...choiceOrder()]);
+          await expect(cards.first()).toHaveAttribute("data-inbox-item", "brief_signoff");
+          await expect(g.getByRole("list", { name: "Waiting for your approval (2)" }).locator(":scope > [data-inbox-item]")).toHaveCount(2);
+          const group = g.locator("section[data-run-choices]");
+          await expect(group.getByRole("heading", { level: 2, name: "Runs waiting for your choice" })).toBeVisible();
+          const choices = group.getByRole("list", { name: "Runs waiting for your choice (3)" }).locator(":scope > [data-inbox-item]");
+          expect(await choices.evaluateAll((xs) => xs.map((x) => x.getAttribute("data-approval")))).toEqual(choiceOrder());
+          for (const id of choiceOrder()) {
+            await expect(group.locator(`[data-approval="${id}"]`).getByRole("heading", { level: 3 })).toHaveText("Which tagline should we use?");
+          }
+          await expect(group.locator('[data-inbox-item]:not([data-inbox-item="run_choice"])')).toHaveCount(0);
+          await expect(g.locator(`[data-inbox-item="run_choice"]`).getByRole("button", { name: "Approve" })).toHaveCount(0);
+          // The group's heading comes after the last card with an Approve button.
+          expect(await topOf(g.locator(`[data-approval="${f.launchApproval}"]`))).toBeLessThan(await topOf(group));
+          await expectNoHorizontalScroll(g, `/approvals with run choices at ${viewport.width}px`);
+          expect(await contrastViolations(g), `/approvals with run choices at ${viewport.width}px`).toEqual([]);
+          if (viewport === PHONE) {
+            await g.evaluate(() => window.scrollTo(0, 0));
+            const approve = cards.first().getByRole("button", { name: "Approve version 1" });
+            await expect(approve).toBeVisible();
+            const top = await topOf(approve);
+            expect(top, `the sign-off's Approve is ${Math.round(top)} px down; 1.5 screens is ${1.5 * PHONE.height} px`).toBeLessThanOrEqual(1.5 * PHONE.height);
+            const first = g.locator("[data-inbox-item] button").filter({ hasText: "Approve" }).filter({ visible: true }).first();
+            expect(await topOf(first), "the first Approve is the sign-off's").toBe(top);
+          }
+          await g.context().close();
+        });
+      }
+
+      await step(page, "U10-5.7: home lists the approvals in the inbox's order: the sign-off, the launch, then the run choices, newest first", async () => {
+        const g = await guestPage(browser, PHONE);
+        await openHome(g);
+        const keys = await items(g).evaluateAll((xs) => xs.map((x) => x.getAttribute("data-need-key")));
+        expect(keys.filter((k) => !k!.startsWith("alerts:"))).toEqual([
+          `decide-signoff:${f.signoffApproval}`,
+          `approve-launch:${f.launchApproval}`,
+          ...choiceOrder().map((id) => `run-choice:${id}`),
+        ]);
+        await expect(items(g).first()).toHaveAttribute("data-need", "decide-signoff");
+        await g.context().close();
+      });
     },
   );
 

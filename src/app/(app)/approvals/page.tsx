@@ -11,7 +11,7 @@ import { EmptyState } from "@/components/ui/empty-state";
 import { Pill } from "@/components/ui/pill";
 import { PageSkeleton } from "@/components/ui/skeleton";
 import { formatWhen } from "@/lib/format";
-import { REVIEWS_SUMMARY_LABEL, reviewsSummary } from "@/lib/approvals/inbox-view";
+import { hasApprove, REVIEWS_SUMMARY_LABEL, reviewsSummary, RUN_CHOICES_HEADING } from "@/lib/approvals/inbox-view";
 import { stageHref } from "@/lib/campaigns/stages";
 import { PersonaAverages, PLAN_NOTE, TestPlanSummary } from "../campaigns/[id]/reviews-view";
 import { SignoffDecision } from "./signoff-decision";
@@ -30,6 +30,9 @@ type LaunchItem = Extract<InboxItem, { kind: "launch" }>;
 async function ApprovalsContent() {
   const member = await requireMember();
   const items = await listInbox(member.userId);
+  // listInbox gives them in inboxOrder(): everything with an Approve button, then the run choices.
+  const approve = items.filter((i): i is SignoffItem | LaunchItem => hasApprove(i.kind));
+  const choices = items.filter((i): i is ChoiceItem => i.kind === "run_choice");
   // The persona review and test plan behind each brief waiting for sign-off.
   const reviews = new Map<string, Reviews>(
     await Promise.all(
@@ -46,8 +49,8 @@ async function ApprovalsContent() {
       <div>
         <h1 className="text-title font-strong">Approvals</h1>
         <p className="mt-2 max-w-prose text-ink-2">
-          Everything waiting for a person, newest first. Nothing that spends, publishes or replaces creative goes ahead until
-          it is approved.
+          Everything waiting for a person: sign-offs and launches first, then agent runs waiting for your choice, each newest
+          first. Nothing that spends, publishes or replaces creative goes ahead until it is approved.
         </p>
       </div>
 
@@ -62,17 +65,35 @@ async function ApprovalsContent() {
           </p>
         </EmptyState>
       ) : (
-        <ul aria-label={`Waiting for you (${items.length})`} className="space-y-4">
-          {items.map((item) =>
-            item.kind === "brief_signoff" ? (
-              <SignoffCard key={item.id} item={item} reviews={reviews.get(item.id)!} />
-            ) : item.kind === "launch" ? (
-              <LaunchCard key={item.id} item={item} />
-            ) : (
-              <ChoiceCard key={item.id} item={item} />
-            ),
+        <>
+          {/* Rory's decision (9 November 2026): what has an Approve button first, then the run choices in their own group. */}
+          {approve.length > 0 && (
+            <ul aria-label={`Waiting for your approval (${approve.length})`} className="space-y-4" data-inbox-approve="">
+              {approve.map((item) =>
+                item.kind === "brief_signoff" ? (
+                  <SignoffCard key={item.id} item={item} reviews={reviews.get(item.id)!} />
+                ) : (
+                  <LaunchCard key={item.id} item={item} />
+                ),
+              )}
+            </ul>
           )}
-        </ul>
+          {choices.length > 0 && (
+            <section aria-labelledby="run-choices-heading" data-run-choices="" className="space-y-3">
+              <div>
+                <h2 id="run-choices-heading" className="text-xl font-strong tracking-tight">
+                  {RUN_CHOICES_HEADING}
+                </h2>
+                <p className="mt-1 max-w-prose text-sm text-ink-2">Each run stops until you choose, on the run&apos;s own page.</p>
+              </div>
+              <ul aria-label={`${RUN_CHOICES_HEADING} (${choices.length})`} className="space-y-3">
+                {choices.map((item) => (
+                  <ChoiceCard key={item.id} item={item} />
+                ))}
+              </ul>
+            </section>
+          )}
+        </>
       )}
     </div>
   );
@@ -267,9 +288,9 @@ function ChoiceCard({ item }: { item: ChoiceItem }) {
         <span className="text-ink-2">Asked for {formatWhen(item.createdAt)}</span>
         <span className="text-ink-2">Closes {formatWhen(item.expiresAt)}</span>
       </p>
-      <h2 id={heading} className="text-2xl font-strong tracking-tight wrap-anywhere">
+      <h3 id={heading} className="text-lg font-strong tracking-tight wrap-anywhere">
         {item.question}
-      </h2>
+      </h3>
       <ButtonLink href={`/runs/${item.runId}`} className="self-start">
         Choose on the run page
       </ButtonLink>

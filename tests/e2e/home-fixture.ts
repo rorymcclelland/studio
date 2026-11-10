@@ -14,9 +14,10 @@
 // (no picture bytes are needed). The waiting launch names an ad id no gallery
 // holds, as tests/e2e/status-fixture.ts does.
 //
-// Times are set in the past on purpose, so the order home shows is known:
-// approvals newest first (a run choice made during the test is newer than
-// both), then campaigns by their newest unseen alert.
+// Times are set in the past on purpose, so the order home and the inbox show
+// is known: the sign-off, then the launch (asked before it), then the run
+// choices, which are newer than both (Rory's decision, 9 November 2026: what
+// has an Approve button first); then campaigns by their newest unseen alert.
 //
 // One campaign is written in the dev workspace (another workspace from the
 // invitee's): a run in the invitee's workspace names its id, and home must
@@ -174,7 +175,7 @@ async function run(tx: Tx, m: FixtureMember, agent: string, input: Record<string
 /**
  * Everything home shows, in `m`'s workspace, named with `tag`:
  * - waiting: version 1 waiting for sign-off (asked 30 minutes ago), with a review of 3 synthetic personas and a test plan;
- * - launchWaiting: signed off, a launch waiting for approval (asked 20 minutes ago);
+ * - launchWaiting: signed off, a launch waiting for approval (asked 35 minutes ago, before the sign-off);
  * - liveA: live on simulated day 14, two ads, alerts: 3 unseen (newest 10 minutes ago) and 1 seen;
  * - liveB: live on simulated day 9, one ad, 1 unseen alert (5 minutes ago);
  * - quiet: live on simulated day 3, no alerts;
@@ -226,7 +227,7 @@ export async function insertHomeFixture(sql: postgres.Sql, m: FixtureMember, tag
       values (${m.workspaceId}, ${campaigns.waiting}, 1, ${testPlan},
               ${tx.json({ hypotheses: [{ statement: "Walkers respond to mending more than to price.", variable: "message", successMetric: "click-through rate" }], note: "Simulated" })}, ${m.userId})`;
 
-    const { approvalId: launchApproval } = await launch(tx, m, campaigns.launchWaiting, [FAKE_AD], "awaiting_approval", 0, minutesAgo(20));
+    const { approvalId: launchApproval } = await launch(tx, m, campaigns.launchWaiting, [FAKE_AD], "awaiting_approval", 0, minutesAgo(35));
 
     // Live and ended launches, in this order (home lists live campaigns in the order they launched).
     const adsA = [await fixtureAd(tx, m, brandId, campaigns.liveA, 1), await fixtureAd(tx, m, brandId, campaigns.liveA, 2)];
@@ -266,6 +267,30 @@ export async function insertHomeFixture(sql: postgres.Sql, m: FixtureMember, tag
       hidden: { campaignId: hidden.id as string, name: hiddenName },
     };
   }) as Promise<HomeFixture>;
+}
+
+/**
+ * `count` more tagline runs in `m`'s workspace, each waiting for a choice, as the tagline workflow leaves one (a run
+ * awaiting approval with its open run_choice), asked for over the last few seconds, so they are newer than everything
+ * in the fixture. Newest first.
+ */
+export async function insertRunChoices(sql: postgres.Sql, m: FixtureMember, count: number): Promise<{ runId: string; approvalId: string }[]> {
+  return sql.begin(async (tx) => {
+    const made: { runId: string; approvalId: string }[] = [];
+    for (let i = 0; i < count; i++) {
+      const at = new Date(Date.now() - (i + 1) * 1000);
+      const [r] = await tx`
+        insert into public.agent_runs (workspace_id, agent, agent_version, status, input, created_by, label, created_at)
+        values (${m.workspaceId}, 'tagline', 1, 'awaiting_approval', ${tx.json({ brandName: "Larkspur Mill" })}, ${m.userId}, ${`Larkspur Mill ${i + 2}`}, ${at})
+        returning id`;
+      const [a] = await tx`
+        insert into public.approvals (workspace_id, kind, run_id, question, options, expires_at, created_at)
+        values (${m.workspaceId}, 'run_choice', ${r.id}, 'Which tagline should we use?', ${tx.json(["One", "Two", "Three"])}, now() + interval '1 day', ${at})
+        returning id`;
+      made.push({ runId: r.id as string, approvalId: a.id as string });
+    }
+    return made;
+  }) as Promise<{ runId: string; approvalId: string }[]>;
 }
 
 /** Removes the dev workspace's hidden campaign and the invitee's whole workspace, as the tables' owner. */

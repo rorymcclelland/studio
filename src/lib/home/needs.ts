@@ -71,8 +71,10 @@ function alertsNeed(a: CampaignAlerts): HomeNeed {
 }
 
 /**
- * Every approval in the order given (the inbox's: newest first), then one item
- * per campaign with unseen alerts, newest alert first, then by campaign id.
+ * Every approval in the order given (the inbox's, inboxOrder() in
+ * @/lib/approvals/inbox-view: sign-offs and launches newest first, then run
+ * choices newest first), then one item per campaign with unseen alerts, newest
+ * alert first, then by campaign id.
  */
 export function homeNeeds(approvals: readonly HomeApproval[], alerts: readonly CampaignAlerts[]): HomeNeed[] {
   const withAlerts = alerts

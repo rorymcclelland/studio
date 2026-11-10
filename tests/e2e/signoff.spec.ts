@@ -131,7 +131,11 @@ test("the inbox says when nothing is waiting, or lists what is", async ({ page }
     await expect(page.getByRole("heading", { name: "Nothing is waiting for you" })).toBeVisible();
     await expect(visible(page, "[data-nav-count]")).toHaveCount(0);
   } else {
-    await expect(page.getByRole("list", { name: `Waiting for you (${items})` })).toBeVisible();
+    // Rory's decision (9 November 2026): sign-offs and launches in one list, then the run choices in their own group.
+    const approve = await visible(page, '[data-inbox-item="brief_signoff"], [data-inbox-item="launch"]').count();
+    const choices = items - approve;
+    if (approve) await expect(page.getByRole("list", { name: `Waiting for your approval (${approve})` })).toBeVisible();
+    if (choices) await expect(page.getByRole("list", { name: `Runs waiting for your choice (${choices})` })).toBeVisible();
   }
   await checkLayoutAndContrast(page, "/approvals");
 });

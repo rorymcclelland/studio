@@ -174,11 +174,11 @@ beforeAll(async () => {
 afterAll(closeSql);
 
 describe("U10-5 #1 homeNeedsFor() lists the approvals waiting and the unseen alerts per live campaign, each linked to its place", () => {
-  it("the approvals the inbox lists, newest first, then each live campaign with unseen alerts, newest alert first", async () => {
+  it("the approvals the inbox lists, in its order (sign-offs and launches newest first, then run choices), then each live campaign with unseen alerts, newest alert first", async () => {
     expect(await homeNeedsFor(a.userId)).toEqual([
-      { key: `run-choice:${approvals.choice}`, kind: "run-choice", text: "Choose on the run: Larkspur Mill", href: `/runs/${runs.tagline}`, campaignId: null },
       { key: `approve-launch:${approvals.launch}`, kind: "approve-launch", text: `Approve or refuse the launch (simulated): ${names.launchWaiting}`, href: `/approvals#approval-${approvals.launch}`, campaignId: ids.launchWaiting },
       { key: `decide-signoff:${approvals.signoff}`, kind: "decide-signoff", text: `Decide the sign-off of version 1: ${names.waiting}`, href: `/campaigns/${ids.waiting}/brief`, campaignId: ids.waiting },
+      { key: `run-choice:${approvals.choice}`, kind: "run-choice", text: "Choose on the run: Larkspur Mill", href: `/runs/${runs.tagline}`, campaignId: null },
       { key: `alerts:${ids.liveB}`, kind: "alerts", text: `1 unseen alert (simulated): ${names.liveB}`, href: `/campaigns/${ids.liveB}/performance`, campaignId: ids.liveB },
       { key: `alerts:${ids.liveA}`, kind: "alerts", text: `2 unseen alerts (simulated): ${names.liveA}`, href: `/campaigns/${ids.liveA}/performance`, campaignId: ids.liveA },
     ]);

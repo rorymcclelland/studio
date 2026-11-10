@@ -414,19 +414,21 @@ describe("the case list", () => {
 
   it("has every agreed U10-5 case, once each, in order, after U10-4's, checked as the refinement says, with the inbox's cases from answer B1", async () => {
     const u105 = CASES.filter((c) => c.story === "U10-5");
-    // 1 to 4 as refined; 5 and 6 are answer B1 (9 November 2026), which folds the approvals inbox into U10-5.
-    expect(u105.map((c) => c.id)).toEqual(Array.from({ length: 6 }, (_, i) => `U10-5.${i + 1}`));
+    // 1 to 4 as refined; 5 and 6 are answer B1 (9 November 2026), which folds the approvals inbox into U10-5;
+    // 7 is Rory's decision of the same day: what has an Approve button first, then the run choices.
+    expect(u105.map((c) => c.id)).toEqual(Array.from({ length: 7 }, (_, i) => `U10-5.${i + 1}`));
     for (const c of u105) expect(c.sprint, c.id).toBe(10);
     for (const id of ["U10-5.5", "U10-5.6"]) expect(CASES.find((c) => c.id === id)!.words, id).toMatch(/^\(B1, /);
-    // The refinement: a browser test for every case; the pure list and words (1 to 5) and the loader (1 to 4) in CI.
-    expect(u105.map(caseKind)).toEqual(Array(6).fill("browser"));
+    expect(CASES.find((c) => c.id === "U10-5.7")!.words).toMatch(/^\(Rory's decision, 9 November 2026\) /);
+    // The refinement: a browser test for every case; the pure list, words and order (1 to 5, 7) and the loader (1 to 4, 7) in CI.
+    expect(u105.map(caseKind)).toEqual(Array(7).fill("browser"));
     const SPEC = "home-work.spec.ts";
     const LIB = "tests/lib/home-work.test.ts";
     const FLOWS = "tests/flows/home-work.test.ts";
     const ciIn = (id: string, file: string) => CASES.find((c) => c.id === id)!.checks.some((x) => x.kind === "ci" && "file" in x && x.file === file);
     for (const c of u105) for (const x of c.checks.filter((y) => y.kind === "browser")) expect((x as { spec: string }).spec, c.id).toBe(SPEC);
-    for (const id of ["U10-5.1", "U10-5.2", "U10-5.3", "U10-5.4", "U10-5.5"]) expect(ciIn(id, LIB), id).toBe(true);
-    for (const id of ["U10-5.1", "U10-5.2", "U10-5.3", "U10-5.4"]) expect(ciIn(id, FLOWS), id).toBe(true);
+    for (const id of ["U10-5.1", "U10-5.2", "U10-5.3", "U10-5.4", "U10-5.5", "U10-5.7"]) expect(ciIn(id, LIB), id).toBe(true);
+    for (const id of ["U10-5.1", "U10-5.2", "U10-5.3", "U10-5.4", "U10-5.7"]) expect(ciIn(id, FLOWS), id).toBe(true);
     // Rule 7: home reads data, so another workspace is checked against the database.
     expect(CASES.find((c) => c.id === "U10-5.4")!.checks.some((x) => x.kind === "ci" && "test" in x && /another workspace sees none/.test(x.test))).toBe(true);
     expect(u105.flatMap((c) => c.checks).some((x) => x.kind === "ci" && "file" in x && x.file.startsWith("tests/db/"))).toBe(false);
@@ -457,6 +459,8 @@ describe("the case list", () => {
       "3 synthetic personas and a test plan",
       "Read the brief on the campaign",
       "See the launch on the campaign",
+      "Runs waiting for your choice",
+      "inboxOrder",
     ]) {
       expect(head, words).toContain(words);
     }
