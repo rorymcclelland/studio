@@ -296,6 +296,10 @@ beforeEach(async () => {
 });
 afterAll(closeSql);
 
+// These two make many round trips; on CI's Neon branch, across the network, they run just over
+// the job's 60-second limit (also on main), while locally they take a few seconds.
+const SLOW_ON_NEON = 240_000;
+
 describe("P9-3 the Performance view's data", () => {
   it("#1 performanceFor gives the launch's latest simulated day and every day before it, exactly as health.ts works them out from the stored rows and today's compliance", async () => {
     const { launchId } = await rawLaunch(a, ids.main, ids.ads);
@@ -407,7 +411,7 @@ describe("P9-3 the Performance view's data", () => {
     await setBanned(a, FERNHOLLOW.kit.bannedTerms);
     const restored = (await performanceFor(a.userId, ids.main))!.latest!;
     expect(restored).toEqual(healthy);
-  });
+  }, SLOW_ON_NEON);
 
   it("#3 compliance today covers every launched size and language: a German banned term fails a launched German file, an English-only ad is untouched, and a discarded ad is Not compliant", async () => {
     const german: LaunchAd = { variantId: ids.germanAd, sizes: SOCIAL as LaunchAd["sizes"], langs: ["en-GB", "de-DE"] };
@@ -485,7 +489,7 @@ describe("P9-3 the home line", () => {
     await endLaunch(a, second.launchId);
     expect(await homeHealth(a.userId)).toBeNull();
     expect(modelCalls.count).toBe(0);
-  });
+  }, SLOW_ON_NEON);
 });
 
 describe("P9-3 another workspace", () => {
