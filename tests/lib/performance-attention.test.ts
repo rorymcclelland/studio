@@ -15,6 +15,8 @@ import { describe, expect, it } from "vitest";
 import { alertsFor, ALERT_NAMES, type AlertKind } from "@/lib/performance/alerts";
 import {
   alertOneLine,
+  ALERTS_IN_FULL,
+  alertsShown,
   ATTENTION_HEADING,
   MARK_ALL_LABEL,
   markedAllLine,
@@ -22,6 +24,7 @@ import {
   newestFirst,
   NO_ATTENTION,
   recoveredLine,
+  showAllAlertsLabel,
   type AlertRef,
 } from "@/lib/performance/attention";
 import { dayHealth, healthSeries, recoveredOn, type HealthInput } from "@/lib/performance/health";
@@ -214,6 +217,34 @@ describe("U10-4 #2 alerts newest first, and a seen alert in one line", () => {
     expect(alertOneLine({ kind: "tiring", adNumber: 12, day: 9 })).toBe("Ad 12: Tiring on simulated day 9");
     expect(alertOneLine({ kind: "not_compliant", adNumber: 3, day: 14 })).toBe(`Ad 3: ${ALERT_NAMES.not_compliant} on simulated day 14`);
     expect(alertOneLine({ kind: "tiring", adNumber: 0, day: 9 })).toBe("An ad no longer in the gallery: Tiring on simulated day 9");
+  });
+});
+
+describe("U10-4 #8 (R1) which alerts are shown", () => {
+  const seenAt = new Date("2026-11-10T09:00:00Z");
+  const a = (id: string, seen = false) => ({ id, seenAt: seen ? seenAt : null });
+
+  it("U10-4 #8 (R1) 5 unseen alerts: the newest 3 in full and shown; the other 2 one line, behind Show all 5 alerts", () => {
+    const sorted = [a("u1"), a("u2"), a("u3"), a("u4"), a("u5")];
+    expect(ALERTS_IN_FULL).toBe(3);
+    expect(alertsShown(sorted)).toEqual({ inFull: ["u1", "u2", "u3"], shown: ["u1", "u2", "u3"] });
+    expect(showAllAlertsLabel(5)).toBe("Show all 5 alerts");
+  });
+
+  it("#8 seen alerts between unseen ones: the newest 3 unseen are in full, whatever their places; every seen one is one line", () => {
+    const sorted = [a("s1", true), a("u1"), a("s2", true), a("u2"), a("u3"), a("u4")];
+    expect(alertsShown(sorted)).toEqual({ inFull: ["u1", "u2", "u3"], shown: ["u1", "u2", "u3"] });
+  });
+
+  it("#8 fewer than 3 unseen: those in full, made up to 3 shown with the newest of the rest, in the list's order", () => {
+    expect(alertsShown([a("s1", true), a("s2", true), a("u1"), a("s3", true), a("s4", true)])).toEqual({ inFull: ["u1"], shown: ["s1", "s2", "u1"] });
+    expect(alertsShown([a("s1", true), a("s2", true), a("s3", true), a("s4", true)])).toEqual({ inFull: [], shown: ["s1", "s2", "s3"] });
+  });
+
+  it("#8 3 alerts or fewer: every one shown, with nothing behind Show all", () => {
+    expect(alertsShown([a("u1"), a("s1", true), a("u2")])).toEqual({ inFull: ["u1", "u2"], shown: ["u1", "s1", "u2"] });
+    expect(alertsShown([])).toEqual({ inFull: [], shown: [] });
+    expect(showAllAlertsLabel(1)).toBe("Show all 1 alert");
   });
 });
 

@@ -59,7 +59,8 @@ async function expectAdsDrawn(page: Page) {
 async function checkLayout(page: Page, what: string) {
   for (const [width, cols] of [
     [375, 1],
-    [1440, 4],
+    // R2 (10 November): 3 columns at 1440 px, so rows are always full.
+    [1440, 3],
   ] as const) {
     await page.setViewportSize({ width, height: 900 });
     await settle(page);

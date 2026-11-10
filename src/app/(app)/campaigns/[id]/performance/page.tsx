@@ -7,7 +7,8 @@
 //
 // U10-4: what needs action first. Top to bottom: the healthy spend share, the
 // ads below their threshold or tiring now (with the alerts that flagged
-// them), the alerts (newest first; seen ones folded to one line, and a Below
+// them), the alerts (newest first; the newest 3 unseen in full, every other
+// one folded to one line and past the first 3 behind Show all (R1), and a Below
 // threshold alert whose ad has since recovered says so, worked out from the
 // stored days), the ads table, the chart and its table as two tabs, then Ask
 // (the latest answer open, older questions folded). Nothing here acts on an
@@ -25,7 +26,7 @@ import { PageSkeleton } from "@/components/ui/skeleton";
 import { AutoRefresh } from "@/components/auto-refresh";
 import { formatPrice, formatWhen } from "@/lib/format";
 import { ALERT_NAMES, NO_ALERTS, type AlertKind } from "@/lib/performance/alerts";
-import { alertOneLine, ATTENTION_HEADING, needsAttention, newestFirst, NO_ATTENTION, recoveredLine, type AttentionAd } from "@/lib/performance/attention";
+import { alertOneLine, alertsShown, ATTENTION_HEADING, needsAttention, newestFirst, NO_ATTENTION, recoveredLine, showAllAlertsLabel, type AttentionAd } from "@/lib/performance/attention";
 import type { AlertView } from "@/lib/performance/alerts-store";
 import { askPanel, questionsFor, type AskPanel, type QuestionView } from "@/lib/performance/ask";
 import { ANSWER_LABEL, CANNOT_ANSWER, MEASURE_LABELS, type QueryResult } from "@/lib/performance/ask-rules";
@@ -34,7 +35,7 @@ import { HEALTHY_DEFINITION, NOT_ENOUGH_DATA, recoveredOn, shareText, STATUS_NAM
 import { isKpiMeasure, thresholdPhrase } from "@/lib/performance/launch-rules";
 import { Tabs } from "@/components/ui/tabs";
 import { adName, MEASURE_SHORT, PerformanceChart, PerformanceTable } from "./chart";
-import { AskForm, MarkAllSeenButton, MarkSeenButton } from "./monitor-controls";
+import { AlertsReveal, AskForm, MarkAllSeenButton, MarkSeenButton } from "./monitor-controls";
 import { campaignOr404, LockedStage, lockOf } from "../campaign-frame";
 import { StageBar } from "../stage-bar";
 
@@ -330,11 +331,14 @@ function AdLink({ alert }: { alert: AlertView }) {
 
 /**
  * P9-4: the monitor's alerts. They only tell: the controls are Mark as seen
- * and Mark all as seen (rule 3). U10-4: newest first; an unseen alert in full,
- * a seen one folded to one line that opens in place.
+ * and Mark all as seen (rule 3). U10-4: newest first; a seen one folded to one
+ * line that opens in place. R1 (10 November): the newest 3 unseen alerts in
+ * full, every other alert one line, and only the first 3 shown until "Show all
+ * N alerts", so the page is bounded whatever the launch's dates.
  */
 function Alerts({ campaignId, alerts, series }: { campaignId: string; alerts: AlertView[]; series: DayHealth[] }) {
   const unseen = alerts.filter((a) => !a.seenAt).length;
+  const { inFull, shown } = alertsShown(alerts);
   return (
     <Card as="section" aria-labelledby="perf-alerts-heading" className="space-y-4" data-perf-alerts="">
       <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
@@ -343,7 +347,7 @@ function Alerts({ campaignId, alerts, series }: { campaignId: string; alerts: Al
             Alerts (simulated)
           </h2>
           <p className="max-w-prose text-sm text-ink-2">
-            Raised when an ad misses its threshold two simulated days in a row, tires (its three-day click-through rate 25% or more below its best) or stops passing compliance. Alerts change nothing on their own.
+            Raised when an ad misses its threshold two simulated days running, tires or stops passing compliance. Alerts change nothing on their own.
           </p>
         </div>
         {unseen > 0 && <MarkAllSeenButton campaignId={campaignId} />}
@@ -351,18 +355,28 @@ function Alerts({ campaignId, alerts, series }: { campaignId: string; alerts: Al
       {alerts.length === 0 ? (
         <p className="text-ink-2">{NO_ALERTS}</p>
       ) : (
-        <ul className="divide-y divide-line">
+        <AlertsReveal total={alerts.length} more={alerts.length - shown.length} showAllLabel={showAllAlertsLabel(alerts.length)}>
           {alerts.map((a) => {
             const recovered = recoveredOn(series, a);
             const seen = a.seenAt !== null;
+            const full = inFull.includes(a.id);
             const facts = (
               <p id={`alert-${a.id}-facts`} className="max-w-prose wrap-anywhere" data-alert-facts="">
                 {a.line}
               </p>
             );
             return (
-              <li key={a.id} data-perf-alert={a.id} data-kind={a.kind} data-day={String(a.day)} data-seen={seen ? "" : undefined} className="py-3 first:pt-0 last:pb-0">
-                {seen ? (
+              <li
+                key={a.id}
+                data-perf-alert={a.id}
+                data-kind={a.kind}
+                data-day={String(a.day)}
+                data-seen={seen ? "" : undefined}
+                data-alert-full={full ? "" : undefined}
+                data-alert-more={shown.includes(a.id) ? undefined : ""}
+                className="py-3 first:pt-0 last:pb-0"
+              >
+                {!full ? (
                   <div className="flex flex-col gap-1 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
                     <details className="group min-w-0 sm:flex-1">
                       <summary className="flex cursor-pointer list-none items-start gap-2 rounded-field [&::-webkit-details-marker]:hidden">
@@ -378,7 +392,11 @@ function Alerts({ campaignId, alerts, series }: { campaignId: string; alerts: Al
                       </summary>
                       <div className="mt-2 space-y-1.5 pl-4">
                         {facts}
-                        <p className="text-sm text-ink-2 wrap-anywhere" data-alert-seen="">{`Seen by ${a.seenByName ?? "a member of this workspace"}, ${formatWhen(a.seenAt!)}`}</p>
+                        {seen ? (
+                          <p className="text-sm text-ink-2 wrap-anywhere" data-alert-seen="">{`Seen by ${a.seenByName ?? "a member of this workspace"}, ${formatWhen(a.seenAt!)}`}</p>
+                        ) : (
+                          <MarkSeenButton campaignId={campaignId} alertId={a.id} describedBy={`alert-${a.id}-facts`} />
+                        )}
                       </div>
                     </details>
                     <div className="pl-4 sm:pl-0">
@@ -408,7 +426,7 @@ function Alerts({ campaignId, alerts, series }: { campaignId: string; alerts: Al
               </li>
             );
           })}
-        </ul>
+        </AlertsReveal>
       )}
     </Card>
   );

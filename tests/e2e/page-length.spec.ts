@@ -22,8 +22,8 @@
 // page-budgets.ts, so tests/e2e/cases.ts can name every one
 // (tests/lib/cases.test.ts checks that every page has both). The length tests
 // of U10-2's overview and stage pages carry U10-2.6 too (U10-2 case 6: each
-// stage page within its budget with the audit's fullest data); the Creative
-// stage's are U10-3's and Performance's U10-4's, by their markers. The brand
+// stage page within its budget with the audit's fullest data), the Creative
+// stages' and Performance's among them (QA finding 3, 10 November). The brand
 // page's and its tabs' tests carry U10-7.6 (U10-7 case 6), and the kit
 // editor's and the languages page's carry U10-7.7 and U10-7.8 (answer B1).
 // The campaigns list's carry U10-8.6 (answer B1 gave the list to U10-8).
@@ -193,19 +193,19 @@ test.describe("U10-6 every page, with the audit's fullest data", () => {
   test("U10-6 #1: campaign-live-audience is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "campaign-live-audience");
   });
-  test("U10-6 #1: campaign-live-creative is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: campaign-live-creative is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "campaign-live-creative");
   });
   test("U10-6 #1: campaign-live-launch is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "campaign-live-launch");
   });
-  test("U10-6 #1: performance is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: performance is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "performance");
   });
   test("U10-6 #1: campaign-two-audiences is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "campaign-two-audiences");
   });
-  test("U10-6 #1: campaign-two-audiences-creative is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }] }, async ({ page, browser }) => {
+  test("U10-6 #1: campaign-two-audiences-creative is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {
     await checkLength(page, browser, "campaign-two-audiences-creative");
   });
   test("U10-6 #1: campaign-waiting is within its length budget at 375 px and 1440 px", { annotation: [{ type: "case", description: "U10-6.1" }, { type: "case", description: "U10-2.6" }] }, async ({ page, browser }) => {

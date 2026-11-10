@@ -10,7 +10,15 @@
 // tests/db/launch.test.ts runs this function too.
 import type postgres from "postgres";
 
-export type WaitingLaunchTerms = { seed?: string | number; kpi_measure?: "ctr" | "conversion_rate" | "cpa" | "roas"; kpi_value?: number };
+/**
+ * QA finding 3 (10 November): the start of the launches the Performance page is measured and checked on (the
+ * fullest data's, and performance-attention.spec's), fixed so their 14 simulated days don't depend on the calendar: Monday 11 January 2027, whose 14 days (11 to 24 January) hold no
+ * UK bank holiday, Black Friday or Cyber Monday (src/config/simulation.ts; tests/lib/pinned-start.test.ts checks).
+ */
+export const PINNED_STARTS_ON = "2027-01-11";
+
+/** starts_on: "YYYY-MM-DD", for a test whose page must not depend on the calendar (the simulator's bank holidays and retail days). */
+export type WaitingLaunchTerms = { seed?: string | number; kpi_measure?: "ctr" | "conversion_rate" | "cpa" | "roas"; kpi_value?: number; starts_on?: string };
 
 export async function setWaitingLaunchTerms(sql: postgres.Sql, launchId: string, terms: WaitingLaunchTerms): Promise<void> {
   await sql.begin(async (tx) => {

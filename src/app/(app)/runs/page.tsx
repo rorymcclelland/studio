@@ -124,11 +124,13 @@ async function RunsPageContent({ searchParams }: { searchParams: PageProps<"/run
               {runs.map((r) => {
                 const campaign = r.campaign?.name ?? NO_CAMPAIGN;
                 const cost = runCostText(r, heading);
+                const title = runTitle(r, knownAgentName(r.agent));
                 return (
                   <tr key={r.id} data-run={r.id} className="border-line align-top not-first:border-t hover:bg-surface-2">
                     <td className="px-4 py-2.5 sm:py-2 sm:pr-3 sm:pl-6">
-                      <Link href={`/runs/${r.id}`} className="font-semibold wrap-anywhere hover:text-primary">
-                        {runTitle(r, knownAgentName(r.agent))}
+                      {/* QA finding 4 (10 November): at most 2 lines at every width; the full label is the run page's heading. */}
+                      <Link href={`/runs/${r.id}`} title={title} className="line-clamp-2 font-semibold wrap-anywhere hover:text-primary" data-run-label="">
+                        {title}
                       </Link>
                       {/* From sm up the campaign sits under the run's name; on a phone, beside its status and cost. */}
                       <span className="hidden text-ink-2 wrap-anywhere sm:line-clamp-2" data-run-campaign="">

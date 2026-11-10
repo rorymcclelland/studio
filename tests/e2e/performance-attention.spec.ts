@@ -9,7 +9,7 @@
 // raised on day 6 and the ad then recovers before day 14, and another ad is
 // below the threshold on day 14. The cases run in the order that needs
 // (serial): 3 (built day by day, so the line is seen to appear), 1, 2 (marks
-// the oldest alert seen), 5, 7, 6 (asks two questions), then 4 (Mark all as
+// the oldest alert seen), 5, 7, 6 (asks two questions), 8 (R1), then 4 (Mark all as
 // seen, last, with its failure path: a stale tab's second press marks
 // nothing again). The audit's own campaign (tests/e2e/fullest-data.ts) is
 // measured by U10-6 (page-length.spec.ts, "performance"): the page within its
@@ -20,7 +20,7 @@
 //    flagged it; the page's order is share, needs action, the ads table, the
 //    chart and table tabs, then Ask.
 // 2. Alerts are newest first; a seen alert is one line (opening in place to
-//    its facts and who saw it); an unseen one is in full.
+//    its facts and who saw it); the newest unseen ones are in full.
 // 3. The ad's day-6 alert says "Recovered on day N" once the ad has been at or
 //    above its threshold two days in a row: not on day N - 1, then on day N,
 //    as the independent reading of the stored rows says; no other alert does
@@ -34,6 +34,10 @@
 //    table.
 // 7. The chart and table tabs work by keyboard; the chart keeps its table
 //    alternative for screen readers; axe finds nothing.
+// 8. Rory's answer R1 (10 November): the newest 3 unseen alerts are in full and
+//    every other alert is one line; only the first 3 show until "Show all N
+//    alerts" reveals the rest in place. With 5 unseen alerts: 3 in full, 2 one
+//    line behind "Show all 5 alerts". Runs after 6 and before 4.
 //
 // ---------------------------------------------------------------- interface
 // What the builder provides. The tests here, tests/lib/performance-attention.test.ts
@@ -109,8 +113,11 @@
 //     [data-perf-attention] and before Ask, with a <button data-mark-all-seen> MARK_ALL_LABEL while any alert is
 //     unseen (none otherwise). Its items newestFirst(): <li data-perf-alert="<id>" data-kind data-day>, and
 //     data-seen="" once seen.
-//       Unseen, in full as today: [data-alert-kind], [data-alert-day], [data-alert-facts] (the line), the
-//       "Mark as seen" button.
+//       The newest 3 unseen (R1, 10 November: alertsShown() in attention.ts), li[data-alert-full], in full as
+//       today: [data-alert-kind], [data-alert-day], [data-alert-facts] (the line), the "Mark as seen" button.
+//       Every other alert is one line, as a seen one is (an unseen one has Mark as seen inside it, in place
+//       of who saw it). Only the first 3 are shown; the rest are li[data-alert-more], hidden until the
+//       button[data-show-all-alerts] "Show all N alerts" below the list reveals them in place.
 //       Seen, one line: a <details> (closed) whose <summary> holds a leaf [data-alert-oneline] with
 //       alertOneLine(...), on one line at 1440 px; opening it in place shows [data-alert-facts] and
 //       [data-alert-seen] ("Seen by <email>, <when>", as today); no Mark as seen.
@@ -150,7 +157,7 @@ import {
   step,
   untilShown,
 } from "./helpers";
-import { setWaitingLaunchTerms } from "./launch-fixture";
+import { PINNED_STARTS_ON, setWaitingLaunchTerms } from "./launch-fixture";
 
 type Sql = postgres.Sql;
 
@@ -242,6 +249,13 @@ async function dayByDay(page: Page, from: number, day: number) {
   for (let d = from + 1; d <= day; d++) await moveOn(page, "Next day", d);
 }
 
+/** R1: reveals the alerts past the first 3, when there are more. */
+async function showAllAlerts(page: Page) {
+  const button = alertsSection(page).locator("button[data-show-all-alerts]");
+  if (await button.count()) await button.click();
+  await expect(button).toHaveCount(0);
+}
+
 /** How many lines of text an element takes, from its height and its line height. */
 async function linesOf(el: Locator): Promise<number> {
   return el.evaluate((e) => {
@@ -303,9 +317,10 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
           const prices = await sql`
             select p.price_pence from public.products p join public.campaigns c on c.brand_id = p.brand_id
             where c.id = ${idOf(path)} and p.active order by p.price_pence`;
-          plan = seedWithRecovery({ startsOn: l.starts_on, days: l.days, dailyBudgetPence: l.daily_budget_pence, ads: l.ads as LaunchAd[], orderValuesPence: prices.map((p) => p.price_pence as number) }, DAY);
+          // QA finding 3 (10 November): a fixed start with no simulator event, so the days don't depend on the calendar.
+          plan = seedWithRecovery({ startsOn: PINNED_STARTS_ON, days: l.days, dailyBudgetPence: l.daily_budget_pence, ads: l.ads as LaunchAd[], orderValuesPence: prices.map((p) => p.price_pence as number) }, DAY);
           // A launch's terms never change once asked for (launches_terms): the fixture sets them as the tables' owner.
-          await setWaitingLaunchTerms(sql, launchId, { seed: plan.seed, kpi_measure: plan.threshold.measure, kpi_value: plan.threshold.value });
+          await setWaitingLaunchTerms(sql, launchId, { seed: plan.seed, kpi_measure: plan.threshold.measure, kpi_value: plan.threshold.value, starts_on: PINNED_STARTS_ON });
         });
         await page.goto("/approvals");
         await settle(page);
@@ -338,6 +353,7 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
         expect(referenceRecovery(rows, plan.recovered.variantId, plan.threshold, plan.recovered.alertDay, plan.recovered.day)).toBe(plan.recovered.day);
         expect(referenceRecovery(rows, plan.recovered.variantId, plan.threshold, plan.recovered.alertDay, plan.recovered.day - 1)).toBeNull();
         await openPerformance(page);
+        await showAllAlerts(page);
         await expect(alertItem(page, alertId).locator("[data-alert-recovered]")).toHaveText(recoveredText(plan.recovered.day));
         await expect(alertItem(page, alertId).locator("[data-alert-recovered]")).toBeVisible();
       });
@@ -373,7 +389,8 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
         await page.setViewportSize(PHONE);
         await openPerformance(page);
         const share = page.locator("[data-perf-headline] [data-perf-share]");
-        await expect(share).toHaveText(/^(\d{1,3}%|Not enough data yet)$/);
+        // QA finding 6 (10 November): on simulated day 14 the share is a figure, never "Not enough data yet".
+        await expect(share).toHaveText(/^\d{1,3}%$/);
         await expect(attention(page).getByRole("heading", { level: 2 })).toHaveText(HEADING);
         const item = attention(page).locator(`[data-attention-ad="${plan.below.variantId}"]`);
         await expect(item).toBeVisible();
@@ -437,7 +454,7 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
   );
 
   test(
-    "U10-4 #2: alerts are newest first; a seen alert is one line that opens in place, and an unseen one is in full",
+    "U10-4 #2: alerts are newest first; a seen alert is one line that opens in place, and the newest unseen ones are in full",
     { annotation: [{ type: "case", description: "U10-4.2" }] },
     async ({ page }) => {
       test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to read the launch's alerts");
@@ -462,12 +479,16 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
       await step(page, "Mark the oldest alert as seen", async () => {
         const item = alertItem(page, oldest.id);
         adNumber = await adNumberIn(item);
+        // R1: past the newest 3 unseen, an alert is one line, behind Show all; its Mark as seen is inside it.
+        await showAllAlerts(page);
+        if ((await item.getAttribute("data-alert-full")) === null) await item.locator("summary").click();
         await item.getByRole("button", { name: "Mark as seen" }).click();
         await expect(item).toHaveAttribute("data-seen", "", { timeout: 30_000 });
       });
 
       await step(page, "U10-4.2: the seen alert is one line: the ad, the kind and the day, with no facts and no Mark as seen; it stays in its place", async () => {
         await openPerformance(page);
+        await showAllAlerts(page);
         const item = alertItem(page, oldest.id);
         await expect(item).toHaveAttribute("data-seen", "");
         const line = item.locator("[data-alert-oneline]");
@@ -492,11 +513,12 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
         await expect(item.locator("[data-alert-seen]")).toContainText(`Seen by ${DEV_EMAIL}`);
       });
 
-      await step(page, "U10-4.2: every unseen alert is in full: its kind, its day, its facts and Mark as seen", async () => {
+      await step(page, "U10-4.2: the newest unseen alerts (up to 3, R1) are in full: their kind, their day, their facts and Mark as seen", async () => {
         await openPerformance(page);
         const unseen = alertsSection(page).locator("[data-perf-alert]:not([data-seen])");
-        const n = await unseen.count();
+        const n = Math.min(3, await unseen.count());
         expect(n).toBeGreaterThanOrEqual(1);
+        await expect(alertsSection(page).locator("[data-perf-alert][data-alert-full]")).toHaveCount(n);
         for (let i = 0; i < n; i++) {
           const item = unseen.nth(i);
           const day = await item.getAttribute("data-day");
@@ -532,6 +554,7 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
       await step(page, "At 375 px, from the top of the page, the alert's link names its ad and points at its row", async () => {
         await page.setViewportSize(PHONE);
         await openPerformance(page);
+        await showAllAlerts(page);
         await expect(row(target.variantId)).toHaveAttribute("id", `perf-ad-${target.variantId}`);
         const link = alertItem(page, target.id).locator("a[data-alert-ad-link]");
         await expect(link).toHaveAttribute("href", `#perf-ad-${target.variantId}`);
@@ -550,6 +573,7 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
 
       await step(page, "U10-4.5: by keyboard too: Enter on the link lands on the row", async () => {
         await openPerformance(page);
+        await showAllAlerts(page);
         const link = alertItem(page, target.id).locator("a[data-alert-ad-link]");
         await link.focus();
         await page.keyboard.press("Enter");
@@ -697,6 +721,100 @@ test.describe("U10-4 a Fernhollow campaign's Performance page, live on simulated
         // The latest stays open.
         await expect(asked(RIVALS).locator("[data-ask-answer]")).toBeVisible();
         expect(await contrastViolations(page)).toEqual([]);
+      });
+    },
+  );
+
+  test(
+    "U10-4 #8 (R1): with 5 unseen alerts, the newest 3 are in full and the other 2 are one line, behind Show all 5 alerts",
+    { annotation: [{ type: "case", description: "U10-4.8" }] },
+    async ({ page }) => {
+      test.skip(!process.env.DATABASE_URL, "DATABASE_URL is needed to give the launch five unseen alerts");
+      expect(launchId, "the launch from case 3's test").not.toBe("");
+      let five: StoredAlert[] = [];
+
+      await step(page, "Give the launch exactly 5 alerts, all unseen, as the tables' owner: a seen alert put back unseen, Not compliant alerts added for its ads, or the oldest removed", async () => {
+        five = await withSql(async (sql) => {
+          await sql.begin(async (tx) => {
+            // An alert is only ever marked as seen (performance_alerts_guard), so a seen one is put back as an unseen copy, its id and facts kept.
+            const seen = await tx`delete from public.performance_alerts where launch_id = ${launchId} and seen_at is not null returning *`;
+            for (const a of seen) {
+              await tx`
+                insert into public.performance_alerts (id, workspace_id, launch_id, variant_id, day, kind, facts, created_at)
+                values (${a.id}, ${a.workspace_id}, ${a.launch_id}, ${a.variant_id}, ${a.day}, ${a.kind}, ${tx.json(a.facts)}, ${a.created_at})`;
+            }
+            const [{ workspace_id: ws }] = await tx`select workspace_id from public.launches where id = ${launchId}`;
+            for (const ad of launchAds) {
+              const [{ n }] = await tx`select count(*)::int as n from public.performance_alerts where launch_id = ${launchId}`;
+              if ((n as number) >= 5) break;
+              // Test data, said so in its own words: only this test's launch shows it.
+              await tx`
+                insert into public.performance_alerts (workspace_id, launch_id, variant_id, day, kind, facts)
+                values (${ws as string}, ${launchId}, ${ad}, ${DAY}, 'not_compliant', ${tx.json({ reason: "Added by the browser test for R1 (simulated)." })})
+                on conflict do nothing`;
+            }
+          });
+          for (const extra of newestFirst(await storedAlerts(sql)).slice(5)) await sql`delete from public.performance_alerts where id = ${extra.id}`;
+          return newestFirst(await storedAlerts(sql));
+        });
+        expect(five.every((a) => a.seenAt === null)).toBe(true);
+        expect(five).toHaveLength(5);
+      });
+
+      for (const size of [DESKTOP, PHONE]) {
+        await step(page, `U10-4.8 at ${size.width} px: the newest 3 in full, the other 2 one line and hidden, and Show all 5 alerts below them`, async () => {
+          await page.setViewportSize(size);
+          await openPerformance(page);
+          const items = alertsSection(page).locator("[data-perf-alert]");
+          expect(await items.evaluateAll((xs) => xs.map((x) => x.getAttribute("data-perf-alert")!))).toEqual(five.map((a) => a.id));
+          for (const a of five.slice(0, 3)) {
+            const item = alertItem(page, a.id);
+            await expect(item).toHaveAttribute("data-alert-full", "");
+            await expect(item.locator("[data-alert-facts]")).toBeVisible();
+            await expect(item.getByRole("button", { name: "Mark as seen" })).toBeVisible();
+            await expect(item.locator("[data-alert-oneline]")).toHaveCount(0);
+          }
+          for (const a of five.slice(3)) {
+            const item = alertItem(page, a.id);
+            await expect(item).not.toHaveAttribute("data-alert-full", "");
+            await expect(item.locator("[data-alert-oneline]")).toHaveCount(1);
+            await expect(item).toBeHidden();
+          }
+          const button = alertsSection(page).getByRole("button", { name: "Show all 5 alerts", exact: true });
+          await expect(button).toBeVisible();
+          const below = (await button.boundingBox())!.y;
+          expect(below, "the control is below the alerts in full").toBeGreaterThan((await alertItem(page, five[2].id).boundingBox())!.y);
+          await expect(alertsSection(page).getByRole("button", { name: MARK_ALL, exact: true })).toBeVisible();
+          await expectNoHorizontalScroll(page, `performance, 5 unseen alerts, at ${size.width}px`);
+          expect(await contrastViolations(page)).toEqual([]);
+        });
+      }
+
+      await step(page, "U10-4.8: by keyboard, Show all 5 alerts reveals the other 2 in place, each one line, and moves focus to the first of them", async () => {
+        await page.setViewportSize(DESKTOP);
+        await openPerformance(page);
+        const button = alertsSection(page).getByRole("button", { name: "Show all 5 alerts", exact: true });
+        await button.focus();
+        await page.keyboard.press("Enter");
+        await expect(button).toHaveCount(0);
+        for (const a of five.slice(3)) {
+          const line = alertItem(page, a.id).locator("[data-alert-oneline]");
+          await expect(line).toBeVisible();
+          expect(await linesOf(line), "a one-line alert at 1440 px").toBe(1);
+        }
+        await expect(alertItem(page, five[3].id).locator("summary")).toBeFocused();
+        const order = await alertsSection(page).locator("[data-perf-alert]").evaluateAll((xs) => xs.map((x) => x.getAttribute("data-perf-alert")!));
+        expect(order, "still newest first").toEqual(five.map((a) => a.id));
+        expect(await contrastViolations(page)).toEqual([]);
+      });
+
+      await step(page, "U10-4.8: an unseen one-line alert opens in place to its facts and Mark as seen, which marks it", async () => {
+        const item = alertItem(page, five[4].id);
+        await item.locator("summary").focus();
+        await page.keyboard.press("Enter");
+        await expect(item.locator("[data-alert-facts]")).toBeVisible();
+        await item.getByRole("button", { name: "Mark as seen" }).click();
+        await expect(item).toHaveAttribute("data-seen", "", { timeout: 30_000 });
       });
     },
   );

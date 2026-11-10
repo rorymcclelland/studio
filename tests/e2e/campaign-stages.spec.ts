@@ -389,10 +389,13 @@ test.describe("U10-2 a Fernhollow campaign taken through every stage from its ov
       await page.waitForURL((u) => u.pathname === stagePath(path, "performance"));
       await settle(page);
       const unseen = visible(page, "[data-perf-alerts] [data-perf-alert]").filter({ has: page.getByRole("button", { name: "Mark as seen" }) });
-      for (let n = await unseen.count(); n > 0; n--) {
+      // R1 (10 November): only the newest 3 unseen alerts are in full, so marking one brings the next into full.
+      for (let left = 20; left > 0 && (await unseen.count()) > 0; left--) {
+        const id = (await unseen.first().getAttribute("data-perf-alert"))!;
         await unseen.first().getByRole("button", { name: "Mark as seen" }).click();
-        await expect(unseen).toHaveCount(n - 1, { timeout: 30_000 });
+        await expect(page.locator(`[data-perf-alerts] [data-perf-alert="${id}"]`)).toHaveAttribute("data-seen", "", { timeout: 30_000 });
       }
+      await expect(page.locator("[data-perf-alerts] [data-perf-alert]:not([data-seen])")).toHaveCount(0);
       await openOverview(page, path);
       await expect(need(page, "alerts")).toHaveCount(0);
       await expect(stageLink(page, "performance").locator("[data-stage-state]")).toHaveText("No new alerts");

@@ -50,6 +50,28 @@ export function needsAttention(ads: readonly { variantId: string }[], latest: Da
   return [...below, ...out.filter((a) => !a.reasons.includes("below_threshold"))];
 }
 
+/** R1 (10 November): how many unseen alerts the Performance page shows in full. */
+export const ALERTS_IN_FULL = 3;
+
+/** "Show all 5 alerts": the control that reveals the alerts past the first few. */
+export function showAllAlertsLabel(n: number): string {
+  return `Show all ${n} ${n === 1 ? "alert" : "alerts"}`;
+}
+
+/**
+ * R1 (10 November): which alerts the Performance page shows, from the alerts
+ * already newest first. `inFull`: the newest ALERTS_IN_FULL unseen ones; every
+ * other alert is one line. `shown`: the alerts shown before "Show all N alerts",
+ * the ones in full, made up to ALERTS_IN_FULL with the newest of the rest when
+ * fewer are unseen; the rest wait behind the control. Ids, in the given order.
+ */
+export function alertsShown(sorted: readonly { id: string; seenAt: Date | string | null }[]): { inFull: string[]; shown: string[] } {
+  const inFull = sorted.filter((a) => a.seenAt === null).slice(0, ALERTS_IN_FULL).map((a) => a.id);
+  const extra = sorted.filter((a) => !inFull.includes(a.id)).slice(0, Math.max(0, ALERTS_IN_FULL - inFull.length)).map((a) => a.id);
+  const shown = sorted.filter((a) => inFull.includes(a.id) || extra.includes(a.id)).map((a) => a.id);
+  return { inFull, shown };
+}
+
 /** A seen alert's one line: "Ad 1: Below threshold on simulated day 6". */
 export function alertOneLine({ kind, adNumber, day }: { kind: AlertKind; adNumber: number; day: number }): string {
   const ad = adNumber > 0 ? `Ad ${adNumber}` : "An ad no longer in the gallery";
