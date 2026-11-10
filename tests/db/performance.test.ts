@@ -296,6 +296,10 @@ beforeEach(async () => {
 });
 afterAll(closeSql);
 
+// These two make many round trips; on CI's Neon branch, across the network, they run just over
+// the job's 60-second limit (also on main), while locally they take a few seconds.
+const SLOW_ON_NEON = 240_000;
+
 describe("P9-3 the Performance view's data", () => {
   it("#1 performanceFor gives the launch's latest simulated day and every day before it, exactly as health.ts works them out from the stored rows and today's compliance", async () => {
     const { launchId } = await rawLaunch(a, ids.main, ids.ads);
@@ -407,7 +411,7 @@ describe("P9-3 the Performance view's data", () => {
     await setBanned(a, FERNHOLLOW.kit.bannedTerms);
     const restored = (await performanceFor(a.userId, ids.main))!.latest!;
     expect(restored).toEqual(healthy);
-  });
+  }, SLOW_ON_NEON);
 
   it("#3 compliance today covers every launched size and language: a German banned term fails a launched German file, an English-only ad is untouched, and a discarded ad is Not compliant", async () => {
     const german: LaunchAd = { variantId: ids.germanAd, sizes: SOCIAL as LaunchAd["sizes"], langs: ["en-GB", "de-DE"] };
@@ -451,7 +455,7 @@ describe("P9-3 the home line", () => {
 
     // One live campaign with no days yet: it counts, with nothing to judge.
     const second = await rawLaunch(a, ids.second, [ids.secondAd]);
-    expect(await homeHealth(a.userId)).toEqual({ campaigns: 1, healthyPence: 0, learningPence: 0, totalPence: 0, share: null, line: "Healthy spend share across 1 live campaign: Not enough data yet (simulated)" });
+    expect(await homeHealth(a.userId)).toEqual({ campaigns: 1, healthyPence: 0, learningPence: 0, totalPence: 0, share: null, line: "Healthy spend share across 1 live campaign: Not enough data yet (simulated)", live: expect.any(Array) });
 
     // Two live: the main campaign on day 10 and the second on day 2 (all learning). Pooled by spend, each at its latest day.
     const main = await rawLaunch(a, ids.main, ids.ads);
@@ -465,7 +469,8 @@ describe("P9-3 the home line", () => {
     const totalPence = m10.totalPence + s2.totalPence;
     const share = totalPence - learningPence > 0 ? healthyPence / (totalPence - learningPence) : null;
     const home = await homeHealth(a.userId);
-    expect(home).toEqual({ campaigns: 2, healthyPence, learningPence, totalPence, share, line: homeLine(2, share) });
+    // U10-5 added each live campaign (`live`); tests/flows/home-work.test.ts checks it.
+    expect(home).toEqual({ campaigns: 2, healthyPence, learningPence, totalPence, share, line: homeLine(2, share), live: expect.any(Array) });
     expect(home!.line).toMatch(/^Healthy spend share across 2 live campaigns: (\d{1,3}%|Not enough data yet) \(simulated\)$/);
     // The ended campaign's spend is in neither side.
     expect(totalPence).toBe(m10.totalPence + s2.totalPence);
@@ -484,7 +489,7 @@ describe("P9-3 the home line", () => {
     await endLaunch(a, second.launchId);
     expect(await homeHealth(a.userId)).toBeNull();
     expect(modelCalls.count).toBe(0);
-  });
+  }, SLOW_ON_NEON);
 });
 
 describe("P9-3 another workspace", () => {

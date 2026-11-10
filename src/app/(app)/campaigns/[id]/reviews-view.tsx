@@ -184,4 +184,4 @@ export function TestPlanSummary({ plan }: { plan: TestPlan }) {
 
 /** Sample sizes are deliberately left out of the plan; this says why, wherever it is shown. */
 export const PLAN_NOTE =
-  "The plan has no sample sizes or run lengths on purpose: they will come from the campaign simulator, which is not built yet.";
+  "The plan has no sample sizes or run lengths on purpose. A simulated launch has its own daily budget and length in days, which a person approves; Studio does not work out sample sizes.";

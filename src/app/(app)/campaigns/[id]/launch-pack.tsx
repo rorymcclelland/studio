@@ -59,6 +59,7 @@ export async function LaunchPack({ summary }: { summary: Promise<PackSummary | n
   return (
     <section
       aria-labelledby={headingId}
+      id="launch-pack"
       className="flex flex-col gap-3 rounded-field bg-surface px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
       data-launch-pack=""
     >

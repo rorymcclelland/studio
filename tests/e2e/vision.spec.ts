@@ -22,7 +22,7 @@
 // SHOTS_DIR=<folder> saves screenshots.
 import { expect, test, type Page } from "@playwright/test";
 import postgres from "postgres";
-import { contrastViolations, DEV_EMAIL, demoBrandId, expectNoHorizontalScroll, makeCreative, newCampaign, saveShot, settle, signIn, signOffVersion, step, untilShown } from "./helpers";
+import { contrastViolations, demoBrandId, DEV_EMAIL, expectNoHorizontalScroll, makeCreative, newCampaign, openStage, saveShot, settle, signIn, signOffVersion, step, untilShown, openPickedChecks } from "./helpers";
 
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
 const bar = (page: Page) => page.locator("[data-picture-check-bar]");
@@ -43,13 +43,15 @@ async function checkWidths(page: Page, what: string) {
 
 /** Presses Check pictures and waits until the bar says every picture is checked. */
 async function checkPictures(page: Page, campaignPath: string, label: RegExp) {
-  await page.goto(campaignPath);
-  await settle(page);
+  await openStage(page, "creative", campaignPath);
+  // U10-3: the picture checks are among the checks on the picked ads, folded into one line until opened.
+  await openPickedChecks(page);
   const button = bar(page).getByRole("button", { name: label });
   await expect(button).toBeEnabled();
   await button.click();
   await expect(toast(page, /^Checking the pictures\./)).toBeVisible({ timeout: 30_000 });
   await untilShown(page, () => expect(bar(page).locator("[data-picture-check-reason]")).toHaveText("Every picture in the campaign's ads has been checked by AI.", { timeout: 10_000 }), 180_000);
+  await openPickedChecks(page);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -88,8 +90,8 @@ test(
       });
 
       await step(page, "C8-2.4: Check pictures shows its cost for the four pictures before the click", async () => {
-        await page.goto(campaignPath);
-        await settle(page);
+        await openStage(page, "creative", campaignPath);
+        await openPickedChecks(page);
         await expect(bar(page).getByRole("button", { name: /^Check pictures \(about [\d.]+p a picture, [\d.]+p in all\)$/ })).toBeEnabled();
         await expect(bar(page).locator("[data-picture-check-todo]")).toContainText("4 pictures have no result yet");
         await checkWidths(page, "campaign with Check pictures");

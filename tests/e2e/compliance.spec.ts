@@ -30,24 +30,30 @@ import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
 import postgres from "postgres";
 import {
+  adTool,
   contrastViolations,
-  DEV_EMAIL,
   demoBrandId,
+  DEV_EMAIL,
+  drawInLayout,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openAdMenu,
+  openPickedChecks,
+  openStage,
   saveShot,
   settle,
   signIn,
   signOffVersion,
   step,
   untilShown,
-  drawInLayout,
 } from "./helpers";
 
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
 const ads = (page: Page) => page.locator("[data-gallery] > li");
 const pack = (page: Page) => page.locator("[data-launch-pack]");
+/** An ad by its number (U10-3: the gallery shows ads needing a decision and picked ads first, so its place changes). */
+const adNo = (page: Page, n: number) => ads(page).filter({ has: page.getByRole("heading", { name: `Ad ${n}`, exact: true }) });
 const dontRows = (page: Page) => page.locator("[data-compliance-ad] [data-rule=dont]");
 const SOCIAL = ["1080x1080", "1080x1350", "1080x1920", "1200x628"];
 const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -65,13 +71,17 @@ async function checkWidths(page: Page, what: string) {
 
 /** Picks an ad from its card and waits for the shortlist to say so. */
 async function pick(page: Page, n: number) {
-  await ads(page).nth(n - 1).getByRole("button", { name: `Pick ad ${n}` }).click();
+  const button = await adTool(adNo(page, n), "pick");
+  await expect(button).toHaveAccessibleName(`Pick ad ${n}`);
+  await button.click();
   await expect(toast(page, "Picked for the shortlist.").first()).toBeVisible({ timeout: 30_000 });
-  await expect(ads(page).nth(n - 1)).toHaveAttribute("data-picked", "", { timeout: 30_000 });
+  await expect(adNo(page, n)).toHaveAttribute("data-picked", "", { timeout: 30_000 });
 }
 
 /** Translate on one picked ad (mock Localise agent), and waits for its three translations. */
 async function translate(page: Page, card: ReturnType<Page["locator"]>) {
+  // U10-3: Translate is in the card's More menu.
+  await openAdMenu(card, "more");
   const button = card.getByRole("button", { name: /^Translate\s*\(/ });
   await expect(button).toBeEnabled({ timeout: 30_000 });
   await button.click();
@@ -99,13 +109,13 @@ test(
 
     await step(page, "Pick ad 1 and translate it into French, German and Spanish", async () => {
       await pick(page, 1);
-      first = (await ads(page).first().getAttribute("data-ad"))!;
-      await translate(page, ads(page).first());
+      first = (await adNo(page, 1).getAttribute("data-ad"))!;
+      await translate(page, adNo(page, 1));
     });
 
     await step(page, "Pick ad 2, whose don't rules no one has looked at yet", async () => {
       await pick(page, 2);
-      second = (await ads(page).nth(1).getAttribute("data-ad"))!;
+      second = (await adNo(page, 2).getAttribute("data-ad"))!;
     });
 
     let rules = 0;
@@ -165,10 +175,11 @@ test(
       viewRules = await page
         .locator('[data-compliance-lang="en-GB"] [data-compliance-size="1080x1080"] [data-rule]')
         .evaluateAll((rows) => rows.map((r) => [r.getAttribute("data-rule")!, r.getAttribute("data-status")!]));
-      await page.goto(campaignPath);
-      await settle(page);
-      await expect(ads(page).first().locator("[data-compliance-pill]")).toHaveText("Passes");
-      await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText(`${rules} to review`);
+      await openStage(page, "creative", campaignPath);
+      await expect(adNo(page, 1).locator("[data-compliance-pill]")).toHaveText("Passes");
+      await expect(adNo(page, 2).locator("[data-compliance-pill]")).toHaveText(`${rules} to review`);
+      // U10-3: the checks on the picked ads are folded into one line until opened.
+      await openPickedChecks(page);
       await expect(page.locator("[data-compliance-summary]")).toHaveText(new RegExp(`^Compliance of the picked ads: ${files} ads pass, \\d+ to review, 0 fail, over every size and language\\.`));
     });
 
@@ -208,8 +219,8 @@ test(
     });
 
     await step(page, "C8-1.8: on the campaign, Accept for every picked ad accepts each don't rule for ad 2, with its own decision", async () => {
-      await page.goto(campaignPath);
-      await settle(page);
+      await openStage(page, "creative", campaignPath);
+      await openPickedChecks(page);
       const bulk = page.locator("[data-bulk-dont-rule]");
       await expect(bulk).toHaveCount(rules);
       for (let i = 0; i < rules; i++) {
@@ -224,7 +235,7 @@ test(
         await expect(row.locator("[data-bulk-status]")).toHaveText("Decided on all 2 picked ads.");
         await expect(row.getByRole("button")).toHaveCount(0);
       }
-      await expect(ads(page).nth(1).locator("[data-compliance-pill]")).toHaveText("Passes");
+      await expect(adNo(page, 2).locator("[data-compliance-pill]")).toHaveText("Passes");
       // Nothing waits for review any more (a language ad 2 has no words in is still left out, as before C8-1).
       await expect(pack(page).locator("[data-pack-left-out] li", { hasText: "Awaiting review" })).toHaveCount(0);
       await checkWidths(page, "gallery, don't rules accepted for every picked ad");
@@ -238,9 +249,8 @@ test(
     });
 
     await step(page, "C8-1.8: drawing ad 1 in another layout redraws it, and its don't rules are Review again", async () => {
-      await page.goto(campaignPath);
-      await settle(page);
-      const own = await ads(page).first().locator('button[aria-pressed="true"]').getAttribute("aria-label");
+      await openStage(page, "creative", campaignPath);
+      const own = await adNo(page, 1).locator('button[aria-pressed="true"]').getAttribute("aria-label");
       await drawInLayout(page, 1, own?.startsWith("Split") ? "Card" : "Split");
       await page.goto(`${campaignPath}/ads/${first}/compliance`);
       await settle(page);

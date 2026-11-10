@@ -1,5 +1,8 @@
 import { createRun, type Member, type SendEvent, StartRunError } from "@/lib/agents/runs";
+import type postgres from "postgres";
 import { asUser, type Tx } from "@/lib/db/scoped";
+import { campaignName } from "@/lib/home/needs";
+import { CAMPAIGNS_PAGE_SIZE, campaignCursor, parseCampaignCursor, type CampaignFilterKey, type CampaignFilters } from "@/lib/campaigns/list-filters";
 import { changedSections, evidenceProblems, kitListsFor, type KitLists, unsourcedNumbers } from "./checks";
 import { contextById, realNamesFor } from "./gather";
 import { BRIEF_SECTIONS, briefCore, storedBrief, type BriefSection, type StoredBrief } from "./schema";
@@ -68,26 +71,128 @@ export async function retryDraft(member: Member, campaignId: string, send: SendE
 export type CampaignSummary = {
   id: string;
   objective: string;
-  status: "drafting" | "draft";
+  /** campaigns.status as stored; a value this code doesn't know shows as Draft (campaignStatusLabel). */
+  status: string;
   currentVersion: number;
+  /** Every launch of the campaign, any order, for the status in lists (U10-1, BUG-13). */
+  launches: { status: string; simDay: number }[];
   brand: { id: string; name: string };
   title: string | null;
   updatedAt: Date;
 };
 
+/** The columns a campaigns list reads, with each campaign's current title and its launches. */
+async function selectCampaigns(tx: Tx, where: postgres.Fragment, limit: number): Promise<CampaignSummary[]> {
+  return (await selectCampaignRows(tx, where, limit)).map((r) => r.summary);
+}
+
+/** As selectCampaigns, with each row's position (updated_at in microseconds, exact) for the list's cursor. */
+async function selectCampaignRows(tx: Tx, where: postgres.Fragment, limit: number): Promise<{ summary: CampaignSummary; micros: string }[]> {
+  const rows = await tx`
+    select c.id, c.objective, c.status, c.current_version, c.updated_at, b.id as brand_id, b.name as brand_name,
+      (extract(epoch from c.updated_at) * 1000000)::bigint::text as updated_micros,
+      (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title,
+      coalesce((select jsonb_agg(jsonb_build_object('status', l.status, 'simDay', l.sim_day))
+                from public.launches l where l.campaign_id = c.id), '[]'::jsonb) as launches
+    from public.campaigns c join public.brands b on b.id = c.brand_id
+    where ${where}
+    order by c.updated_at desc, c.id desc
+    limit ${limit}`;
+  return rows.map((r) => ({
+    micros: r.updated_micros as string,
+    summary: {
+      id: r.id, objective: r.objective, status: r.status, currentVersion: r.current_version,
+      launches: (r.launches as { status: string; simDay: number | string }[]).map((l) => ({ status: l.status, simDay: Number(l.simDay) })),
+      brand: { id: r.brand_id, name: r.brand_name }, title: r.title, updatedAt: r.updated_at,
+    },
+  }));
+}
+
 export async function listCampaigns(userId: string, brandId?: string): Promise<CampaignSummary[]> {
   if (brandId !== undefined && !UUID.test(brandId)) return [];
-  const rows = await asUser(userId, (tx) => tx`
-    select c.id, c.objective, c.status, c.current_version, c.updated_at, b.id as brand_id, b.name as brand_name,
-      (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title
-    from public.campaigns c join public.brands b on b.id = c.brand_id
-    where ${brandId === undefined ? tx`true` : tx`c.brand_id = ${brandId}`}
-    order by c.updated_at desc
-    limit 100`);
-  return rows.map((r) => ({
-    id: r.id, objective: r.objective, status: r.status, currentVersion: r.current_version,
-    brand: { id: r.brand_id, name: r.brand_name }, title: r.title, updatedAt: r.updated_at,
-  }));
+  return asUser(userId, (tx) => selectCampaigns(tx, brandId === undefined ? tx`true` : tx`c.brand_id = ${brandId}`, 100));
+}
+
+/**
+ * U10-8: the reader's campaigns by name (campaignName's rule), most recently changed first, for the runs list's
+ * Campaign filter. At most 1,000; `include` (the campaign the list is filtered by) is added when it is older than
+ * those, so the select still shows the filter that is applied.
+ */
+export async function listCampaignOptions(userId: string, include: string | null = null): Promise<{ id: string; name: string }[]> {
+  const extra = include !== null && UUID.test(include) ? include.toLowerCase() : null;
+  const rows = await asUser(userId, async (tx) => {
+    const select = (where: postgres.Fragment, limit: number) => tx`
+      select c.id, c.objective,
+        (select v.brief ->> 'title' from public.brief_versions v where v.campaign_id = c.id and v.version = c.current_version) as title
+      from public.campaigns c
+      where ${where}
+      order by c.updated_at desc, c.id desc
+      limit ${limit}`;
+    const newest = await select(tx`true`, 1000);
+    if (extra === null || newest.some((r) => r.id === extra)) return newest;
+    return [...newest, ...(await select(tx`c.id = ${extra}`, 1))];
+  });
+  return rows.map((r) => ({ id: r.id as string, name: campaignName({ title: r.title as string | null, objective: r.objective as string }) }));
+}
+
+/** U10-8 (answer B1): a page of the campaigns list. `older` is the cursor for the next page (the last campaign's position, campaignCursor), or null. */
+export type CampaignsPage = { campaigns: CampaignSummary[]; older: string | null; ignored: CampaignFilterKey[] };
+
+/**
+ * The state a campaign's row shows, in SQL, with campaignStatusKey's precedence (src/lib/campaigns/list-filters.ts),
+ * so a status filter pages correctly.
+ */
+const statusKeySql = (tx: Tx) => tx`
+  case
+    when exists (select 1 from public.launches l where l.campaign_id = c.id and l.status = 'live') then 'live'
+    when exists (select 1 from public.launches l where l.campaign_id = c.id and l.status = 'awaiting_approval') then 'launchWaiting'
+    when exists (select 1 from public.launches l where l.campaign_id = c.id and l.status = 'ended') then 'ended'
+    when c.status = 'drafting' or c.current_version = 0 then 'writing'
+    when c.status = 'awaiting_signoff' then 'waiting'
+    when c.status = 'approved' then 'signedOff'
+    else 'draft'
+  end`;
+
+/**
+ * U10-8 (answer B1): a page of campaigns, filtered by brand and status, after the position `before` (by updated_at,
+ * then id), through asUser() (rule 7). A brand that isn't the reader's is not applied and is reported in `ignored`;
+ * a cursor that isn't well formed gives the first page.
+ */
+export async function listCampaignsPage(
+  userId: string,
+  query: { filters: CampaignFilters; before: string | null },
+  pageSize = CAMPAIGNS_PAGE_SIZE,
+): Promise<CampaignsPage> {
+  const brandId = query.filters.brand !== null && UUID.test(query.filters.brand) ? query.filters.brand.toLowerCase() : null;
+  const cursor = parseCampaignCursor(query.before);
+  const status = query.filters.status;
+  const size = Math.max(1, Math.floor(pageSize));
+  return asUser(userId, async (tx) => {
+    const ignored: CampaignFilterKey[] = [];
+    let brand: string | null = null;
+    if (query.filters.brand !== null) {
+      const [b] = brandId ? await tx`select id from public.brands where id = ${brandId}` : [];
+      if (b) brand = b.id as string;
+      else ignored.push("brand");
+    }
+    // The cursor is only a position (a time and an id), compared under RLS, so another workspace's id reveals nothing.
+    const conditions = [
+      brand ? tx`c.brand_id = ${brand}` : null,
+      status !== null ? tx`${statusKeySql(tx)} = ${status}` : null,
+      cursor
+        ? tx`(c.updated_at, c.id) < (timestamptz 'epoch' + ${cursor.micros}::bigint * interval '1 microsecond', ${cursor.id}::uuid)`
+        : null,
+    ].filter((c) => c !== null);
+    const where = conditions.reduce((acc, c) => tx`${acc} and ${c}`, tx`true`);
+    const rows = await selectCampaignRows(tx, where, size + 1);
+    const shown = rows.slice(0, size);
+    const last = shown[shown.length - 1];
+    return {
+      campaigns: shown.map((r) => r.summary),
+      older: rows.length > size ? campaignCursor({ micros: last.micros, id: last.summary.id }) : null,
+      ignored,
+    };
+  });
 }
 
 export type Proposal = {
@@ -197,10 +302,18 @@ export async function saveBriefEdit(member: Member, campaignId: string, baseVers
   }
   if (!UUID.test(campaignId)) throw new CampaignError("That campaign isn't in your workspace.");
   return asUser(member.userId, async (tx) => {
-    const [c] = await tx`select c.id, c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+    const [c] = await tx`select c.id, c.brand_id, c.objective, b.name as brand_name, b.own_names, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
       from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
     if (!c) throw new CampaignError("That campaign isn't in your workspace.");
-    const kit = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims, realNames: await realNamesFor(tx, c.brand_id) };
+    const kit: KitLists = {
+      legalLines: c.legal_lines,
+      bannedTerms: c.banned_terms,
+      dontRules: c.dont_rules,
+      evidenceClaims: c.evidence_claims,
+      realNames: await realNamesFor(tx, c.brand_id),
+      brandName: c.brand_name,
+      ownNames: c.own_names ?? [],
+    };
     const context = await contextById(tx, c.brand_id);
     // Only the parts the person changed are checked, so a source removed since can't block an edit elsewhere.
     const [base] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
@@ -221,7 +334,7 @@ export async function startRevision(
   instruction: string,
   send: SendEvent,
 ): Promise<string> {
-  if (section !== null && !BRIEF_SECTIONS.includes(section)) throw new CampaignError("Choose a part of the brief to revise.");
+  if (section !== null && (!BRIEF_SECTIONS.includes(section) || section === "line")) throw new CampaignError("Choose a part of the brief to revise.");
   const c = await getCampaign(member.userId, campaignId);
   if (!c) throw new CampaignError("That campaign isn't in your workspace.");
   if (c.currentVersion !== baseVersion) throw new StaleBriefError();
@@ -278,10 +391,18 @@ export async function dismissRevision(member: Member, campaignId: string, runId:
  * Figures are not re-checked: the version they come from already passed.
  */
 async function recheck(tx: Tx, campaignId: string, brief: StoredBrief, sections?: BriefSection[]): Promise<StoredBrief> {
-  const [b] = await tx`select c.brand_id, c.objective, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+  const [b] = await tx`select c.brand_id, c.objective, b.name as brand_name, b.own_names, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
     from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
   if (!b) throw new CampaignError("That campaign isn't in your workspace.");
-  const kit: KitLists = { legalLines: b.legal_lines, bannedTerms: b.banned_terms, dontRules: b.dont_rules, evidenceClaims: b.evidence_claims, realNames: await realNamesFor(tx, b.brand_id) };
+  const kit: KitLists = {
+    legalLines: b.legal_lines,
+    bannedTerms: b.banned_terms,
+    dontRules: b.dont_rules,
+    evidenceClaims: b.evidence_claims,
+    realNames: await realNamesFor(tx, b.brand_id),
+    brandName: b.brand_name,
+    ownNames: b.own_names ?? [],
+  };
   const problems = evidenceProblems(brief, await contextById(tx, b.brand_id), kit, { objective: b.objective, allowUnsourcedNumbers: true, sections });
   if (problems.length) throw new BriefEditError(problems);
   return storedBrief.parse({ ...brief, ...kitListsFor(kit) });

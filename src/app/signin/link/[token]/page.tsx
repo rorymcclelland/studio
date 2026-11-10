@@ -28,8 +28,9 @@ export default function SignInLinkPage(props: PageProps<"/signin/link/[token]">)
       <Card size="hero">
         <h1 className="text-title font-strong">Sign in to Studio</h1>
         <p className="mt-3 text-ink-2">
-          Studio is a multi-agent campaign studio built by Rory McClelland. The brands in it are fictional and their
-          data is simulated. Press Continue to sign in. This link works once, and only for 15 minutes after it was sent.
+          Studio is a multi-agent campaign studio built by Rory McClelland. Its demo brands are fictional and their
+          data is simulated; a brand you add yourself may be real, and any data Studio generates for it is simulated.
+          Press Continue to sign in. This link works once, and only for 15 minutes after it was sent.
         </p>
         <Suspense>
           <ContinueForm params={props.params} />

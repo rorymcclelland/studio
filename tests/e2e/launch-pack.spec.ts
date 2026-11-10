@@ -13,7 +13,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test, type Page } from "@playwright/test";
 import { strFromU8, unzipSync } from "fflate";
-import { acceptDontRulesForPicked, caption, contrastViolations, expectNoHorizontalScroll, saveShot, settle, signIn, untilShown } from "./helpers";
+import { acceptDontRulesForPicked, adTool, caption, contrastViolations, expectNoHorizontalScroll, openPickedChecks, openStage, saveShot, settle, showAllAds, signIn, untilShown } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan with a launch pack";
 const toast = (page: Page, text: string | RegExp) => page.locator("[data-toast]").filter({ hasText: text });
@@ -46,22 +46,28 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   await caption(page, "A signed-off Quillmoor brief, then Make creative (simulated pictures)");
   await page.goto("/campaigns");
   await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
-  await page.getByLabel("Objective").fill(OBJECTIVE);
-  await page.getByRole("button", { name: "Write the brief" }).click();
+  // U10-8: the list's filters have a Brand too, so the form is found by its region.
+  const form = page.getByRole("region", { name: "New campaign" });
+  await form.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
+  await form.getByLabel("Objective").fill(OBJECTIVE);
+  await form.getByRole("button", { name: "Write the brief" }).click();
+  // It opens on the overview (U10-2); the brief and its sign-off are on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
   const campaignPath = new URL(page.url()).pathname;
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
+  await openStage(page, "brief", campaignPath);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
   const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
   await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
   await expect(toast(page, "Sent for sign-off")).toBeVisible();
   await panel.getByRole("button", { name: "Approve version 1" }).click();
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
-  // Read the signed-off page afresh (as F-26 does): on a slow dev server the action's re-render can lag.
-  await page.reload();
-  await settle(page);
+  // The ads, their checks and the pack are on the Creative stage, opened afresh after the sign-off.
+  await openStage(page, "creative", campaignPath);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
+  // U10-3: every ad shown, and the checks on the picked ads (the launch pack among them) opened.
+  await showAllAds(page);
+  await openPickedChecks(page);
 
   await caption(page, "C7-3.4: nothing picked yet: the pack says why, and offers no download");
   // #4: nothing picked yet: the pack says why, and offers no download; the address refuses too.
@@ -80,7 +86,8 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   for (let i = 0; i < 4; i++) {
     const card = social.nth(i);
     const title = (await card.locator("h3, h4").first().textContent())!.trim();
-    await card.getByRole("button", { name: `Pick ${title.toLowerCase()}` }).click();
+    await expect(await adTool(card, "pick")).toHaveAccessibleName(`Pick ${title.toLowerCase()}`);
+    await (await adTool(card, "pick")).click();
     await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
   }
   const bar = page.locator("[data-languages]");
@@ -102,6 +109,7 @@ test("C7-3: the launch pack of four picked social ads in four languages download
   // #1: the gallery shows what the pack will hold and its file count before download.
   await page.reload();
   await settle(page);
+  await openPickedChecks(page);
   await expect(pack(page).locator("[data-pack-count]")).toContainText("64 ads from 4 picked ads");
   await expect(pack(page).locator("[data-pack-count]")).toContainText("67 files in one zip");
   await expect(pack(page).locator("[data-pack-language]")).toHaveText(["English: 16", "French: 16", "German: 16", "Spanish: 16"]);

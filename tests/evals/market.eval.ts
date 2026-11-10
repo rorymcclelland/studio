@@ -39,7 +39,7 @@ const mod: EvalModule<In, MarketOutput, { sources: WebSource[]; brandName: strin
   },
   async grade(_input, output, ctx) {
     // Source membership and declared names (figures were checked against the cited pages in the run itself).
-    const problems = (await checkMarket({ brandName: ctx.brandName, category: "", description: "", products: [], bannedTerms: ctx.banned, places: [], month: "" }, output, { sources: ctx.sources, readPage: async () => null }))
+    const problems = (await checkMarket({ brandName: ctx.brandName, category: "", description: "", products: [], bannedTerms: ctx.banned, places: [], month: "", country: "United Kingdom" }, output, { sources: ctx.sources, readPage: async () => null }))
       .filter((p) => !/says .*(can't be checked|cited pages do not contain)/.test(p));
     const kinds = new Set(output.notes.map((n) => n.kind));
     if (kinds.size < 2) problems.push("every note is the same kind");

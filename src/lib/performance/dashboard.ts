@@ -6,6 +6,7 @@
 import { complianceFor, complianceForTx, fileCompliance, type AdCompliance } from "@/lib/compliance/compute";
 import { getCreative } from "@/lib/creative/gallery";
 import { asUser, type Tx } from "@/lib/db/scoped";
+import { campaignName } from "@/lib/home/needs";
 import { clockLabel } from "./clock-rules";
 import { dayHealth, healthSeries, homeLine, shareOf, type AdComplianceToday, type DayHealth, type HealthInput } from "./health";
 import { describeLaunchAds, isKpiMeasure, launchesFor, type LaunchAd, type LaunchAdView, type LaunchView } from "./launch";
@@ -148,6 +149,18 @@ export async function performanceFor(userId: string, campaignId: string): Promis
   };
 }
 
+/** U10-5: a live launch's campaign on home, with its own simulated day and share. */
+export type LiveCampaign = {
+  campaignId: string;
+  /** The current brief version's title, else the objective (campaignName). */
+  name: string;
+  launchId: string;
+  simDay: number;
+  days: number;
+  /** That launch's own healthy spend share on its simulated day, as its Performance page shows it; null on day 0 or with no rows. */
+  share: number | null;
+};
+
 export type HomeHealth = {
   campaigns: number;
   healthyPence: number;
@@ -155,6 +168,8 @@ export type HomeHealth = {
   totalPence: number;
   share: number | null;
   line: string;
+  /** U10-5: every live launch, in the order they were made. */
+  live: LiveCampaign[];
 };
 
 /**
@@ -164,12 +179,26 @@ export type HomeHealth = {
  */
 export async function homeHealth(userId: string): Promise<HomeHealth | null> {
   const { live, rows } = await asUser(userId, async (tx) => {
-    const live = await tx`select id, ads, kpi_measure, kpi_value::text as kpi_value, sim_day from public.launches where status = 'live' order by created_at, id`;
+    const live = await tx`
+      select l.id, l.campaign_id, l.ads, l.kpi_measure, l.kpi_value::text as kpi_value, l.sim_day, l.days, c.objective, v.brief ->> 'title' as title
+      from public.launches l
+      join public.campaigns c on c.id = l.campaign_id
+      left join public.brief_versions v on v.campaign_id = c.id and v.version = c.current_version
+      where l.status = 'live' order by l.created_at, l.id`;
     return { live, rows: await storedRows(tx, live.map((l) => l.id as string)) };
   });
   if (live.length === 0) return null;
 
-  const launches = live.map((l) => ({ id: l.id as string, ads: l.ads as LaunchAd[], kpiMeasure: l.kpi_measure as string, kpiValue: Number(l.kpi_value), simDay: l.sim_day as number }));
+  const launches = live.map((l) => ({
+    id: l.id as string,
+    campaignId: l.campaign_id as string,
+    name: campaignName({ title: l.title as string | null, objective: l.objective as string }),
+    ads: l.ads as LaunchAd[],
+    kpiMeasure: l.kpi_measure as string,
+    kpiValue: Number(l.kpi_value),
+    simDay: l.sim_day as number,
+    days: l.days as number,
+  }));
   // One compliance read for every launched ad; each launch then judges its own sizes and languages.
   const all = await complianceFor(
     userId,
@@ -178,15 +207,19 @@ export async function homeHealth(userId: string): Promise<HomeHealth | null> {
   let healthyPence = 0;
   let learningPence = 0;
   let totalPence = 0;
+  const each: LiveCampaign[] = [];
   for (const l of launches) {
+    const one: LiveCampaign = { campaignId: l.campaignId, name: l.name, launchId: l.id, simDay: l.simDay, days: l.days, share: null };
+    each.push(one);
     if (l.simDay === 0) continue;
     const compliance = new Map(l.ads.map((a) => [a.variantId, judgeToday(all.get(a.variantId), a)]));
     const d = dayHealth(healthInput(l, compliance, rows.get(l.id) ?? []), l.simDay);
     if (!d) continue;
+    one.share = d.share;
     healthyPence += d.healthyPence;
     learningPence += d.learningPence;
     totalPence += d.totalPence;
   }
   const share = shareOf(healthyPence, learningPence, totalPence);
-  return { campaigns: launches.length, healthyPence, learningPence, totalPence, share, line: homeLine(launches.length, share) };
+  return { campaigns: launches.length, healthyPence, learningPence, totalPence, share, line: homeLine(launches.length, share), live: each };
 }

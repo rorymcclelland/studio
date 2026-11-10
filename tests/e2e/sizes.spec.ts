@@ -10,10 +10,12 @@
 // simulated, and every ad says so.
 import { expect, test, type Page } from "@playwright/test";
 import {
+  adTool,
   contrastViolations,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  overviewPath,
   saveShot,
   settle,
   signIn,
@@ -105,12 +107,14 @@ test(
   async ({ page }) => {
     test.setTimeout(600_000);
     await campaignWithDisplay(page, "Fernhollow Outfitters", "Bring lapsed customers back for the winter range in every size");
-    const campaignPath = new URL(page.url()).pathname;
+    // The ads are on the Creative stage; their pages are under the campaign's overview path (U10-2).
+    const campaignPath = overviewPath(page.url());
     const socialId = (await ads(page, "paid social").first().getAttribute("data-ad"))!;
     const displayId = (await ads(page, "display").first().getAttribute("data-ad"))!;
 
     await step(page, "C7-1.1: open Sizes on a paid-social ad: the four social sizes, each with contrast, fit, legal lines and the simulated label", async () => {
-      await ads(page, "paid social").first().locator("[data-ad-sizes]").click();
+      // U10-3: Sizes is in the card's More menu.
+      await (await adTool(ads(page, "paid social").first(), "sizes")).click();
       await page.waitForURL(new RegExp(`${campaignPath}/ads/${socialId}/sizes$`));
       await settle(page);
       await expect(page.getByRole("heading", { name: "Sizes", level: 2 })).toBeVisible();
@@ -156,7 +160,8 @@ test(
   async ({ page }) => {
     test.setTimeout(540_000);
     await campaignWithDisplay(page, "Quillmoor Money", "Bring lapsed savers back to the Plus plan on every site they read");
-    const campaignPath = new URL(page.url()).pathname;
+    // The ads are on the Creative stage; their pages are under the campaign's overview path (U10-2).
+    const campaignPath = overviewPath(page.url());
     const displayId = (await ads(page, "display").first().getAttribute("data-ad"))!;
 
     await step(page, "C7-1.4: Sizes on a Quillmoor display ad: its three legal lines don't fit the 728 × 90 leaderboard, so it is left out with the reason", async () => {

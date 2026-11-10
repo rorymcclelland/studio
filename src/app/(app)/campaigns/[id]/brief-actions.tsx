@@ -84,7 +84,7 @@ export function RestoreVersionButton({ campaignId, version, currentVersion }: { 
       call={() => restoreBriefVersion(campaignId, version, currentVersion)}
       label="Make this the current version"
       pendingLabel="Restoring…"
-      onDone={() => router.push(`/campaigns/${campaignId}`)}
+      onDone={() => router.push(`/campaigns/${campaignId}/brief`)}
     />
   );
 }

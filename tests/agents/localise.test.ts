@@ -153,7 +153,7 @@ describe("C7-2 Languages", () => {
     // Every ad on the same words gets the translations too (one call per set and language).
     for (const other of (await view()).variants.filter((x) => x.words.setId === ad.words.setId)) expect(other.translations).toHaveLength(3);
     expect(v.translate.todo).toBe(0);
-    expect((await getRun(a.userId, runId))!.output).toMatchObject({ href: `/campaigns/${campaign}#creative` });
+    expect((await getRun(a.userId, runId))!.output).toMatchObject({ href: `/campaigns/${campaign}/creative` });
   });
 
   it("#2 each translated ad renders in every size of its channel and passes fit and contrast, or is left out with the reason", async () => {

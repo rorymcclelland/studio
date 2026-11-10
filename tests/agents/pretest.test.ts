@@ -163,7 +163,7 @@ describe("C8-4 Pre-test panel", () => {
       expect(Number(s.cost_pence)).toBeGreaterThan(0);
     }
     expect(mockBehaviour.lastImageCount).toBe(1);
-    expect(run.output).toMatchObject({ label: SYNTHETIC_PANEL, href: `/campaigns/${campaign}#creative` });
+    expect(run.output).toMatchObject({ label: SYNTHETIC_PANEL, href: `/campaigns/${campaign}/creative` });
     expect((run.output as { summary: string }).summary).toContain(`${SYNTHETIC_PANEL}: ${personas} personas scored 4 picked ads (simulated scores from the mock model).`);
 
     for (const p of picked) {

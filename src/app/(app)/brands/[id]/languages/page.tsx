@@ -22,7 +22,7 @@ async function LanguagesContent(props: PageProps<"/brands/[id]/languages">) {
   const brand = await getBrand(member.userId, id);
   if (!brand) notFound();
   const languages = await listBrandLanguages(member.userId, brand.id);
-  const demoMissing = brand.isSimulated && isDemoSlug(brand.slug) && languages.length < SUPPORTED_LANGS.length;
+  const demoMissing = brand.isFictional && isDemoSlug(brand.slug) && languages.length < SUPPORTED_LANGS.length;
 
   return (
     <div className="space-y-8">
@@ -32,7 +32,7 @@ async function LanguagesContent(props: PageProps<"/brands/[id]/languages">) {
         </TextLink>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 className="min-w-0 text-title font-strong wrap-anywhere">Languages</h1>
-          {brand.isSimulated && <Pill tone="review">Demo brand</Pill>}
+          {brand.isFictional && <Pill tone="review">Demo brand</Pill>}
         </div>
         <p className="mt-2 max-w-prose text-lg text-ink-2 wrap-anywhere">
           {brand.name}. The Localise agent translates picked ads into these languages. Each language needs its own legal lines,

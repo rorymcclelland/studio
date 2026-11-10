@@ -53,6 +53,7 @@ export type Unsourced = { where: string; number: string };
 
 export const SECTION_LABEL: Record<BriefSection, string> = {
   title: "Title",
+  line: "Campaign line",
   summary: "Summary",
   story: "Story",
   insights: "Insights",
@@ -65,12 +66,14 @@ export const SECTION_LABEL: Record<BriefSection, string> = {
 export function sectionPhrase(section: string | null): string {
   if (!section) return "the whole brief";
   if (section === "kpi") return "the KPI";
+  if (section === "line") return "the campaign line";
   return `the ${section}`;
 }
 
 /** Which section an unsourced figure's `where` ("insight 2", "the email role") belongs to. */
 export function sectionOfWhere(where: string): BriefSection | null {
   if (where === "the title") return "title";
+  if (where === "the campaign line") return "line";
   if (where === "the summary") return "summary";
   if (where === "the story") return "story";
   if (where.startsWith("insight ")) return "insights";
@@ -190,6 +193,14 @@ export function SectionBody({
         <p className="text-xl font-strong tracking-tight wrap-anywhere">
           <Figures text={brief.title} unsourced={unsourced} where="the title" />
         </p>
+      );
+    case "line":
+      return brief.line ? (
+        <p className="text-lg font-strong wrap-anywhere" data-campaign-line="">
+          <Figures text={brief.line} unsourced={unsourced} where="the campaign line" />
+        </p>
+      ) : (
+        <p className="text-ink-2">No campaign line yet.</p>
       );
     case "summary":
       return (
@@ -322,6 +333,8 @@ function KitNote({ brandId }: { brandId: string }) {
 export function coreOf(b: StoredBrief) {
   return {
     title: b.title,
+    // D-4: kept when another section is edited, so a new version carries the line.
+    ...(b.line ? { line: b.line } : {}),
     summary: b.summary,
     story: b.story,
     insights: b.insights,

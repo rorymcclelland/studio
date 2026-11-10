@@ -5,7 +5,7 @@
 // checks the workspace and the sign-off, and the run goes through the daily cap
 // (rule 5). It writes picture-check results only: nothing is replaced.
 
-import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { StartRunError } from "@/lib/agents/runs";
 import { sendEvent } from "@/inngest/client";
@@ -16,7 +16,7 @@ export async function checkPictures(campaignId: string): Promise<BriefActionStat
   const member = await requireMember();
   try {
     await startPictureCheck(member, campaignId, sendEvent);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: "Checking the pictures. Each ad's Compliance view shows what the AI found in a few seconds." };
   } catch (err) {
     if (err instanceof PictureCheckError || err instanceof StartRunError) return { error: err.message };

@@ -5,7 +5,7 @@
 // checks the workspace, the sign-off and the panel, and the run goes through
 // the daily cap (rule 5). Nothing is published, replaced or ranked.
 
-import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { StartRunError } from "@/lib/agents/runs";
 import { sendEvent } from "@/inngest/client";
@@ -16,7 +16,7 @@ export async function pretestPicked(campaignId: string): Promise<BriefActionStat
   const member = await requireMember();
   try {
     await startPretest(member, campaignId, sendEvent);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: "Pre-testing the picked ads. The synthetic panel's scores appear under each ad in a few seconds." };
   } catch (err) {
     if (err instanceof PretestError || err instanceof StartRunError) return { error: err.message };

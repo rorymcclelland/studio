@@ -43,6 +43,10 @@ export function LanguagesEditor({
   const router = useRouter();
   const change = (i: number, patch: Partial<(typeof rows)[number]>) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
   const chosen = rows.filter((r) => r.chosen);
+  // Unsaved: the form differs from the languages the page was given (a save refreshes those).
+  const shape = (x: { lang: Lang; chosen: boolean }, legal: string[], banned: string[]) => JSON.stringify([x.lang, x.chosen, x.chosen ? legal : [], x.chosen ? banned : []]);
+  const dirty =
+    rows.map((r) => shape(r, lines(r.legalText), lines(r.bannedText))).join() !== languages.map((l) => shape(l, l.legalLines, l.bannedTerms)).join();
   const errors = result && !result.ok ? result.fieldErrors : {};
   const errorFor = (lang: Lang, field: "legalLines" | "bannedTerms") => {
     const n = chosen.findIndex((r) => r.lang === lang);
@@ -65,7 +69,8 @@ export function LanguagesEditor({
 
   return (
     <form
-      className="space-y-5"
+      // Controls scrolled into view by focus stop above the sticky save bar, not under it.
+      className="space-y-5 [&_:is(input,textarea,button)]:scroll-mb-36"
       onSubmit={(e) => {
         e.preventDefault();
         save();
@@ -84,7 +89,7 @@ export function LanguagesEditor({
       {rows.map((r, i) => {
         const id = `lang-${r.lang}`;
         return (
-          <Card as="fieldset" key={r.lang} className="min-w-0 space-y-4" data-language-form={r.lang}>
+          <Card as="fieldset" key={r.lang} className="min-w-0 space-y-3" data-language-form={r.lang}>
             <legend className="sr-only">{r.name}</legend>
             <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <label className="inline-flex min-h-11 items-center gap-3 text-lg font-strong">
@@ -111,10 +116,10 @@ export function LanguagesEditor({
                   hint={englishLegal.length ? "One per line. Required while the English kit has legal lines." : "One per line."}
                   error={errorFor(r.lang, "legalLines")}
                 >
-                  <Textarea rows={5} lang={r.lang} value={r.legalText} onChange={(e) => change(i, { legalText: e.target.value })} />
+                  <Textarea rows={3} lang={r.lang} value={r.legalText} onChange={(e) => change(i, { legalText: e.target.value })} />
                 </Field>
                 <Field id={`${id}-banned`} label={`${r.name} banned terms`} hint="One per line." error={errorFor(r.lang, "bannedTerms")}>
-                  <Textarea rows={5} lang={r.lang} value={r.bannedText} onChange={(e) => change(i, { bannedText: e.target.value })} />
+                  <Textarea rows={3} lang={r.lang} value={r.bannedText} onChange={(e) => change(i, { bannedText: e.target.value })} />
                 </Field>
               </div>
             )}
@@ -126,15 +131,25 @@ export function LanguagesEditor({
           </Card>
         );
       })}
-      <div className="flex flex-col items-start gap-2">
+      {/* Answer B1: Save stays on screen while editing, at every width, as the kit editor's does. */}
+      <div
+        data-save-bar=""
+        className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card bg-surface px-4 py-3 shadow-lg ring-1 shadow-ink/10 ring-line sm:flex-nowrap sm:p-4 sm:px-6"
+      >
+        <div className="min-w-0 basis-full text-sm sm:flex-1 sm:basis-auto">
+          {result && !result.ok ? (
+            <p role="alert" className="font-medium text-attention-ink">
+              {result.error}
+            </p>
+          ) : (
+            <p role="status" className="text-ink-2">
+              {pending ? "Saving…" : dirty ? "You have unsaved changes." : "No changes yet."}
+            </p>
+          )}
+        </div>
         <Button type="submit" disabled={pending}>
           {pending ? "Saving…" : "Save languages"}
         </Button>
-        {result && !result.ok && (
-          <p role="alert" className="text-sm font-medium text-attention-ink">
-            {result.error}
-          </p>
-        )}
       </div>
     </form>
   );

@@ -24,15 +24,16 @@ async function EditBrandContent(props: PageProps<"/brands/[id]/edit">) {
         </TextLink>
         <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
           <h1 className="min-w-0 text-title font-strong wrap-anywhere">Edit brand kit</h1>
-          {brand.isSimulated && <Pill tone="review">Demo brand</Pill>}
+          {brand.isFictional && <Pill tone="review">Demo brand</Pill>}
         </div>
         <p className="mt-2 max-w-prose text-lg text-ink-2 wrap-anywhere">
           {brand.name}. Agents read this kit before they write or design anything, so changes apply to their next run.
         </p>
       </div>
-      <LogoUpload brandId={brand.id} brandName={brand.name} initial={{ svg: brand.logoSvg, pngSrc: brand.logoPngSrc }} />
       <BrandEditor
         brandId={brand.id}
+        isFictional={brand.isFictional}
+        lead={<LogoUpload brandId={brand.id} brandName={brand.name} initial={{ svg: brand.logoSvg, pngSrc: brand.logoPngSrc }} />}
         initial={{
           name: brand.name,
           slug: brand.slug,
@@ -48,6 +49,7 @@ async function EditBrandContent(props: PageProps<"/brands/[id]/edit">) {
           legalLines: brand.legalLines,
           bannedTerms: brand.bannedTerms,
           evidenceClaims: brand.evidenceClaims,
+          ownNames: brand.ownNames,
         }}
       />
     </div>

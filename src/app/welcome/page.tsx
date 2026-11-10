@@ -10,7 +10,8 @@ import { Wordmark } from "@/components/ui/wordmark";
 
 export const metadata: Metadata = {
   title: "A multi-agent campaign studio",
-  description: "Strategy agents turn a campaign objective into an evidenced brief; synthetic personas critique it; a person signs it off.",
+  description:
+    "Three squads of AI agents take a campaign from an objective to a signed-off brief, checked ads and a simulated launch. A person approves every consequential move.",
 };
 
 const STEPS = [
@@ -44,14 +45,15 @@ export default function WelcomePage() {
       <main id="main" className="mx-auto max-w-5xl space-y-10 px-4 pt-6 pb-16 sm:px-8">
         <Card size="hero">
           <p className="flex flex-wrap gap-2">
-            <Pill tone="review">Fictional brands</Pill>
+            <Pill tone="review">Fictional demo brands</Pill>
             <Pill tone="review">Simulated data</Pill>
           </p>
           <h1 className="mt-4 max-w-3xl text-display font-strong">A multi-agent campaign studio for marketing teams</h1>
           <p className="mt-4 max-w-prose text-lg text-ink-2">
             Three squads of AI agents share one store of business context. The Strategy squad takes a campaign from an
-            objective to a signed-off brief and test plan, and the Creative squad turns that brief into ads; the Performance
-            squad comes next. A person approves every consequential move.
+            objective to a signed-off brief and test plan, the Creative squad turns that brief into checked ads, and the
+            Performance squad watches a simulated launch and flags what needs attention. A person approves every
+            consequential move.
           </p>
           <div className="mt-6 flex flex-wrap items-center gap-x-5 gap-y-3">
             <ButtonLink href="/signin" size="lg">
@@ -93,7 +95,28 @@ export default function WelcomePage() {
               From a signed-off brief, the Imagery agent draws four pictures, each checked for text, and the Copy agent writes
               words for each channel within its character limits, through the same checks as the brief. Code puts each
               picture and set of words into an ad with the logo and the legal line, and checks contrast and fit. A person
-              picks, discards, edits the words or asks for a new picture. Nothing is published.
+              picks, discards, edits the words or asks for a new picture.
+            </p>
+            <p className="max-w-prose text-ink-2">
+              Each ad comes in four social sizes and three banners, and can be translated into the brand&apos;s languages. The
+              Compliance agent checks every ad against the brand&apos;s rules, including ads uploaded from outside Studio, and a
+              person decides anything that needs judgement. A synthetic panel pre-tests the ads, and the ones that pass go
+              into a launch pack. Nothing is published.
+            </p>
+          </Card>
+        </section>
+
+        <section aria-labelledby="performance" className="space-y-4">
+          <h2 id="performance" className="text-2xl font-strong tracking-tight">
+            What the Performance squad does today
+          </h2>
+          <Card className="space-y-2">
+            <h3 className="text-lg font-strong">Simulated launches, watched for you</h3>
+            <p className="max-w-prose text-ink-2">
+              A person approves a launch of the ads that pass, with a daily budget and a length in days. The launch runs in
+              a simulator, on a clock a person moves forward, and no media is bought. The Monitor agent raises an alert when
+              an ad falls below the campaign&apos;s threshold, starts to tire or stops being compliant, and answers
+              plain-English questions about the results. Every performance figure is simulated and labelled as simulated.
             </p>
           </Card>
         </section>
@@ -104,14 +127,14 @@ export default function WelcomePage() {
               Coming next
             </h2>
             <p className="mt-2 text-ink-2">
-              More sizes for each ad, and a compliance agent that checks creative before it goes anywhere. Then the
-              Performance squad will watch how creative does and propose replacements, which a person approves.
+              Forecasts of when an ad starts to tire, new ads proposed to replace tired ones, and budget moved towards the
+              ads doing best. Each waits for a person to approve it.
             </p>
           </Card>
           <Card>
             <h2 className="text-xl font-strong tracking-tight">What to expect inside</h2>
             <ul className="mt-2 list-disc space-y-1.5 pl-5 text-ink-2 marker:text-ink-2">
-              <li>The brands are fictional, and their customers and orders are simulated: segment sizes and sales figures are generated for the demo. Market notes come from real web pages and link to them.</li>
+              <li>The demo brands are fictional, and their customers and orders are simulated: segment sizes and sales figures are generated for the demo. A brand you add yourself may be real; any customers and orders Studio generates for it are simulated and labelled so. Market notes come from real web pages and link to them.</li>
               <li>Every agent run keeps its trail: inputs, outputs, model, tokens, cost and time.</li>
               <li>AI spend is capped each day, and runs stop at the cap.</li>
               <li>Each invited person gets their own workspace, with the demo brands one click away.</li>

@@ -13,10 +13,10 @@
 // tests/db/performance.test.ts.
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { createElement } from "react";
+import { createElement, Fragment } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
-import { PerformanceChart } from "@/app/(app)/campaigns/[id]/performance/chart";
+import { PerformanceChart, PerformanceTable } from "@/app/(app)/campaigns/[id]/performance/chart";
 import {
   dayHealth,
   HEALTHY_DEFINITION,
@@ -312,17 +312,19 @@ describe("P9-3 labelled simulated, with a text alternative", () => {
 
   it("#7 the chart is an SVG labelled Simulated, with the events marked and a table version of every day for screen readers", () => {
     const series = healthSeries(input(), 5);
+    const ads = [
+      { variantId: X, adNumber: 1, headline: "Made for the long way round" },
+      { variantId: Y, adNumber: 2, headline: "Kit for the long way round" },
+      { variantId: Z, adNumber: 3, headline: "Walk further this autumn" },
+    ];
+    // U10-4: the chart and its table are two tabs on the page, rendered side by side here.
     const html = renderToStaticMarkup(
-      createElement(PerformanceChart, {
-        series,
-        ads: [
-          { variantId: X, adNumber: 1, headline: "Made for the long way round" },
-          { variantId: Y, adNumber: 2, headline: "Kit for the long way round" },
-          { variantId: Z, adNumber: 3, headline: "Walk further this autumn" },
-        ],
-        threshold: { measure: "cpa", value: 20 },
-        days: 30,
-      }),
+      createElement(
+        Fragment,
+        null,
+        createElement(PerformanceChart, { series, ads, threshold: { measure: "cpa", value: 20 }, days: 30 }),
+        createElement(PerformanceTable, { series, ads, measure: "cpa" }),
+      ),
     );
     // The chart: an image with a title that says simulated, and "Simulated" drawn on it.
     const svg = /<svg[^>]*data-perf-chart[^>]*>[\s\S]*?<\/svg>/.exec(html)?.[0] ?? "";

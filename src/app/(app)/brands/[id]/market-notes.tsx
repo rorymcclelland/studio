@@ -54,9 +54,8 @@ export function MarketNotes({
             Market notes
           </h2>
           <p className="mt-1 max-w-prose text-ink-2">
-            Outside evidence the Brief agent can cite: category trends, seasonal timing, what rivals are doing and gaps.
-            The Market agent searches the web about the category, never this brand, and every note links to the pages it
-            rests on. Real company names stay in these notes; the brief&apos;s checks keep them out of briefs.
+            Evidence the Brief agent can cite, from a web search about the category, with sources. Real company names
+            stay here; the brief&apos;s checks keep them out of briefs.
           </p>
         </div>
         <RefreshMarketButton brandId={brandId} running={active} />
@@ -108,19 +107,20 @@ export function MarketNotes({
             {ordered.map((n) => {
               const k = KINDS.find((x) => x.kind === n.kind) ?? { label: "Note", tone: "neutral" as PillTone };
               return (
-                <Card as="li" key={n.id} data-market-note={n.kind} className="flex flex-col gap-3">
-                  <div className="flex flex-wrap items-center gap-2">
+                <Card as="li" key={n.id} data-market-note={n.kind} className="flex flex-col gap-2">
+                  {/* U10-7: the kind beside the title, so a note starts one line shorter. */}
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                     <Pill tone={k.tone}>{k.label}</Pill>
                     {daysSince(n.checkedAt) > staleDays && <Pill tone="review">Getting old</Pill>}
+                    <h3 className="min-w-0 font-semibold wrap-anywhere">{n.title}</h3>
                   </div>
-                  <h3 className="font-semibold wrap-anywhere">{n.title}</h3>
                   <p className="text-ink-2 wrap-anywhere">{n.text}</p>
                   {n.names.length > 0 && (
                     <p className="text-sm wrap-anywhere" data-real-names="">
                       <span className="font-semibold">Names real companies:</span> {n.names.join(", ")}
                     </p>
                   )}
-                  <div className="mt-auto border-t border-line pt-3">
+                  <div className="mt-auto border-t border-line pt-2">
                     <WebLinks
                       web={{ checkedAt: n.checkedAt.toISOString(), links: n.sources.map((x) => ({ url: x.url, title: x.title })) }}
                       label={`Sources for ${n.title}`}

@@ -27,17 +27,42 @@ export default defineConfig({
     // S2-4 #5 needs an empty workspace, so it runs once, before every spec
     // that reads the demo brands, instead of emptying it under them.
     { name: "demo-brands", testMatch: /demo-brands\.setup\.ts/, use: { ...devices["Desktop Chrome"] }, dependencies: ["sign-in"] },
-    { name: "chromium", use: { ...devices["Desktop Chrome"] }, dependencies: ["demo-brands"], grepInvert: /@brand-kit/ },
+    // U10-6: the audit's fullest data (tests/e2e/fullest-data.ts), built beside the specs, one part per worker.
+    {
+      name: "page-length-data",
+      testMatch: /page-length-data\.setup\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["demo-brands"],
+      fullyParallel: true,
+    },
+    {
+      name: "chromium",
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["demo-brands"],
+      grepInvert: /@brand-kit/,
+      testIgnore: /page-length\.spec\.ts/,
+    },
     // Sprint 8 QA fix: the tests tagged @brand-kit change a demo brand's kit for a moment (a don't rule, a banned or
     // German term, German legal lines, the palette, tone words) and put it back. Other specs read those kits (the
     // launch pack, the pre-test and the uploads count Quillmoor's and Fernhollow's don't rules, for example), so
     // these run after every other spec, one at a time, never beside a test that reads what they change. A
     // failure in the main project skips them (Playwright's rule for dependencies); CI retries a test once first.
+    // The fullest data's live campaign accepts Fernhollow's don't rules, so it is built before these change them.
     {
       name: "brand-kit",
       use: { ...devices["Desktop Chrome"] },
-      dependencies: ["chromium"],
+      dependencies: ["chromium", "page-length-data"],
       grep: /@brand-kit/,
+      workers: 1,
+      fullyParallel: false,
+    },
+    // U10-6: every page measured against its length budget once every other spec has run, so every list is as
+    // long as the suite makes it (tests/e2e/page-length.spec.ts; the budgets are tests/e2e/page-budgets.ts).
+    {
+      name: "page-length",
+      testMatch: /page-length\.spec\.ts/,
+      use: { ...devices["Desktop Chrome"] },
+      dependencies: ["brand-kit"],
       workers: 1,
       fullyParallel: false,
     },

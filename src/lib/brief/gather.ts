@@ -1,4 +1,5 @@
 import type { Tx } from "@/lib/db/scoped";
+import { refusableNames } from "@/lib/brands/own-names";
 import type { EvidenceItem, KitLists } from "./checks";
 
 // S3-2: what the Brief agent may use. Gathered in code, tagged C1..Cn for the
@@ -45,9 +46,12 @@ export async function gatherContext(tx: Tx, brandId: string, objective: string):
 
   // Products keep their places; the kit, segments and insights fill the rest.
   const rows = [...fixed.slice(0, MAX_CONTEXT_ITEMS - products.length), ...products];
+  // The brand's own names stay in its market notes (D-2); other companies are replaced (rule 2).
+  const own = { name: b.name as string, ownNames: (b.own_names ?? []) as string[] };
+  const hidden = (r: Record<string, unknown>) => refusableNames(((r.meta as { names?: string[] } | null)?.names ?? []) as string[], own);
   const items: GatheredItem[] = rows.map((r, i) => {
-    const body = r.kind === "result" ? withoutNames(r.body as string, (r.meta?.names ?? []) as string[]) : (r.body as string);
-    const title = r.kind === "result" ? withoutNames(r.title as string, (r.meta?.names ?? []) as string[]) : (r.title as string);
+    const body = r.kind === "result" ? withoutNames(r.body as string, hidden(r)) : (r.body as string);
+    const title = r.kind === "result" ? withoutNames(r.title as string, hidden(r)) : (r.title as string);
     return {
       ref: `C${i + 1}`,
       id: r.id as string,
@@ -71,6 +75,7 @@ export async function gatherContext(tx: Tx, brandId: string, objective: string):
       bannedTerms: b.banned_terms as string[],
       dontRules: b.dont_rules as string[],
       evidenceClaims: b.evidence_claims as string[],
+      ownNames: own.ownNames,
     },
     items,
   };
@@ -82,12 +87,18 @@ export async function contextById(tx: Tx, brandId: string): Promise<EvidenceItem
   return rows.map((r) => ({ ref: r.id as string, kind: r.kind as string, title: r.title as string, text: r.body as string }));
 }
 
-/** The real companies the brand's market notes name (S4-3, rule 2). */
+/**
+ * The real companies the brand's market notes name (S4-3, rule 2), less the
+ * brand's own name and its own names (D-2, decision 0029): the names a brief or
+ * ad may not use.
+ */
 export async function realNamesFor(tx: Tx, brandId: string): Promise<string[]> {
   const rows = await tx`
     select distinct jsonb_array_elements_text(coalesce(meta -> 'names', '[]'::jsonb)) as name
     from public.context_items where brand_id = ${brandId} and kind = 'result'`;
-  return rows.map((r) => r.name as string).filter((n) => n.trim().length >= 2);
+  const [b] = await tx`select name, own_names from public.brands where id = ${brandId}`;
+  const names = rows.map((r) => r.name as string).filter((n) => n.trim().length >= 2);
+  return b ? refusableNames(names, { name: b.name as string, ownNames: (b.own_names ?? []) as string[] }) : names;
 }
 
 /** A market note as the brief sees it: the real names it declared replaced (rule 2). */

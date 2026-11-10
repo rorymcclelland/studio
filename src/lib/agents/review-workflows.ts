@@ -138,7 +138,7 @@ export async function executePersonaRun(ctx: StepContext, step: StepTools): Prom
       values (${ctx.workspaceId}, ${l.campaignId}, ${l.version}, ${ctx.runId}, ${tx.json(review as never)}, ${ctx.userId})
       on conflict (run_id) do nothing`);
     await setRun(ctx, "completed", {
-      output: { summary: `${personas.length} synthetic personas scored version ${l.version}: ${overall} out of 5 overall.`, href: `/campaigns/${l.campaignId}#personas`, hrefLabel: "See the persona review" },
+      output: { summary: `${personas.length} synthetic personas scored version ${l.version}: ${overall} out of 5 overall.`, href: `/campaigns/${l.campaignId}/audience#personas`, hrefLabel: "See the persona review" },
     });
     return "completed";
   });
@@ -195,14 +195,14 @@ export async function executeTestPlanRun(ctx: StepContext, step: StepTools): Pro
         insight: insight(h.insightRef)?.text ?? null,
         audience: audience(h.audienceRef) ? { segmentRef: audience(h.audienceRef)!.segmentRef, title: l.items[audience(h.audienceRef)!.segmentRef]?.title ?? null } : null,
       })),
-      note: "Sample sizes and run lengths come from the campaign simulator (Sprint 8).",
+      note: "No sample sizes or run lengths: a launch in the campaign simulator has its own daily budget and length in days, which a person approves.",
     };
     await asUser(ctx.userId, (tx) => tx`
       insert into public.test_plans (workspace_id, campaign_id, brief_version, run_id, plan, created_by)
       values (${ctx.workspaceId}, ${l.campaignId}, ${l.version}, ${ctx.runId}, ${tx.json(plan as never)}, ${ctx.userId})
       on conflict (run_id) do nothing`);
     await setRun(ctx, "completed", {
-      output: { summary: `${plan.hypotheses.length} hypotheses for version ${l.version}.`, href: `/campaigns/${l.campaignId}#test-plan`, hrefLabel: "See the test plan" },
+      output: { summary: `${plan.hypotheses.length} hypotheses for version ${l.version}.`, href: `/campaigns/${l.campaignId}/audience#test-plan`, hrefLabel: "See the test plan" },
     });
     return "completed";
   });

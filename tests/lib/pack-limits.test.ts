@@ -31,7 +31,7 @@ const item = (n: number): PackItem => ({
 });
 
 const plan = (files: number): PackPlan => ({
-  campaign: { id: "00000000-0000-4000-8000-000000000009", objective: "o", brandName: "Quillmoor Money", brandSimulated: true, briefTitle: null, briefVersion: 1, signedOffAt: null },
+  campaign: { id: "00000000-0000-4000-8000-000000000009", objective: "o", brandName: "Quillmoor Money", brandSimulated: true, brandFictional: true, briefTitle: null, briefVersion: 1, signedOffAt: null },
   ads: [],
   items: Array.from({ length: files }, (_, i) => item(i)),
   leftOut: [],

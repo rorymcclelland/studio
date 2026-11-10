@@ -1,5 +1,6 @@
 // S5-4 test cases 1 to 6 through the UI, with the mock models: a Quillmoor
-// brief shows "Sign off the brief to make creative" until it is signed off;
+// brief's Creative stage is locked until it is signed off (U10-2: "Creative is
+// made only from a signed-off brief.", with a link to the sign-off);
 // then Make creative gives 12 ads with their badges and the "Simulated image"
 // label, New picture replaces one ad's picture, Edit words with a banned term
 // is refused inline and saves nothing, and Pick and Discard survive a reload
@@ -12,15 +13,21 @@
 // tests/agents/creative.test.ts.
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import {
+  adTool,
   caption,
   contrastViolations,
   demoBrandId,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openAdMenu,
+  openHistory,
+  openStage,
   settle,
+  showAllAds,
   signIn,
   signOffVersion,
+  stagePath,
 } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan in January";
@@ -30,16 +37,9 @@ const visible = (page: Page, selector: string) => page.locator(selector).filter(
 const creative = (page: Page) => page.locator("[data-creative]");
 const ads = (page: Page) => page.locator("[data-gallery] > li");
 
+/** A Quillmoor brief, version 1, open on its Brief stage. Returns the campaign's overview path. */
 async function newQuillmoorCampaign(page: Page): Promise<string> {
-  await demoBrandId(page, "Quillmoor Money");
-  await page.goto("/campaigns");
-  await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
-  await page.getByLabel("Objective").fill(OBJECTIVE);
-  await page.getByRole("button", { name: "Write the brief" }).click();
-  await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
-  return new URL(page.url()).pathname;
+  return newCampaign(page, "Quillmoor Money", OBJECTIVE);
 }
 
 /** The number of columns the gallery shows: distinct left edges in its first rows. */
@@ -59,7 +59,8 @@ async function expectAdsDrawn(page: Page) {
 async function checkLayout(page: Page, what: string) {
   for (const [width, cols] of [
     [375, 1],
-    [1440, 4],
+    // R2 (10 November): 3 columns at 1440 px, so rows are always full.
+    [1440, 3],
   ] as const) {
     await page.setViewportSize({ width, height: 900 });
     await settle(page);
@@ -70,7 +71,8 @@ async function checkLayout(page: Page, what: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-const ad = (page: Page, n: number): Locator => ads(page).nth(n - 1);
+// U10-3: by its number, not its place: the gallery now shows launched, needing a decision and picked ads first, newest first.
+const ad = (page: Page, n: number): Locator => ads(page).filter({ has: page.getByRole("heading", { name: `Ad ${n}`, exact: true }) });
 
 test.beforeEach(async ({ page }) => {
   await signIn(page);
@@ -80,10 +82,13 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   test.setTimeout(300_000);
   const path = await newQuillmoorCampaign(page);
 
-  // #5: before sign-off there is the message and no button.
-  await expect(creative(page).getByText("Sign off the brief to make creative")).toBeVisible();
-  await expect(creative(page).getByRole("button", { name: /Make creative/ })).toHaveCount(0);
+  // #5: before sign-off the Creative stage says why it is locked, links to the sign-off, and has no button.
+  await openStage(page, "creative", path);
+  await expect(visible(page, "[data-stage-locked]:not([data-stage])")).toContainText("Creative is made only from a signed-off brief.");
+  await expect(visible(page, "[data-stage-locked]:not([data-stage])").getByRole("link", { name: "Sign off the brief" })).toHaveAttribute("href", stagePath(path, "brief"));
+  await expect(page.getByRole("button", { name: /Make creative/ })).toHaveCount(0);
 
+  await openStage(page, "brief", path);
   const panel = visible(page, "[data-signoff-panel]");
   await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
   await expect(toast(page, "Sent for sign-off")).toBeVisible();
@@ -91,11 +96,14 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
 
   // #1: Make creative says what it costs, then gives 12 ads with their badges, labelled simulated.
+  await openStage(page, "creative", path);
   const make = creative(page).getByRole("button", { name: /^Make creative \(about \d+p, at most \d+p\)$/ });
   await expect(make).toBeEnabled();
   await make.click();
   await expect(creative(page).getByRole("status").filter({ hasText: "Drawing four pictures" })).toBeVisible({ timeout: 15_000 });
   await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  // U10-3: the gallery shows six until Show all.
+  await showAllAds(page);
   await expect(page.locator("[data-simulated-note]")).toContainText("Simulated images.");
   for (const card of await ads(page).all()) {
     await expect(card.locator("[data-badge=contrast]")).toContainText(/^Contrast \d+\.\d:1$/);
@@ -115,7 +123,8 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   // Once there are ads, Make creative is disabled and says why.
   await expect(creative(page).getByRole("button", { name: /Make creative/ })).toBeDisabled();
   await expect(page.locator("[data-make-creative-reason]")).not.toBeEmpty();
-  // The cost so far and the runs, with the Make creative run and its children.
+  // The cost so far and the runs, with the Make creative run and its children (one line until opened).
+  await openHistory(page, "runs");
   await expect(page.locator("[data-creative-cost]")).toContainText("AI cost of the creative so far:");
   const runs = page.getByRole("list", { name: "Creative runs, newest first" });
   await expect(runs.getByRole("link", { name: "Make creative" })).toBeVisible();
@@ -127,8 +136,9 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   // #6: one column at 375 px, four at 1440 px; nothing scrolls sideways; AA contrast.
   await checkLayout(page, "the gallery");
 
-  // S5-3 #6: a layout switch draws the ad in that layout, or says why not.
+  // S5-3 #6: a layout switch draws the ad in that layout, or says why not (U10-3: from the card's Edit menu).
   const first = ad(page, 1);
+  await openAdMenu(first, "edit");
   const firstLayout = (await first.getByRole("button", { pressed: true }).textContent())!.trim();
   const other = firstLayout === "Split" ? "Full bleed" : "Split";
   await first.getByRole("button", { name: `${other} layout for ad 1` }).click();
@@ -144,6 +154,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   // #2: New picture says its cost, replaces only that ad's picture, and the cost is shown.
   const beforeId = await ad(page, 1).getAttribute("data-ad");
   const sibling = await ad(page, 2).getAttribute("data-ad");
+  await openAdMenu(ad(page, 1), "edit");
   const newPicture = ad(page, 1).getByRole("button", { name: /^New picture for ad 1, (about \d+p|under 1p)$/ });
   await newPicture.click();
   await expect(toast(page, "Drawing a new picture")).toBeVisible();
@@ -151,12 +162,13 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(ads(page)).toHaveCount(12);
   await expect(page.locator(`[data-ad="${sibling}"]`)).toHaveCount(1);
   await expect(runs.getByRole("link", { name: "New picture" })).toBeVisible();
+  await openHistory(page, "discarded");
   await expect(page.locator("[data-discarded-ad]").first()).toBeVisible();
   await expectAdsDrawn(page);
 
   // #3: Edit words with a banned term is refused inline, and nothing is saved.
   const headline = (await ad(page, 3).locator("img").getAttribute("alt"))!.match(/Headline: (.*?)\. /)![1];
-  await ad(page, 3).getByRole("button", { name: "Edit the words for ad 3" }).click();
+  await (await adTool(ad(page, 3), "edit-words")).click();
   const dialog = page.getByRole("dialog", { name: "Edit the words for ad 3" });
   await expect(dialog).toBeVisible();
   const field = dialog.getByRole("textbox", { name: "Headline" });
@@ -178,23 +190,28 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(dialog).toBeHidden();
   await page.reload();
   await settle(page);
+  await showAllAds(page);
   await expect(ad(page, 3).locator("img")).toHaveAttribute("alt", new RegExp(`Headline: ${headline.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`));
   await expect(page.locator("[data-copy-set]").filter({ hasText: "Edited by a person" })).toHaveCount(0);
 
   // #4: Pick and Discard survive a reload; a discarded ad is listed with an undo.
   const pickedId = await ad(page, 4).getAttribute("data-ad");
-  await ad(page, 4).getByRole("button", { name: "Pick ad 4" }).click();
+  const pick4 = await adTool(ad(page, 4), "pick");
+  await expect(pick4).toHaveAccessibleName("Pick ad 4");
+  await pick4.click();
   await expect(toast(page, "Picked for the shortlist.")).toBeVisible();
   const discardedId = await ad(page, 5).getAttribute("data-ad");
-  await ad(page, 5).getByRole("button", { name: "Discard ad 5" }).click();
+  await (await adTool(ad(page, 5), "discard")).click();
   await expect(toast(page, "Ad discarded.")).toBeVisible();
   await page.reload();
   await settle(page);
+  await showAllAds(page);
   await expect(page.locator(`[data-ad="${pickedId}"]`)).toHaveAttribute("data-picked", "");
   await expect(page.locator(`[data-ad="${pickedId}"]`).getByText("Picked", { exact: true })).toBeVisible();
   await expect(page.locator(`[data-gallery] [data-ad="${discardedId}"]`)).toHaveCount(0);
   await expect(ads(page)).toHaveCount(11);
   const gone = page.locator(`[data-discarded-ad="${discardedId}"]`);
+  await openHistory(page, "discarded");
   await expect(gone).toBeVisible();
   await gone.getByRole("button", { name: /^Restore the ad/ }).click();
   await expect(toast(page, "Ad restored to the gallery.")).toBeVisible();
@@ -204,6 +221,7 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await expect(toast(page, "Taken off the shortlist.")).toBeVisible();
 
   // The Make creative run's page lists the runs inside it with the cost including them.
+  await openHistory(page, "runs");
   await runs.getByRole("link", { name: "Make creative" }).click();
   await expect(page.getByRole("heading", { level: 1, name: /make creative/ })).toBeVisible();
   await expect(page.locator("[data-child-runs]")).toContainText("With the runs inside it:");
@@ -211,8 +229,9 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
   await page.getByRole("list", { name: "Runs inside this run" }).getByRole("link", { name: "Imagery agent" }).click();
   await expect(page.getByText("Part of a Make creative run.")).toBeVisible();
 
-  // The run list names the Make creative run by its workflow name, not its key.
-  await page.goto("/runs");
+  // The run list names the Make creative run by its workflow name, not its key (U10-8: filtered to Make creative
+  // runs, as the list shows 50 a page).
+  await page.goto("/runs?agent=creative");
   await settle(page);
   await expect(page.getByRole("cell", { name: "Make creative", exact: true }).first()).toBeVisible();
   await page.goto(path);
@@ -220,17 +239,23 @@ test("S5-4 #1 to #6: make creative, new picture, edit words, pick and discard, t
 
 test("S5-4 #6: every action on an ad is reachable by keyboard at 375 px", async ({ page }) => {
   test.setTimeout(240_000);
-  await newQuillmoorCampaign(page);
+  const path = await newQuillmoorCampaign(page);
   const panel = visible(page, "[data-signoff-panel]");
   await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
   await panel.getByRole("button", { name: "Approve version 1" }).click();
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
+  await openStage(page, "creative", path);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await expect(ads(page)).toHaveCount(12, { timeout: 120_000 });
+  // U10-3: the gallery shows six until Show all.
+  await showAllAds(page);
 
   await page.setViewportSize({ width: 375, height: 800 });
   await settle(page);
   const card = ad(page, 1);
+  // U10-3: the tools are in the card's Edit and More menus; opened, every one is a Tab stop.
+  await openAdMenu(card, "edit");
+  await openAdMenu(card, "more");
   for (const name of [/layout for ad 1$/, /^Pick ad 1$/, /^Discard ad 1$/, /^New picture for ad 1/, /^New words for ad 1/, /^Edit the words for ad 1$/]) {
     const b = card.getByRole("button", { name }).first();
     await b.focus();
@@ -287,8 +312,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
   test.setTimeout(600_000);
   const brandName = "Fernhollow Outfitters";
   const brandId = await demoBrandId(page, brandName);
-  await newCampaign(page, brandName, "Bring lapsed customers back for the winter range, redrawn with the current kit");
-  const campaignPath = new URL(page.url()).pathname;
+  const campaignPath = stagePath(await newCampaign(page, brandName, "Bring lapsed customers back for the winter range, redrawn with the current kit"), "creative");
   await signOffVersion(page, 1);
   // Read the signed-off page afresh: this spec is about redrawing, not the sign-off panel's refresh.
   await makeCreative(page, 12);
@@ -305,6 +329,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await savePaletteInEditor(page, brandId, brandName, [...palette].reverse());
     await page.goto(campaignPath);
     await settle(page);
+    await showAllAds(page);
     const bar = page.locator("[data-older-kit]");
     await expect(bar).toContainText("All 12 ads were made with an older kit.");
     await expect(page.locator("[data-gallery] [data-badge=kit]")).toHaveCount(12);
@@ -320,8 +345,11 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await caption(page, "F-26.1, F-26.4: pick ad 1 and redraw it with the current kit: the pick carries over");
     // #1 and #4: one ad redrawn; the pick carries over to the redrawn ad.
     const firstId = (await ad(page, 1).getAttribute("data-ad"))!;
-    await ad(page, 1).getByRole("button", { name: "Pick ad 1" }).click();
+    const pick1 = await adTool(ad(page, 1), "pick");
+    await expect(pick1).toHaveAccessibleName("Pick ad 1");
+    await pick1.click();
     await expect(toast(page, "Picked for the shortlist.")).toBeVisible();
+    await openAdMenu(ad(page, 1), "edit");
     await ad(page, 1).getByRole("button", { name: "Redraw ad 1 with the current kit, no AI cost" }).click();
     await expect(toast(page, "Ad redrawn with the current kit.")).toBeVisible();
     await expect(page.locator(`[data-gallery] [data-ad="${firstId}"]`)).toHaveCount(0);
@@ -334,6 +362,7 @@ test("F-26 #1 to #4: ads made with an older kit say so; Redraw with current kit 
     await caption(page, "F-26.2: undo brings the old ad back, with its pick");
     // #2: undo brings the old ad back (with the pick) and discards the redrawn one.
     const old = page.locator(`[data-discarded-ad="${firstId}"]`);
+    await openHistory(page, "discarded");
     await expect(old).toContainText("Restoring it brings back the older kit");
     await old.getByRole("button", { name: /^Restore the ad/ }).click();
     await expect(toast(page, "Ad restored to the gallery.")).toBeVisible();

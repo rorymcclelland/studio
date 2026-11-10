@@ -1,6 +1,6 @@
 import { asUser } from "@/lib/db/scoped";
 import { CapExceededError, type WebSource } from "@/lib/models/generate";
-import { marketAgent, marketStart, type MarketInput, type MarketOutput } from "./market";
+import { marketAgent, marketCountry, marketStart, type MarketInput, type MarketOutput } from "./market";
 import { runModelStep, type StepContext } from "./model-step";
 import { setRun, type StepTools } from "./workflow";
 
@@ -20,9 +20,11 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
       const started = Date.now();
       const [run] = await tx`select input from public.agent_runs where id = ${ctx.runId}`;
       const start = marketStart.safeParse(run?.input);
-      const [b] = start.success ? await tx`select id, name, category, description, banned_terms, is_simulated from public.brands where id = ${start.data.brandId}` : [];
+      const [b] = start.success ? await tx`select id, name, category, description, banned_terms, is_simulated, is_fictional, own_names from public.brands where id = ${start.data.brandId}` : [];
       const products = b ? await tx`select name, category from public.products where brand_id = ${b.id} and active order by name limit 30` : [];
       const places = b ? await tx`select distinct region from public.customers where brand_id = ${b.id} and region <> '' limit 30` : [];
+      // QA, Sprint 10b: the market's country, from where most of the brand's customers are.
+      const regions = b ? await tx`select region, count(*)::int as customers from public.customers where brand_id = ${b.id} group by region` : [];
       const result: Prepared = b
         ? {
             ok: true,
@@ -35,14 +37,18 @@ export async function executeMarketRun(ctx: StepContext, step: StepTools): Promi
               products: products.map((p) => `${p.name} (${p.category})`),
               bannedTerms: b.banned_terms,
               places: places.map((p) => p.region as string),
+              country: marketCountry(regions.map((r) => ({ region: r.region as string, customers: r.customers as number }))),
               month: new Date().toLocaleDateString("en-GB", { month: "long", year: "numeric", timeZone: "Europe/London" }),
+              // D-2 (decision 0029): a person's own real brand may be searched for by its names.
+              fictional: b.is_fictional as boolean,
+              ownNames: b.is_fictional ? [] : ((b.own_names ?? []) as string[]),
             },
           }
         : { ok: false, message: "The brand no longer exists, or isn't in this workspace." };
       await tx`
         insert into public.agent_steps (run_id, workspace_id, seq, name, kind, status, input, output, error, duration_ms, finished_at)
         values (${ctx.runId}, ${ctx.workspaceId}, 1, 'Read the brand', 'system', ${result.ok ? "succeeded" : "failed"},
-                ${tx.json((run?.input ?? {}) as never)}, ${result.ok ? tx.json({ category: result.input.category, products: result.input.products.length } as never) : null},
+                ${tx.json((run?.input ?? {}) as never)}, ${result.ok ? tx.json({ category: result.input.category, products: result.input.products.length, country: result.input.country } as never) : null},
                 ${result.ok ? null : result.message}, ${Date.now() - started}, now())
         on conflict (run_id, seq) do update set status = excluded.status, output = excluded.output, error = excluded.error, finished_at = now()`;
       return result;

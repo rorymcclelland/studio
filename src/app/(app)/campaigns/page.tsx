@@ -1,9 +1,11 @@
 import { Suspense } from "react";
 import { requireMember } from "@/lib/auth/session";
 import { listBrands } from "@/lib/brands/repo";
-import { listCampaigns, OBJECTIVE_MAX, OBJECTIVE_MIN, type CampaignSummary } from "@/lib/brief/repo";
+import { listCampaignsPage, OBJECTIVE_MAX, OBJECTIVE_MIN, type CampaignSummary } from "@/lib/brief/repo";
+import { CAMPAIGN_STATUS_FILTERS, campaignFilterNote, campaignsHref, parseCampaignFilters } from "@/lib/campaigns/list-filters";
 import { AutoRefresh } from "@/components/auto-refresh";
-import { ButtonLink } from "@/components/ui/button";
+import { ListFilters } from "@/components/list-filters";
+import { ButtonLink, TextLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { PageSkeleton } from "@/components/ui/skeleton";
@@ -11,6 +13,7 @@ import { CampaignList } from "./campaign-list";
 import { NewCampaignForm } from "./new-campaign-form";
 
 export const metadata = { title: "Campaigns" };
+
 
 /**
  * A brief takes under a minute; a campaign still without one after ten has
@@ -20,9 +23,19 @@ function stillDrafting(c: CampaignSummary): boolean {
   return c.currentVersion === 0 && Date.now() - new Date(c.updatedAt).getTime() < 10 * 60_000;
 }
 
-async function CampaignsPageContent() {
+async function CampaignsPageContent({ searchParams }: { searchParams: PageProps<"/campaigns">["searchParams"] }) {
+  const parsed = parseCampaignFilters(await searchParams);
   const member = await requireMember();
-  const [brands, campaigns] = await Promise.all([listBrands(member.userId, member.workspaceId), listCampaigns(member.userId)]);
+  const [brands, page] = await Promise.all([
+    listBrands(member.userId, member.workspaceId),
+    listCampaignsPage(member.userId, { filters: parsed.filters, before: parsed.before }),
+  ]);
+  const { campaigns, older } = page;
+  // The page's own check (a brand that isn't the reader's) joins the address's.
+  const ignored = (["brand", "status"] as const).filter((k) => parsed.ignored.includes(k) || page.ignored.includes(k));
+  const filters = { ...parsed.filters, brand: page.ignored.includes("brand") ? null : parsed.filters.brand };
+  const filtered = filters.brand !== null || filters.status !== null;
+  const note = campaignFilterNote(ignored);
   const drafting = campaigns.some(stillDrafting);
   return (
     <div className="space-y-10">
@@ -41,13 +54,18 @@ async function CampaignsPageContent() {
           title="Add a brand first"
           headingLevel={2}
           action={
-            <ButtonLink href="/brands" size="sm">
-              Go to brands
-            </ButtonLink>
+            <div className="flex flex-col items-start gap-3 sm:flex-row">
+              <ButtonLink href="/brands/new" size="sm">
+                New brand
+              </ButtonLink>
+              <ButtonLink href="/brands" size="sm" variant="quiet">
+                Add demo brands
+              </ButtonLink>
+            </div>
           }
         >
-          A campaign belongs to a brand, and the brief is written from that brand&apos;s kit, products and customers. Add
-          the demo brands on the Brands page to try it.
+          A campaign belongs to a brand, and the brief is written from that brand&apos;s kit, products and customers. Start
+          a brand of your own, or add the two fictional demo brands on the Brands page to try it.
         </EmptyState>
       ) : (
         <Card as="section" tone="primary" aria-labelledby="new-campaign">
@@ -68,29 +86,71 @@ async function CampaignsPageContent() {
         <h2 id="all-campaigns" className="text-2xl font-strong tracking-tight">
           All campaigns
         </h2>
+        <p className="mt-1 text-ink-2">Most recently changed first.</p>
+        {(campaigns.length > 0 || filtered || note) && (
+          <ListFilters
+            action="/campaigns"
+            label="Filter campaigns"
+            data-campaign-filters=""
+            className="mt-4"
+            gridClass="grid-cols-2 sm:max-w-xl"
+            // With no campaign matching, Clear filters is the empty state's own action instead.
+            clearHref={filtered && campaigns.length > 0 ? "/campaigns" : null}
+            selects={[
+              { name: "brand", label: "Brand", all: "All brands", options: brands.map((b) => ({ value: b.id, label: b.name })), value: filters.brand ?? "" },
+              { name: "status", label: "Status", all: "All statuses", options: CAMPAIGN_STATUS_FILTERS.map((st) => ({ value: st.id, label: st.label })), value: filters.status ?? "" },
+            ]}
+          />
+        )}
+        {note && (
+          <p className="mt-3 text-sm font-medium text-ink" role="status" data-campaigns-filter-note="">
+            {note}
+          </p>
+        )}
         {campaigns.length === 0 ? (
-          <EmptyState title="No campaigns yet" className="mt-4">
-            {brands.length === 0
-              ? "Campaigns appear here once you have a brand to write them for."
-              : "Write your first brief above. It appears here as soon as the Brief agent starts."}
-          </EmptyState>
+          filtered ? (
+            <EmptyState
+              title="No campaigns match these filters"
+              className="mt-4"
+              action={
+                <ButtonLink href="/campaigns" variant="quiet" size="sm">
+                  Clear filters
+                </ButtonLink>
+              }
+            >
+              Try another brand or status, or clear the filters to see every campaign.
+            </EmptyState>
+          ) : (
+            <EmptyState title="No campaigns yet" className="mt-4">
+              {brands.length === 0
+                ? "Campaigns appear here once you have a brand to write them for."
+                : "Write your first brief above. It appears here as soon as the Brief agent starts."}
+            </EmptyState>
+          )
         ) : (
-          <>
-            <p className="mt-1 text-ink-2">Newest first.</p>
-            <div className="mt-4">
-              <CampaignList campaigns={campaigns} label="Campaigns, newest first" />
-            </div>
-          </>
+          <div className="mt-4">
+            <CampaignList campaigns={campaigns} label="Campaigns, most recently changed first" />
+          </div>
+        )}
+        {(older || parsed.before) && (
+          <p className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-3">
+            {older && (
+              <ButtonLink href={campaignsHref(filters, older)} variant="quiet" data-older-campaigns="">
+                Older campaigns
+              </ButtonLink>
+            )}
+            {parsed.before && <TextLink href={campaignsHref(filters)}>Back to the newest campaigns</TextLink>}
+          </p>
         )}
       </section>
     </div>
   );
 }
 
-export default function CampaignsPage() {
+export default function CampaignsPage(props: PageProps<"/campaigns">) {
   return (
     <Suspense fallback={<PageSkeleton label="Loading campaigns" />}>
-      <CampaignsPageContent />
+      <CampaignsPageContent searchParams={props.searchParams} />
     </Suspense>
   );
 }

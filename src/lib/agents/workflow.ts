@@ -41,12 +41,17 @@ export async function setRun(ctx: StepContext, status: string, fields: { output?
 }
 
 type ProposeResult =
-  | { ok: true; taglines: string[] }
+  | { ok: true; taglines: string[]; /** D-4: Suggest lines, for this campaign and brief version. */ campaign?: { campaignId: string; version: number } }
   | { ok: false; reason: "cap" | "error"; message: string };
 
 /**
  * Hello-world workflow: propose three taglines, wait for a person to pick
  * one (rule 3), then finish. Every step is recorded (rule 4).
+ *
+ * D-4 Suggest lines (a campaign in the input): one model step, "Suggest lines",
+ * then the run completes with the three lines and no approval step. Nothing is
+ * saved to the brief: a person picks a line on the Brief stage, which is a
+ * brief edit, a new version signed off with the brief (rule 3).
  */
 export async function executeTaglineRun(ctx: StepContext, step: StepTools): Promise<string> {
   await step.run("start", () => setRun(ctx, "running"));
@@ -59,8 +64,9 @@ export async function executeTaglineRun(ctx: StepContext, step: StepTools): Prom
       return r.input as z.infer<typeof taglineInput>;
     });
     try {
-      const { output } = await runModelStep(ctx, taglineAgent, input, 1, "Propose taglines");
-      return { ok: true, taglines: output.taglines };
+      const campaign = input.campaign ? { campaignId: input.campaign.campaignId, version: input.campaign.version } : undefined;
+      const { output } = await runModelStep(ctx, taglineAgent, input, 1, campaign ? "Suggest lines" : "Propose taglines");
+      return { ok: true, taglines: output.taglines, ...(campaign ? { campaign } : {}) };
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return { ok: false, reason: err instanceof CapExceededError ? "cap" : "error", message };
@@ -72,6 +78,23 @@ export async function executeTaglineRun(ctx: StepContext, step: StepTools): Prom
       setRun(ctx, proposed.reason === "cap" ? "stopped_cap" : "failed", { error: proposed.message }),
     );
     return proposed.reason === "cap" ? "stopped_cap" : "failed";
+  }
+
+  if (proposed.campaign) {
+    const { campaignId, version } = proposed.campaign;
+    await step.run("finish", () =>
+      setRun(ctx, "completed", {
+        output: {
+          taglines: proposed.taglines,
+          campaignId,
+          version,
+          summary: `Three lines for version ${version}: ${proposed.taglines.join("; ")}. Pick one on the Brief stage.`,
+          href: `/campaigns/${campaignId}/brief`,
+          hrefLabel: "Pick a line on the brief",
+        },
+      }),
+    );
+    return "completed";
   }
 
   const timeout = approvalTimeout();

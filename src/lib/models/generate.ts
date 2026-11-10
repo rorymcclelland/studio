@@ -56,8 +56,8 @@ export async function spendPosition(userId: string, workspaceId: string): Promis
 
 /**
  * Today's simulated spend (rule 1, review finding 4): ledger rows from the mock
- * models, for this workspace and across the app. Shown beside the spend; it
- * never enters the cap arithmetic, which counts simulated pence like any others.
+ * models, for this workspace and across the app. It never enters the cap
+ * arithmetic, which counts simulated pence like any others.
  */
 export async function simulatedSpendToday(userId: string, workspaceId: string): Promise<{ workspace: number; total: number }> {
   return asUser(userId, async (tx) => {
@@ -70,13 +70,56 @@ export async function simulatedSpendToday(userId: string, workspaceId: string): 
   });
 }
 
+/** Reservations left by crashed calls stop counting after this long (F-21). */
+const RESERVATION_LIFETIME = "10 minutes";
+
+/** What the header's spend meter shows (U10-1): charged today, its simulated part and the calls in flight. */
+export type SpendMeterReading = {
+  owner: boolean;
+  /** Charged today (usage_ledger), without live reservations: a reservation is an estimate, never shown as spend. */
+  chargedPence: number;
+  /** The mock models' part of it (rule 1, review finding 4). */
+  simulatedPence: number;
+  /** Live reservations (under 10 minutes old): one per model call in flight. */
+  callsInFlight: number;
+  /** The cap this person is measured against: the daily cap for the owner, the workspace's limit for others. */
+  capPence: number;
+};
+
+/**
+ * The spend meter's facts: app-wide for the owner, this workspace's for
+ * everyone else (as the cap figures are). Reservations still count against the
+ * cap in reserve(); here they are only counted as calls running.
+ */
+export async function spendMeterReading(userId: string, workspaceId: string): Promise<SpendMeterReading> {
+  return asUser(userId, async (tx) => {
+    // The app-wide figures are read only for the owner, so a guest's page never asks for them.
+    const [who] = await tx`select public.current_user_email() as email`;
+    const owner = isOwnerEmail(who.email);
+    const [r] = await tx`
+      select
+        coalesce((select sum(l.cost_pence) from public.usage_ledger l
+                  where l.workspace_id = ${workspaceId}
+                    and l.created_at >= (date_trunc('day', now() at time zone 'Europe/London') at time zone 'Europe/London')), 0) as ws_charged,
+        coalesce((select sum(l.cost_pence) from public.usage_ledger l
+                  where l.workspace_id = ${workspaceId} and l.provider = 'mock'
+                    and l.created_at >= (date_trunc('day', now() at time zone 'Europe/London') at time zone 'Europe/London')), 0) as ws_simulated,
+        (select count(*)::integer from public.spend_reservations s
+         where s.workspace_id = ${workspaceId} and s.created_at > now() - ${RESERVATION_LIFETIME}::interval) as ws_running,
+        ${owner ? tx`m.charged_pence, m.simulated_pence, m.calls_running` : tx`null as charged_pence, null as simulated_pence, null as calls_running`}
+      ${owner ? tx`from public.spend_meter_today() m` : tx``}`;
+    return owner
+      ? { owner, chargedPence: Number(r.charged_pence), simulatedPence: Number(r.simulated_pence), callsInFlight: Number(r.calls_running), capPence: dailyCapPence() }
+      : { owner, chargedPence: Number(r.ws_charged), simulatedPence: Number(r.ws_simulated), callsInFlight: Number(r.ws_running), capPence: workspaceCapPence() };
+  });
+}
+
 // F-21: every cap check takes the app-wide lock, then the workspace's, always in
 // that order (so two checks never deadlock). The app-wide lock is what keeps
 // the owner and guest split consistent, since a guest's room depends on what
 // every workspace has spent; the workspace lock keeps the per-workspace limit
 // serialised on its own if the app-wide one is ever relaxed.
 const APP_LOCK = "studio:spend:app";
-const RESERVATION_LIFETIME = "10 minutes";
 
 /**
  * Checks the caps and reserves the call's estimate in one transaction, under

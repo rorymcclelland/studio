@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { requireMember } from "@/lib/auth/session";
 import { getRun, listChildRuns, runTitle, type RunDetail } from "@/lib/agents/runs";
+import { numberTrailSteps } from "@/lib/agents/run-list";
 import { getAgent } from "@/lib/agents/registry";
 import { agentDisplayName, knownAgentName } from "@/lib/agents/names";
 import { StatusBadge, ACTIVE_STATUSES } from "@/components/status-badge";
@@ -95,10 +96,13 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
           <p className="mt-4 rounded-card bg-surface p-6 text-ink-2">The run hasn&apos;t taken a step yet.</p>
         ) : (
           <ol className="mt-4 space-y-3">
-            {run.steps.map((s) => (
-              <Card as="li" key={s.id}>
+            {/* U10-8: numbered 1 to n in the order taken; an agent's reserved slots can leave gaps in seq. */}
+            {numberTrailSteps(run.steps).map((s) => (
+              <Card as="li" key={s.id} data-trail-step="" data-step-seq={s.seq}>
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
-                  <span className="text-sm text-ink-2 tabular-nums">Step {s.seq}</span>
+                  <span className="text-sm text-ink-2 tabular-nums" data-step-number="">
+                    Step {s.number}
+                  </span>
                   <h3 className="font-semibold">{s.name}</h3>
                   <StatusBadge status={s.status} />
                   <span className="ml-auto text-sm text-ink-2 tabular-nums">{formatMs(s.duration_ms)}</span>
@@ -112,7 +116,7 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
                   </dl>
                 )}
                 {s.error && <p className="mt-3 text-sm font-medium text-attention-ink wrap-anywhere">{s.error}</p>}
-                {s.kind === "model" && (s.attempt_log?.length ?? 0) > 1 && <Attempts stepSeq={s.seq} log={s.attempt_log} />}
+                {s.kind === "model" && (s.attempt_log?.length ?? 0) > 1 && <Attempts stepNumber={s.number} log={s.attempt_log} />}
                 <details className="group mt-4 text-sm">
                   <summary className="inline-flex cursor-pointer items-center gap-1.5 rounded-full font-semibold text-primary">
                     <span aria-hidden className="inline-block transition-transform group-open:rotate-90">
@@ -136,7 +140,8 @@ async function RunPageContent(props: PageProps<"/runs/[id]">) {
 
 /** The run's result. Tagline runs show the chosen line; other agents link to what they made, or summarise it. */
 function RunResult({ agent, output }: { agent: string; output: Record<string, unknown> }) {
-  if (agent === "tagline") {
+  // D-4: a Suggest lines run (the Tagline agent with a campaign) has no chosen tagline; it shows its summary and link below.
+  if (agent === "tagline" && typeof output.tagline === "string") {
     return (
       <Card as="section" tone="good" aria-labelledby="result" className="bg-good-soft">
         <h2 id="result" className="font-semibold text-good-ink">
@@ -178,11 +183,11 @@ type AttemptLog = RunDetail["steps"][number]["attempt_log"];
  * F-13: why a reply was sent back. Every attempt but a passing last one is
  * listed with its problems, and its raw reply behind a toggle.
  */
-function Attempts({ stepSeq, log }: { stepSeq: number; log: AttemptLog }) {
+function Attempts({ stepNumber, log }: { stepNumber: number; log: AttemptLog }) {
   const last = log[log.length - 1];
   const shown = last && last.problems.length === 0 ? log.slice(0, -1) : log;
   return (
-    <ol aria-label={`Attempts at step ${stepSeq}`} className="mt-4 space-y-3">
+    <ol aria-label={`Attempts at step ${stepNumber}`} className="mt-4 space-y-3">
       {shown.map((a) => {
         const final = a === last;
         return (

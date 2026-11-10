@@ -16,7 +16,7 @@ export type CopyContext = {
   brandName: string;
   voice: string;
   doRules: string[];
-  kit: { legalLines: string[]; bannedTerms: string[]; dontRules: string[]; evidenceClaims: string[]; realNames: string[] };
+  kit: { legalLines: string[]; bannedTerms: string[]; dontRules: string[]; evidenceClaims: string[]; realNames: string[]; ownNames: string[] };
   products: string[];
   places: string[];
   /** The campaign's sign-off state: creative starts only when it is 'approved'. */
@@ -36,7 +36,7 @@ export type TaggedAudience = { tag: string; segmentRef: string | null; segment: 
 export async function loadCopyContext(tx: Tx, campaignId: string, version?: number): Promise<CopyContext | null> {
   const [c] = await tx`
     select c.id, c.brand_id, c.status, c.approved_version, b.name, b.tone_words, b.voice_notes, b.do_rules, b.dont_rules,
-      b.legal_lines, b.banned_terms, b.evidence_claims
+      b.legal_lines, b.banned_terms, b.evidence_claims, b.own_names
     from public.campaigns c join public.brands b on b.id = c.brand_id where c.id = ${campaignId}`;
   const v = version ?? (c?.approved_version as number | null);
   if (!c || !v) return null;
@@ -59,6 +59,7 @@ export async function loadCopyContext(tx: Tx, campaignId: string, version?: numb
       dontRules: c.dont_rules,
       evidenceClaims: c.evidence_claims,
       realNames: await realNamesFor(tx, c.brand_id),
+      ownNames: (c.own_names ?? []) as string[],
     },
     products: products.map((p) => p.name as string),
     places: places.map((p) => p.region as string),
@@ -103,7 +104,10 @@ export function rulesFor(ctx: CopyContext): CopyRules {
     bannedTerms: ctx.kit.bannedTerms,
     evidenceClaims: ctx.kit.evidenceClaims,
     realNames: ctx.kit.realNames,
+    ownNames: ctx.kit.ownNames,
     legalLines: ctx.kit.legalLines,
+    // D-4: the brief version's campaign line holds every paid-social and display headline, a person's edit included.
+    line: ctx.brief.line ?? null,
     pool: evidencePool([...insightsWithEvidence(ctx).flatMap((i) => i.evidence), ...audiences.map((a) => ({ title: a.segment, text: a.facts }))]),
   };
 }

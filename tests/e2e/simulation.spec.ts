@@ -24,8 +24,10 @@ import {
   contrastViolations,
   DEV_EMAIL,
   expectNoHorizontalScroll,
+  inboxCard,
   makeCreative,
   newCampaign,
+  openLaunch,
   saveShot,
   settle,
   signIn,
@@ -61,11 +63,9 @@ async function pickSocial(page: Page, i: number) {
   await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
 }
 
+/** The campaign's Launch stage (U10-2), through the stage bar, with its Launch (simulated) panel. */
 async function openPanel(page: Page, path: string) {
-  await page.goto(path);
-  await settle(page);
-  await expect(panel(page).getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
-  await panel(page).scrollIntoViewIfNeeded();
+  await openLaunch(page, path);
 }
 
 /** Every figure the panel shows is labelled simulated: the clock says "Simulated day", the summary "(simulated)". */
@@ -106,7 +106,7 @@ test(
       for (const name of CONTROLS) await expect(panel(page).getByRole("button", { name })).toHaveCount(0);
       await page.goto("/approvals");
       await settle(page);
-      const card = page.locator("[data-inbox-item=launch]").filter({ has: page.locator(`a[href="${path}"]`) });
+      const card = inboxCard(page, "launch", path);
       await expect(card).toHaveCount(1);
       await card.getByRole("button", { name: "Approve" }).click();
       await expect(card).toHaveCount(0, { timeout: 30_000 });

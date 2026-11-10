@@ -4,6 +4,7 @@
 // simulated clock: Next day, Next week and Run to the end. Each returns a
 // brief action's state, so the page's forms show the error and its problems.
 import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { advance, ClockError, clockLabel, type ClockStep } from "@/lib/performance/clock";
 import { endLaunch, LaunchError, requestLaunch, type LaunchRequest } from "@/lib/performance/launch";
@@ -20,7 +21,7 @@ export async function askToLaunch(campaignId: string, request: LaunchRequest): P
   const member = await requireMember();
   try {
     await requestLaunch(member, campaignId, request);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     revalidatePath("/approvals");
     return { done: "Launch asked for. It waits for approval in the inbox; nothing real is spent." };
   } catch (err) {
@@ -36,7 +37,7 @@ export async function endTheLaunch(campaignId: string, launchId: string): Promis
   const member = await requireMember();
   try {
     await endLaunch(member, launchId, { campaignId });
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: "The launch has ended." };
   } catch (err) {
     const k = launchErrorState(err);
@@ -55,7 +56,7 @@ export async function advanceClock(campaignId: string, launchId: string, by: Clo
   const member = await requireMember();
   try {
     const r = await advance(member, launchId, by, fromDay, { campaignId });
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: r.written > 0 ? `${clockLabel(r.simDay, r.days)}.` : `The clock had already moved on: ${clockLabel(r.simDay, r.days).toLowerCase()}.` };
   } catch (err) {
     if (err instanceof ClockError) return { error: err.message };

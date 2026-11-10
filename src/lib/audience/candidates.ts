@@ -143,8 +143,8 @@ export async function computeCandidates(tx: Tx, brandId: string): Promise<Candid
     });
   }
   defs.push(
-    { key: "consenting", definition: "Customers who have agreed to marketing.", test: (r) => r.consent },
-    { key: "not-consenting", definition: "Customers who have not agreed to marketing; reachable only through paid media.", test: (r) => !r.consent },
+    { key: "consenting", definition: "Customers who have opted in to marketing.", test: (r) => r.consent },
+    { key: "not-consenting", definition: "Customers who have not opted in to marketing; reachable only through paid media.", test: (r) => !r.consent },
   );
 
   const candidates: Candidate[] = [];

@@ -1,5 +1,8 @@
+import { refusableNames } from "@/lib/brands/own-names";
 import { normaliseKitText } from "@/lib/context/keys";
-import type { BriefCore, BriefSection, StoredBrief } from "./schema";
+import { undeclaredNames } from "@/lib/text/names";
+import { voiceProblem } from "@/lib/text/voice";
+import { BRIEF_SECTIONS, type BriefCore, type BriefSection, type StoredBrief } from "./schema";
 
 // S3-2: the evidence checks, in code (rule 1). They run on every agent draft
 // and revision (with one repair) and on every hand edit, accepted proposal
@@ -14,6 +17,10 @@ export type KitLists = {
   evidenceClaims: string[];
   /** S4-3: real companies named in the brand's market notes; they stay in the notes (rule 2). */
   realNames?: string[];
+  /** D-2 (Sprint 10b): the brand's own names, such as a parent brand's; never refused as a real company. */
+  ownNames?: string[];
+  /** Review fix B1 (Sprint 10b): the brand's name, the one name (with its own names) a campaign line may carry. */
+  brandName?: string;
 };
 
 // A figure with its unit: "£45", "45%", "12 month", "5116 customer", or a bare "37".
@@ -89,11 +96,45 @@ export function quantityInWords(text: string): string | null {
   return NUMBER_WORD.exec(text)?.[0] ?? QUANTITY_CLAIM.exec(plain)?.[0] ?? null;
 }
 
+// BUG-4: the check refuses loose quantities about people (F-14, agreed in
+// Sprint 4: "most of our lapsed customers" says how many, and nothing can hold
+// it to the data), but the Brief agent's prompt named only "half of" and "one
+// in four", so the real model kept writing "Many people" and "most of" and was
+// refused twice (F-16a, 6 and 7 Nov). The prompt now shows the model these
+// phrases and the way round them, from this one list, and a test holds every
+// phrase to the check, so the prompt and the check can't drift apart again.
+/** Phrases the check refuses, each with a sentence that uses it (the sentence is what the test checks). */
+export const LOOSE_QUANTITIES: { phrase: string; sentence: string }[] = [
+  { phrase: "most of", sentence: "Most of our lapsed customers stopped after one order." },
+  { phrase: "many people", sentence: "Many people look at their money again in January." },
+  { phrase: "many of", sentence: "Many of them still have the app installed." },
+  { phrase: "a good share of", sentence: "A good share of younger customers budget on their phones." },
+  { phrase: "plenty of customers", sentence: "Plenty of customers save a little each month." },
+  { phrase: "the majority of", sentence: "The majority of savers use round-ups." },
+  { phrase: "few customers", sentence: "Few customers use the Premium plan." },
+  { phrase: "nearly all", sentence: "Nearly all of them signed up on the app." },
+  { phrase: "half of", sentence: "Half of our walkers come back each winter." },
+  { phrase: "one in four", sentence: "One in four customers buys a fleece." },
+];
+
+/** How to say it instead, as the prompt and the problem message put it. Each example passes the check. */
+export const QUANTITY_INSTEAD = {
+  advice: "name the group without saying how much of it there is, or use a figure from the context written as it is there",
+  examples: ["Lapsed customers who stopped after one order", "People who look at their money again in January", "Customers aged 25 to 34 who budget on their phones"],
+};
+
+/** The problem a quantity in words raises, for the model's one repair. */
+export function quantityProblem(where: string, found: string): string {
+  return `${where} says "${found.trim()}"; quantities in words can't be checked, so ${QUANTITY_INSTEAD.advice} (for example "${QUANTITY_INSTEAD.examples[0]}")`;
+}
+
 type Field = { where: string; section: BriefSection; text: string; cites?: string[] };
 
 function textFields(b: BriefCore): Field[] {
   return [
     { where: "the title", section: "title", text: b.title },
+    // D-4: the campaign line, checked like any other words of the brief.
+    ...(b.line ? [{ where: "the campaign line", section: "line" as const, text: b.line }] : []),
     { where: "the summary", section: "summary", text: b.summary },
     { where: "the story", section: "story", text: b.story },
     ...b.insights.map((i, n) => ({ where: `insight ${n + 1}`, section: "insights" as const, text: i.text, cites: i.cites })),
@@ -167,18 +208,23 @@ export function evidenceProblems(
   const fields = textFields(brief).filter((f) => checks(f.section));
   if (!opts.allowUnsourcedNumbers) {
     for (const f of unsourcedNumbers(brief, context, opts.objective)) {
-      if (!checks(f.section)) continue;
+      // The campaign line is held to stricter checks below, whoever wrote it.
+      if (!checks(f.section) || f.section === "line") continue;
       problems.push(`${f.where} says ${f.number}, which no ${f.cited ? "cited item" : "context item"} contains; use only figures from the context, written as they are there`);
     }
     for (const f of fields) {
+      if (f.section === "line") continue;
       const m = quantityInWords(f.text);
-      if (m) problems.push(`${f.where} says "${m}"; quantities in words can't be checked, so use only figures from the context`);
+      if (m) problems.push(quantityProblem(f.where, m));
     }
   }
 
+  const line = fields.find((f) => f.section === "line");
+  if (line) problems.push(...lineProblems(line.text, context, kit));
+
   for (const f of fields) {
     for (const term of kit.bannedTerms) if (containsTerm(f.text, term)) problems.push(`${f.where} uses the banned term "${term}"`);
-    for (const name of kit.realNames ?? []) {
+    for (const name of refusableNames(kit.realNames ?? [], { name: "", ownNames: kit.ownNames ?? [] })) {
       if (containsTerm(f.text, name)) problems.push(`${f.where} names ${name}, a real company from the market notes; describe it instead ("a large outdoor chain")`);
     }
     for (const claim of kit.evidenceClaims) {
@@ -186,6 +232,32 @@ export function evidenceProblems(
     }
   }
   return problems;
+}
+
+/**
+ * Review fix B1 (Sprint 10b): a campaign line is every paid-social and display
+ * headline, and a person's figure in it would be unmarked in every ad, so it
+ * is checked the same way whoever wrote it, even on a hand edit (rules 1 and
+ * 2): no figure, even one from the context; no quantity in words; no quote,
+ * rating or attribution; and no capitalised name but the brand's own names
+ * and products. Banned terms, claims and the market notes' companies are
+ * checked with the brief's other words.
+ */
+export function lineProblems(text: string, context: EvidenceItem[], kit: KitLists): string[] {
+  const where = "the campaign line";
+  const out: string[] = [];
+  const brandNames = [kit.brandName ?? "", ...(kit.ownNames ?? [])].filter(Boolean);
+  const products = context.filter((c) => c.kind === "product").map((c) => c.title);
+  for (const f of figuresIn(text)) out.push(`${where} says ${show(f)}; a campaign line can't carry a figure, so say it without one`);
+  const q = quantityInWords(text);
+  if (q) out.push(`${where} says "${q.trim()}"; a campaign line can't carry a quantity, in figures or in words`);
+  const own = [...brandNames, ...products].join(" ").match(/[\p{L}0-9']+/gu) ?? [];
+  const v = voiceProblem(text, { cta: false, own });
+  if (v) out.push(`${where} ${v}; a campaign line can't carry a quote, a rating or anyone else's words`);
+  for (const n of undeclaredNames(text, kit.realNames ?? [], { brandName: brandNames.join(" "), category: "", products, places: [] })) {
+    out.push(`${where} names "${n}", which looks like another company; a campaign line can't carry another company's name${brandNames.length ? ` (only ${brandNames.join(" or ")})` : ""}`);
+  }
+  return out;
 }
 
 const show = (f: Figure) => (f.unit === "£" ? `£${f.value}` : f.unit === "%" ? `${f.value}%` : f.value);
@@ -211,8 +283,7 @@ export function unsourcedNumbers(
 
 /** The sections of `next` that differ from `base`. */
 export function changedSections(base: BriefCore, next: BriefCore): BriefSection[] {
-  const all: BriefSection[] = ["title", "summary", "story", "insights", "audiences", "channels", "kpi"];
-  return all.filter((s) => JSON.stringify(base[s]) !== JSON.stringify(next[s]));
+  return BRIEF_SECTIONS.filter((s) => JSON.stringify(base[s]) !== JSON.stringify(next[s]));
 }
 
 /** The kit's lists a stored brief must carry: every legal line, and every banned term and don't rule to avoid. */

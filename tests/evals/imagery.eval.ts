@@ -6,6 +6,10 @@
 // sources in tests/evals/fixtures/imagery, checked in regression.test.ts). They
 // run only the prompt step on a fixed Quillmoor input, so they draw no
 // pictures and cost only the text model.
+// BUG-11 adds a fourth (the brand's name reached the model in F-16a's
+// "Fernhollow winter range", 7 Nov; fixture tests/evals/fixtures/imagery/brand-name.json):
+// the prompt step on a Fernhollow input whose brief still names the brand, and
+// every case's grader now reads every line the model was given, not only the brief.
 import { checkImagery, IMAGE_COUNT, imageryAgent, isFinanceCategory, type ImageryInput, type ImageryOutput } from "@/lib/agents/imagery";
 import { runModelStep } from "@/lib/agents/model-step";
 import { createRun, createWorkflowRun, getRun } from "@/lib/agents/runs";
@@ -16,10 +20,11 @@ import { startImagery } from "@/lib/creative/imagery";
 import type { EvalEnv, EvalModule } from "@/lib/evals/types";
 import { imageCostPence } from "@/lib/models/cost";
 import { REAL_BRANDS } from "./real-brands";
+import brandNameFixture from "./fixtures/imagery/brand-name.json";
 import quillmoorInput from "./fixtures/imagery/quillmoor-input.json";
 
-/** The 27 Oct production failures (F-16a). */
-export type ImageryRegression = "cut-off" | "face" | "aspect";
+/** The 27 Oct production failures (F-16a), and the 7 Nov eval failure (BUG-11). */
+export type ImageryRegression = "cut-off" | "face" | "aspect" | "brand-name";
 type In = { brand: "fernhollow" | "quillmoor"; objective: string; storyAddition?: string; regression?: ImageryRegression };
 type Out = {
   prompts: ImageryOutput["prompts"];
@@ -33,10 +38,31 @@ type Out = {
   attempts: string[][];
   leftOut: string[];
 };
-type Ctx = { input: ImageryInput; storyAddition?: string };
+type Ctx = {
+  input: ImageryInput;
+  storyAddition?: string;
+  /** The data lines of the prompt the model was sent (after the task line); the grader reads them for the brand's name. */
+  sent?: string;
+};
 
 /** The fixed input the regression cases write prompts for: Quillmoor (a finance brand), a walker seen from behind. */
 export const REGRESSION_INPUT = quillmoorInput.input as ImageryInput;
+
+/** BUG-11: a Fernhollow input whose brief still names the brand ("Fernhollow's", "Fernhollow kit"), as the 7 Nov run's did. */
+export const BRAND_NAME_INPUT = brandNameFixture.input as ImageryInput;
+
+const regressionInput = (kind: ImageryRegression) => (kind === "brand-name" ? BRAND_NAME_INPUT : REGRESSION_INPUT);
+
+/** The demo brands' names, in any form, in what the model was given. */
+const DEMO_NAMES = /quillmoor|fernhollow/i;
+
+/** Which of the prompt's data lines name a demo brand (empty when none do). */
+export function linesNamingTheBrand(sent: string): string[] {
+  return sent
+    .split("\n")
+    .filter((l) => DEMO_NAMES.test(l))
+    .map((l) => l.slice(0, l.indexOf(":") > 0 ? l.indexOf(":") : 20));
+}
 
 /** What each regression case adds to the usual checks, given each attempt's problems. */
 export function regressionProblems(kind: ImageryRegression, attempts: string[][], leftOut: string[]): string[] {
@@ -45,8 +71,12 @@ export function regressionProblems(kind: ImageryRegression, attempts: string[][]
   if (kind === "cut-off" && all.some((p) => /not valid JSON/.test(p))) out.push("a reply was cut off or wasn't JSON (27 Oct: cut off at the reply limit)");
   if (kind === "aspect" && all.some((p) => /aspect/i.test(p))) out.push("an attempt failed over the aspect field (27 Oct: \"1:1 square\")");
   if (kind === "face" && leftOut.length > 0) out.push(`prompts were left out after the repair: ${leftOut.join("; ")}`);
+  if (kind === "brand-name" && all.some((p) => /names the brand/.test(p))) out.push("a prompt named the brand, which the model was not given");
   return out;
 }
+
+/** A prompt's data lines: everything after its task line. */
+const dataLines = (prompt: string) => prompt.split("\n").slice(1).join("\n");
 
 const BRANDS = {
   fernhollow: { name: "Fernhollow Outfitters", category: "Outdoor apparel" },
@@ -89,13 +119,17 @@ const mod: EvalModule<In, Out, Ctx> = {
     { name: "Regression, 27 Oct: the cut-off reply (four full prompts fit)", input: { brand: "quillmoor", objective: "", regression: "cut-off" }, extraPence: 0 },
     { name: "Regression, 27 Oct: the ruled-out face (a walker seen from behind)", input: { brand: "quillmoor", objective: "", regression: "face" }, extraPence: 0 },
     { name: "Regression, 27 Oct: the aspect wording", input: { brand: "quillmoor", objective: "", regression: "aspect" }, extraPence: 0 },
+    // BUG-11 regression (F-16a, 7 Nov, "Fernhollow winter range"): the brief names the brand in short and possessive forms.
+    { name: "Regression, 7 Nov: the brand's name in the brief (Fernhollow)", input: { brand: "fernhollow", objective: "", regression: "brand-name" }, extraPence: 0 },
   ],
   async execute(env, input) {
     if (input.regression) {
       const m = env.member;
       const runId = await createWorkflowRun(m, imageryAgent.key, imageryAgent.version, { eval: true }, async () => {}, { label: `Eval: image prompts (${input.regression})` });
-      const r = await runModelStep({ runId, workspaceId: m.workspaceId, userId: m.userId }, imageryAgent, REGRESSION_INPUT, 1, "Write the image prompts");
+      const given = regressionInput(input.regression);
+      const r = await runModelStep({ runId, workspaceId: m.workspaceId, userId: m.userId }, imageryAgent, given, 1, "Write the image prompts");
       const step = (await getRun(m.userId, runId))!.steps.find((s) => s.id === r.stepId);
+      const sentPrompt = (step?.input as { prompt?: string } | undefined)?.prompt ?? "";
       return {
         runId,
         output: {
@@ -108,7 +142,7 @@ const mod: EvalModule<In, Out, Ctx> = {
           attempts: (step?.attempt_log ?? []).map((a) => a.problems),
           leftOut: r.leftOut,
         },
-        context: { input: REGRESSION_INPUT },
+        context: { input: given, sent: dataLines(sentPrompt) },
       };
     }
     const brandId = env.brands[input.brand];
@@ -147,6 +181,7 @@ const mod: EvalModule<In, Out, Ctx> = {
       },
       context: {
         storyAddition: input.storyAddition,
+        sent: dataLines(prompt),
         input: {
           brief: read("Brief"),
           palette: (read("Palette") as { name: string; words: string }[]).map((p) => ({ ...p, hex: "#000000" })),
@@ -170,7 +205,10 @@ const mod: EvalModule<In, Out, Ctx> = {
       if (REAL_BRANDS.test(`${p.idea} ${p.prompt}`)) problems.push(`"${p.idea}" names a real brand`);
       if (ctx.storyAddition && /save now|logo|\bsign\b|billboard|headline|poster|digits|written|texto/i.test(p.prompt)) problems.push(`"${p.idea}" follows the brief's request for text`);
     }
-    if (!ctx.input.brief.story || /quillmoor|fernhollow/i.test(JSON.stringify(ctx.input.brief))) problems.push("the brief reached the model with the brand's name in it");
+    // BUG-11: every line the model was given, not only the brief (a test without a recorded prompt builds it as the agent does).
+    const sent = ctx.sent ?? dataLines(imageryAgent.buildPrompt(ctx.input));
+    for (const line of linesNamingTheBrand(sent)) problems.push(line === "Brief" ? "the brief reached the model with the brand's name in it" : `the ${line} line reached the model with the brand's name in it`);
+    if (!ctx.input.brief.story) problems.push("the brief reached the model empty");
     return {
       pass: problems.length === 0,
       notes:

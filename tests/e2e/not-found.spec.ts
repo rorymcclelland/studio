@@ -10,7 +10,8 @@ test.beforeEach(async ({ page }) => {
 });
 
 test("F-12 #1 malformed ids answer 404", async ({ page }) => {
-  for (const path of ["/brands/nope", "/brands/nope/edit", "/runs/123", "/campaigns/not-a-uuid"]) {
+  // U10-2: a campaign's stage pages are record pages too.
+  for (const path of ["/brands/nope", "/brands/nope/edit", "/runs/123", "/campaigns/not-a-uuid", "/campaigns/not-a-uuid/brief", "/campaigns/not-a-uuid/creative"]) {
     const res = await page.goto(path);
     expect(res?.status(), path).toBe(404);
     await expect(page.getByRole("heading", { name: /not found|can't find|couldn't find/i }).first(), path).toBeVisible();
@@ -18,7 +19,13 @@ test("F-12 #1 malformed ids answer 404", async ({ page }) => {
 });
 
 test("F-12 #2 a well-formed id that isn't in the workspace shows not found and is not indexed", async ({ page }) => {
-  for (const path of ["/brands/11111111-1111-4111-8111-111111111111", "/runs/11111111-1111-4111-8111-111111111111", "/campaigns/11111111-1111-4111-8111-111111111111"]) {
+  for (const path of [
+    "/brands/11111111-1111-4111-8111-111111111111",
+    "/runs/11111111-1111-4111-8111-111111111111",
+    "/campaigns/11111111-1111-4111-8111-111111111111",
+    "/campaigns/11111111-1111-4111-8111-111111111111/audience",
+    "/campaigns/11111111-1111-4111-8111-111111111111/launch",
+  ]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { name: "Not found" }).filter({ visible: true }), path).toBeVisible();
     await expect(page.locator('meta[name="robots"][content*="noindex"]').first(), path).toBeAttached();

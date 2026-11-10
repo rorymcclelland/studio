@@ -2,9 +2,11 @@
 // signed-off Fernhollow campaign with ads (simulated pictures):
 //
 // 1. The failure path (case 2): four paid-social ads are picked, but no one has
-//    looked at the brand's don't rules yet, so none passes compliance. The
-//    Launch (simulated) panel lists each as left out with the reason, and Ask
-//    to launch can't be pressed: "No picked ads pass compliance yet".
+//    looked at the brand's don't rules yet, so none passes compliance. U10-2:
+//    the Launch stage is locked with the reason ("A launch needs picked ads that
+//    pass compliance or were accepted.") and a link to the decisions, so there
+//    is no Ask to launch; the launch pack on the Creative stage lists each ad as
+//    left out with its reason.
 // 2. The main path (cases 1 and 2): the don't rules are accepted for every
 //    picked ad, and a fifth ad is picked, still waiting on its rules. The panel
 //    lists the four that would launch, and the fifth left out with the same
@@ -18,6 +20,9 @@
 //    simulated day (the clock never moves here; tests/e2e/simulation.spec.ts
 //    ends a launch on its last simulated day).
 //
+// U10-2: the panel is on the campaign's Launch stage and the pack on its
+// Creative stage; both are reached through the stage bar.
+//
 // Each page at 375 px and 1440 px: nothing scrolls sideways, AA contrast.
 // SHOTS_DIR=<folder> saves screenshots. The brand's kit is not changed, so this
 // runs in the main project. The interface it expects is written at the top of
@@ -25,20 +30,26 @@
 import { expect, test, type Page } from "@playwright/test";
 import {
   acceptDontRulesForPicked,
+  openPickedChecks,
+  showAllAds,
   contrastViolations,
   DEV_EMAIL,
   expectNoHorizontalScroll,
+  inboxCard,
   makeCreative,
   newCampaign,
+  openLaunch,
+  openStage,
   saveShot,
   settle,
   signIn,
   signOffVersion,
+  stagePath,
   step,
 } from "./helpers";
 
 const OBJECTIVE = "Bring walkers back for the autumn range, launched in a simulation";
-const NO_ELIGIBLE_ADS = "No picked ads pass compliance yet";
+const LOCKED = "A launch needs picked ads that pass compliance or were accepted.";
 const SIMULATED_DEFAULT = "Studio's own simulated default, not a benchmark";
 
 const panel = (page: Page) => page.locator("[data-launch-panel]");
@@ -63,6 +74,8 @@ async function checkWidths(page: Page, what: string) {
 
 /** Picks the i-th paid-social ad from its card; returns its gallery number. */
 async function pickSocial(page: Page, i: number): Promise<number> {
+  // U10-3: every ad shown first (each group shows six until Show all).
+  await showAllAds(page);
   const card = social(page).nth(i);
   const button = card.getByRole("button", { name: /^Pick ad \d+$/ });
   const n = Number((await button.getAttribute("aria-label"))!.replace("Pick ad ", ""));
@@ -71,11 +84,9 @@ async function pickSocial(page: Page, i: number): Promise<number> {
   return n;
 }
 
+/** The campaign's Launch stage, through the stage bar, with its Launch (simulated) panel. */
 async function openPanel(page: Page, path: string) {
-  await page.goto(path);
-  await settle(page);
-  await expect(panel(page).getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
-  await panel(page).scrollIntoViewIfNeeded();
+  await openLaunch(page, path);
 }
 
 test.beforeEach(async ({ page }) => {
@@ -100,36 +111,45 @@ test(
       for (let i = 0; i < 4; i++) await pickSocial(page, i);
     });
 
-    await step(page, "P9-1.2: no picked ad passes compliance yet, so Ask to launch can't be pressed, and each ad says why", async () => {
-      await openPanel(page, path);
-      await expect(panel(page)).toContainText("Simulated");
-      await expect(panel(page).getByRole("button", { name: "Ask to launch" })).toBeDisabled();
-      await expect(panel(page).locator("[data-launch-reason]")).toHaveText(NO_ELIGIBLE_ADS);
-      await expect(panel(page).locator("[data-launch-ad]")).toHaveCount(0);
-      const left = panel(page).locator("[data-launch-left-out]");
-      await expect(left).toHaveCount(4);
-      for (const row of await left.all()) await expect(row).toHaveText(/^Ad \d+: Awaiting review: don't rule/);
-      await checkWidths(page, "launch panel, nothing passes yet");
+    await step(page, "P9-1.2: no picked ad passes compliance yet, so the Launch stage says why and offers no Ask to launch; the pack gives each ad's reason", async () => {
+      // U10-2: with no ad that can launch, the Launch stage is locked with its reason and the step that unlocks it.
+      await openStage(page, "launch", path);
+      // The reason, not the stage bar's locked links (which carry data-stage-locked too).
+      const locked = page.locator("[data-stage-locked]:not([data-stage])").filter({ visible: true });
+      await expect(locked).toContainText(LOCKED);
+      await expect(locked.getByRole("link", { name: "Decide compliance" })).toHaveAttribute("href", `${stagePath(path, "creative")}?show=decide`);
+      await expect(page.getByRole("button", { name: "Ask to launch" })).toHaveCount(0);
+      await expect(page.locator("[data-launch-ad]")).toHaveCount(0);
+      await checkWidths(page, "launch stage, nothing passes yet");
+      // Each picked ad's reason, as the launch pack on the Creative stage gives it.
+      await openStage(page, "creative", path);
+      await openPickedChecks(page);
+      await pack(page).locator("[data-pack-left-out] summary").click();
+      const rows = pack(page).locator("[data-pack-left-out] li").filter({ hasText: /^Ad \d+, every size, English:/ });
+      await expect(rows).toHaveCount(4);
+      for (const row of await rows.all()) await expect(row).toHaveText(/^Ad \d+, every size, English:\s*Awaiting review: don't rule/);
     });
 
     let waiting = 0;
     await step(page, "Accept the brand's don't rules for every picked ad, then pick a fifth ad, still waiting on its rules", async () => {
-      await page.reload();
+      await openStage(page, "creative", path);
       await acceptDontRulesForPicked(page);
       waiting = await pickSocial(page, 4);
     });
 
     await step(page, "P9-1.2: the panel lists the four ads that would launch, and the fifth left out with the same reason the launch pack gives", async () => {
-      await openPanel(page, path);
-      await expect(panel(page).locator("[data-launch-ad]")).toHaveCount(4);
-      const left = panel(page).locator("[data-launch-left-out]");
-      await expect(left).toHaveCount(1);
-      // The pack's reason for the same ad, in English (the pack lists English first).
+      // The pack's reason for the same ad, in English (the pack lists English first), on the Creative stage.
+      await openStage(page, "creative", path);
+      await openPickedChecks(page);
       await pack(page).locator("[data-pack-left-out] summary").click();
       const packRow = pack(page).locator("[data-pack-left-out] li").filter({ hasText: new RegExp(`^Ad ${waiting}, every size, English:`) });
       await expect(packRow).toHaveCount(1);
       const packReason = (await packRow.textContent())!.replace(/^Ad \d+, every size, English:\s*/, "").trim();
       expect(packReason).toMatch(/^Awaiting review: don't rule/);
+      await openPanel(page, path);
+      await expect(panel(page).locator("[data-launch-ad]")).toHaveCount(4);
+      const left = panel(page).locator("[data-launch-left-out]");
+      await expect(left).toHaveCount(1);
       await expect(left).toHaveText(`Ad ${waiting}: ${packReason}`);
       await expect(panel(page).locator("[data-launch-reason]")).toHaveCount(0);
       await expect(panel(page).getByRole("button", { name: "Ask to launch" })).toBeEnabled();
@@ -155,7 +175,7 @@ test(
     await step(page, "P9-1.1: the inbox shows the request with its four ads, budget, length, threshold and that no real money is spent; Approve", async () => {
       await page.goto("/approvals");
       await settle(page);
-      const card = page.locator("[data-inbox-item=launch]").filter({ has: page.locator(`a[href="${path}"]`) });
+      const card = inboxCard(page, "launch", path);
       await expect(card).toHaveCount(1);
       await expect(card).toContainText("Simulated: no real money is spent");
       await expect(card.locator("[data-launch-ad]")).toHaveCount(4);

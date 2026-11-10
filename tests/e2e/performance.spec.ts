@@ -48,11 +48,13 @@ import { simulateDays, type SimLaunch, type SimRow } from "@/lib/performance/sim
 import {
   acceptDontRulesForPicked,
   contrastViolations,
-  DEV_EMAIL,
   demoBrandId,
+  DEV_EMAIL,
   expectNoHorizontalScroll,
+  inboxCard,
   makeCreative,
   newCampaign,
+  openLaunch,
   saveShot,
   settle,
   signIn,
@@ -92,11 +94,9 @@ async function pickCard(page: Page, card: ReturnType<Page["locator"]>) {
   await expect(card).toHaveAttribute("data-picked", "", { timeout: 30_000 });
 }
 
+/** The campaign's Launch stage (U10-2), through the stage bar, with its Launch (simulated) panel. */
 async function openPanel(page: Page, path: string) {
-  await page.goto(path);
-  await settle(page);
-  await expect(panel(page).getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
-  await panel(page).scrollIntoViewIfNeeded();
+  await openLaunch(page, path);
 }
 
 /** Ask to launch with the panel's defaults; the launch then waits for approval. */
@@ -110,7 +110,7 @@ async function askToLaunch(page: Page, path: string, ads: number) {
 async function approveInInbox(page: Page, path: string) {
   await page.goto("/approvals");
   await settle(page);
-  const card = page.locator("[data-inbox-item=launch]").filter({ has: page.locator(`a[href="${path}"]`) });
+  const card = inboxCard(page, "launch", path);
   await expect(card).toHaveCount(1);
   await card.getByRole("button", { name: "Approve" }).click();
   await expect(card).toHaveCount(0, { timeout: 30_000 });

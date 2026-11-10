@@ -46,7 +46,7 @@ export function RemoveSegmentButton({ brandId, itemId, title }: { brandId: strin
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
   return (
-    <div className="flex flex-col items-end gap-1">
+    <div className="flex flex-col items-start gap-1">
       <Button
         type="button"
         variant="quiet"
@@ -70,5 +70,59 @@ export function RemoveSegmentButton({ brandId, itemId, title }: { brandId: strin
         </p>
       )}
     </div>
+  );
+}
+
+/**
+ * U10-7: a segment card's disclosure. The name and Details share the first row, the size and one-sentence
+ * definition follow, and the rest of the card (the agent's description, its facts, where it came from and
+ * Remove) is hidden until opened, in place.
+ */
+export function SegmentDisclosure({
+  id,
+  name,
+  head,
+  size,
+  definition,
+  children,
+}: {
+  id: string;
+  name: string;
+  /** The card's heading. */
+  head: React.ReactNode;
+  /** The size, below the heading and beside Details. */
+  size: React.ReactNode;
+  /** The one-sentence definition, the card's full width. */
+  definition: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 pt-1.5">
+          {head}
+          {size}
+        </div>
+        <button
+          type="button"
+          aria-expanded={open}
+          aria-controls={id}
+          data-segment-open=""
+          onClick={() => setOpen((o) => !o)}
+          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full text-sm font-semibold text-primary"
+        >
+          <span aria-hidden className={open ? "inline-block rotate-90 motion-safe:transition-transform" : "inline-block motion-safe:transition-transform"}>
+            ›
+          </span>
+          {open ? "Hide" : "Details"}
+          <span className="sr-only">{open ? ` the details of ${name}` : ` of ${name}`}</span>
+        </button>
+      </div>
+      {definition}
+      <div id={id} hidden={!open} data-segment-details="" className="mt-2 border-t border-line pt-2">
+        {children}
+      </div>
+    </>
   );
 }

@@ -15,7 +15,7 @@ export function signInEmail(to: string, link: string, minutes: number): Email {
     "",
     `It works once and lasts ${minutes} minutes. Open it and press Continue to sign in.`,
     "",
-    "Studio is a multi-agent campaign studio built by Rory McClelland. AI agents propose briefs and creative for fictional brands, and a person approves every move that spends, publishes or replaces creative.",
+    "Studio is a multi-agent campaign studio built by Rory McClelland. AI agents propose briefs and creative for its fictional demo brands or a brand you add yourself, and a person approves every move that spends, publishes or replaces creative. Any customer data Studio generates is simulated.",
     "",
     "If you didn't ask for this link, you can ignore this email. No one can sign in without it.",
   ].join("\n");
@@ -26,7 +26,7 @@ export function signInEmail(to: string, link: string, minutes: number): Email {
 <p><a href="${escape(link)}" style="display: inline-block; background: #24292f; color: #ffffff; padding: 10px 18px; border-radius: 999px; text-decoration: none; font-weight: bold;">Sign in to Studio</a></p>
 <p>It works once and lasts ${minutes} minutes. Open it and press Continue to sign in.</p>
 <p style="color: #4b535d; font-size: 14px;">If the button doesn't work, copy this address into your browser:<br><span style="word-break: break-all;">${escape(link)}</span></p>
-<p style="color: #4b535d; font-size: 14px;">Studio is a multi-agent campaign studio built by Rory McClelland. AI agents propose briefs and creative for fictional brands, and a person approves every move that spends, publishes or replaces creative.</p>
+<p style="color: #4b535d; font-size: 14px;">Studio is a multi-agent campaign studio built by Rory McClelland. AI agents propose briefs and creative for its fictional demo brands or a brand you add yourself, and a person approves every move that spends, publishes or replaces creative. Any customer data Studio generates is simulated.</p>
 <p style="color: #4b535d; font-size: 14px;">If you didn't ask for this link, you can ignore this email. No one can sign in without it.</p>
 </body>
 </html>`;

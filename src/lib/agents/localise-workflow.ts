@@ -48,6 +48,9 @@ type Prepared =
       englishBanned: string[];
       languages: Partial<Record<Lang, { legalLines: string[]; bannedTerms: string[] }>>;
       sets: Record<string, SetToTranslate>;
+      /** D-4: the signed-off version's campaign line, and its translations already saved for this version, by language. */
+      line: string | null;
+      lineIn: Partial<Record<Lang, string>>;
       jobs: Job[];
       skipped: { setId: string | null; lang: Lang | null; reason: string }[];
     }
@@ -56,7 +59,7 @@ type Prepared =
 export type LeftOutSize = { size: SizeId; name: string; reason: string };
 
 type Translated =
-  | { ok: true; setId: string; lang: Lang; newSetId: string; headline: string; simulated: boolean; leftOut: LeftOutSize[]; repaired: boolean }
+  | { ok: true; setId: string; lang: Lang; newSetId: string; headline: string; rawHeadline: string; simulated: boolean; leftOut: LeftOutSize[]; repaired: boolean }
   | { ok: false; setId: string; lang: Lang; cap: boolean; reason: string };
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -148,6 +151,18 @@ async function prepare(ctx: StepContext): Promise<{ result: Prepared; raw: unkno
       const reasons = [...new Set(skipped.map((s) => s.reason))].join("; ");
       return fail(`Nothing to translate: ${reasons || "no words were chosen"}.`);
     }
+    // D-4: the line, once translated into a language for this version, is every ad's headline in that language.
+    const line = context.brief.line ?? null;
+    const lineIn: Partial<Record<Lang, string>> = {};
+    if (line) {
+      const translated = await tx`
+        select t.lang, t.set ->> 'headline' as headline from public.copy_sets t
+        join public.copy_sets e on e.id = t.translated_from
+        where t.campaign_id = ${start.campaignId} and t.brief_version = ${context.version} and t.discarded_at is null
+          and t.lang = any(${langs}::text[]) and e.set ->> 'headline' = ${line}
+        order by t.created_at, t.id`;
+      for (const r of translated) lineIn[r.lang as Lang] ??= r.headline as string;
+    }
     return {
       result: {
         ok: true,
@@ -161,12 +176,15 @@ async function prepare(ctx: StepContext): Promise<{ result: Prepared; raw: unkno
           dontRules: context.kit.dontRules,
           evidenceClaims: context.kit.evidenceClaims,
           realNames: context.kit.realNames,
+          ownNames: context.kit.ownNames,
           products: context.products,
           places: context.places,
         },
         englishBanned: context.kit.bannedTerms,
         languages: Object.fromEntries(languages.filter((l) => langs.includes(l.lang)).map((l) => [l.lang, { legalLines: l.legalLines, bannedTerms: l.bannedTerms }])),
         sets,
+        line,
+        lineIn,
         jobs,
         skipped,
       },
@@ -262,7 +280,7 @@ function withFit(fit: FitCheck): AgentDefinition<LocaliseInput, LocaliseOutput> 
   };
 }
 
-async function translateOne(ctx: StepContext, p: Extract<Prepared, { ok: true }>, job: Job, seq: number): Promise<Translated> {
+async function translateOne(ctx: StepContext, p: Extract<Prepared, { ok: true }>, job: Job, seq: number, lineIn: Partial<Record<Lang, string>>): Promise<Translated> {
   const set = p.sets[job.setId];
   const language = p.languages[job.lang]!;
   const input: LocaliseInput = {
@@ -272,6 +290,8 @@ async function translateOne(ctx: StepContext, p: Extract<Prepared, { ok: true }>
     english: set.english,
     bannedTerms: [...new Set([...language.bannedTerms, ...p.englishBanned])],
     legalLines: language.legalLines,
+    // D-4: a set whose headline is the campaign line gets the line's translation, if there is one yet.
+    line: p.line && set.english.headline === p.line ? { english: p.line, translated: lineIn[job.lang] ?? null } : null,
   };
   const englishLegal = await asUser(ctx.userId, async (tx) => {
     const [s] = await tx`select legal_lines from public.copy_sets where id = ${job.setId}`;
@@ -298,7 +318,7 @@ async function translateOne(ctx: StepContext, p: Extract<Prepared, { ok: true }>
         : ((await tx`select id from public.copy_sets where translated_from = ${job.setId} and lang = ${job.lang} and discarded_at is null`)[0].id as string);
       return { id, simulated, repaired: Number(stepRow?.attempts ?? 1) > 1 };
     });
-    return { ok: true, setId: job.setId, lang: job.lang, newSetId: saved.id, headline: visible(output.copy.headline), simulated: saved.simulated, leftOut: finalFit.leftOut, repaired: saved.repaired };
+    return { ok: true, setId: job.setId, lang: job.lang, newSetId: saved.id, headline: visible(output.copy.headline), rawHeadline: output.copy.headline, simulated: saved.simulated, leftOut: finalFit.leftOut, repaired: saved.repaired };
   } catch (err) {
     const cap = err instanceof CapExceededError;
     const message = err instanceof Error ? err.message : String(err);
@@ -336,13 +356,17 @@ export async function executeLocaliseRun(ctx: StepContext, step: StepTools): Pro
 
   const results: Translated[] = [];
   let capped = false;
+  // D-4: the line's translation per language, from earlier runs, then from this run's first set that carries it.
+  const lineIn: Partial<Record<Lang, string>> = { ...(prepared.lineIn ?? {}) };
   for (const [i, job] of prepared.jobs.entries()) {
     if (capped) {
       results.push({ ok: false, setId: job.setId, lang: job.lang, cap: true, reason: "not started: the daily AI cap was reached" });
       continue;
     }
-    const r = await step.run(`translate-${job.setId}-${job.lang}`, () => translateOne(ctx, prepared, job, 2 + i));
+    const known = { ...lineIn };
+    const r = await step.run(`translate-${job.setId}-${job.lang}`, () => translateOne(ctx, prepared, job, 2 + i, known));
     results.push(r);
+    if (r.ok && prepared.line && prepared.sets[job.setId].english.headline === prepared.line) lineIn[job.lang] ??= r.rawHeadline;
     if (!r.ok && r.cap) capped = true;
   }
 
@@ -369,7 +393,7 @@ export async function executeLocaliseRun(ctx: StepContext, step: StepTools): Pro
       ],
       campaignId: prepared.campaignId,
       briefVersion: prepared.version,
-      href: `/campaigns/${prepared.campaignId}#creative`,
+      href: `/campaigns/${prepared.campaignId}/creative`,
       hrefLabel: "See the ads",
     };
     if (capped) {

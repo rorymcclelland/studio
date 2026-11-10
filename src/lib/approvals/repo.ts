@@ -4,6 +4,7 @@ import { BriefEditError, CampaignError } from "@/lib/brief/repo";
 import { evidenceProblems, type KitLists } from "@/lib/brief/checks";
 import { contextById, realNamesFor } from "@/lib/brief/gather";
 import { storedBrief } from "@/lib/brief/schema";
+import { inboxOrder } from "./inbox-view";
 import { expireStaleLaunches, launchAdsFor, type LaunchAd, type LaunchAdView } from "@/lib/performance/launch";
 
 // S4-1: the approvals inbox, with brief sign-off as the first gate (rule 3).
@@ -45,7 +46,7 @@ export async function requestSignoff(
     await expireStaleSignoffs(tx);
     const [c] = await tx`
       select c.id, c.brand_id, c.objective, c.current_version, c.status, c.approved_version,
-        b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
+        b.name as brand_name, b.own_names, b.legal_lines, b.banned_terms, b.dont_rules, b.evidence_claims
       from public.campaigns c join public.brands b on b.id = c.brand_id
       where c.id = ${campaignId} for update of c`;
     if (!c) throw new CampaignError("That campaign isn't in your workspace.");
@@ -55,7 +56,15 @@ export async function requestSignoff(
     if (c.approved_version === c.current_version) throw new SignoffError("This version is already signed off.");
     const [v] = await tx`select brief from public.brief_versions where campaign_id = ${campaignId} and version = ${baseVersion}`;
     const brief = storedBrief.parse(v.brief);
-    const kit: KitLists = { legalLines: c.legal_lines, bannedTerms: c.banned_terms, dontRules: c.dont_rules, evidenceClaims: c.evidence_claims, realNames: await realNamesFor(tx, c.brand_id) };
+    const kit: KitLists = {
+      legalLines: c.legal_lines,
+      bannedTerms: c.banned_terms,
+      dontRules: c.dont_rules,
+      evidenceClaims: c.evidence_claims,
+      realNames: await realNamesFor(tx, c.brand_id),
+      brandName: c.brand_name,
+      ownNames: c.own_names ?? [],
+    };
     const problems = evidenceProblems(brief, await contextById(tx, c.brand_id), kit, { objective: c.objective, allowUnsourcedNumbers: true });
     if (problems.length) throw new BriefEditError(problems);
     const [a] = await tx`
@@ -153,7 +162,11 @@ export type InboxItem =
       kpiValue: number;
     };
 
-/** Everything waiting for a person, newest first: open sign-offs and launch requests, and run choices whose run still waits. */
+/**
+ * Everything waiting for a person, in inboxOrder(): open sign-offs and launch requests first, newest first, then run
+ * choices whose run still waits, newest first (Rory's decision, 9 November 2026). The query sorts the same way, so
+ * its limit keeps what has an Approve button.
+ */
 export async function listInbox(userId: string): Promise<InboxItem[]> {
   const rows = await asUser(userId, async (tx) => {
     await expireStaleSignoffs(tx);
@@ -169,10 +182,10 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       left join public.brands b on b.id = c.brand_id
       left join public.launches l on l.approval_id = a.id and a.kind = 'launch'
       where a.status = 'pending' and a.expires_at > now() and (a.kind in ('brief_signoff', 'launch') or r.status = 'awaiting_approval')
-      order by a.created_at desc
+      order by a.kind = 'run_choice', a.created_at desc, a.id
       limit 100`;
   });
-  return Promise.all(
+  const items = await Promise.all(
     rows.map(async (r): Promise<InboxItem> => {
       if (r.kind === "brief_signoff") {
         return {
@@ -191,6 +204,7 @@ export async function listInbox(userId: string): Promise<InboxItem[]> {
       return { kind: "run_choice", id: r.id, question: r.question, createdAt: r.created_at, expiresAt: r.expires_at, runId: r.run_id, runLabel: r.run_label, agent: r.agent };
     }),
   );
+  return inboxOrder(items);
 }
 
 export async function inboxCount(userId: string): Promise<number> {

@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Field } from "@/components/ui/field";
 import { Input, Select, Textarea } from "@/components/ui/input";
 import { Pill } from "@/components/ui/pill";
-import { reviseBrief, saveBrief } from "../actions";
+import { reviseBrief, saveBrief, suggestLines } from "../actions";
 import { ActionError } from "./brief-actions";
 import {
   coreOf,
@@ -35,8 +35,16 @@ type Props = {
   citeOptions: ContextOption[];
   /** The brand's segments, for audiences. */
   segments: ContextOption[];
+  /** D-4: the latest Suggest lines run for this version, if any. */
+  suggestions: LineSuggestions | null;
+  /** D-4: what Suggest lines costs, shown on its button before the click ("under 1p"). */
+  suggestCost: string;
 };
 
+/** D-4: a Suggest lines run (the Tagline agent) for the current version: its state, and its three lines once done. */
+export type LineSuggestions = { runId: string; status: string; taglines: string[] | null; error: string | null };
+
+/** The sections edited and revised here; the campaign line has its own card, first (D-4). */
 const SECTIONS: BriefSection[] = ["title", "summary", "story", "insights", "audiences", "channels", "kpi"];
 const REVISE_MAX = 500;
 
@@ -63,6 +71,7 @@ export function BriefWorkspace(props: Props) {
             and every version is kept.
           </p>
         </div>
+        <LineCard {...props} />
         {SECTIONS.map((s) => (
           <SectionCard key={s} section={s} {...props} />
         ))}
@@ -205,6 +214,165 @@ function ReviseSection({
   );
 }
 
+/* ---------- The campaign line (D-4) ---------- */
+
+const SUGGESTING = new Set(["queued", "running"]);
+
+/**
+ * D-4: the campaign's line, the headline of every paid-social and display ad. A person types it (Edit), or
+ * asks the Tagline agent for three (Suggest lines, its cost on the button) and uses one or edits it first.
+ * Either way it is saved as the next version, after the brief checks, and signed off with the brief.
+ */
+function LineCard(props: Props) {
+  const { campaignId, currentVersion, brief, suggestions, suggestCost } = props;
+  const [editing, setEditing] = useState<{ initial: string } | null>(null);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const returnFocus = useRef(false);
+  const suggest = useBriefAction();
+  useEffect(() => {
+    if (editing || !returnFocus.current) return;
+    editButton.current?.focus();
+    returnFocus.current = false;
+  }, [editing]);
+  const running = !!suggestions && SUGGESTING.has(suggestions.status);
+  const done = suggestions?.status === "completed" && suggestions.taglines ? suggestions.taglines : null;
+  const failed = !!suggestions && !running && !done;
+
+  return (
+    <Card as="section" aria-labelledby="section-line" data-section="line" tone={editing ? "primary" : "plain"}>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h3 id="section-line" className="text-lg font-strong">
+          {SECTION_LABEL.line}
+        </h3>
+        {!editing && (
+          <div className="flex flex-wrap gap-2">
+            <Button ref={editButton} type="button" size="sm" variant="quiet" onClick={() => setEditing({ initial: brief.line ?? "" })} aria-label={`Edit ${sectionPhrase("line")}`}>
+              Edit
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="quiet"
+              disabled={running || suggest.pending}
+              onClick={() => suggest.run(() => suggestLines(campaignId, currentVersion))}
+            >
+              {running || suggest.pending ? "Suggesting lines…" : `Suggest lines (${suggestCost})`}
+            </Button>
+          </div>
+        )}
+      </div>
+      <div className="mt-3">
+        {editing ? (
+          <LineForm
+            campaignId={campaignId}
+            currentVersion={currentVersion}
+            brief={brief}
+            initial={editing.initial}
+            onClose={() => {
+              returnFocus.current = true;
+              setEditing(null);
+            }}
+          />
+        ) : (
+          <>
+            <SectionBody section="line" brief={brief} sources={props.sources} unsourced={props.unsourced} />
+            <p className="mt-1 text-sm text-ink-2">Every paid-social and display headline uses it. Search keeps its own.</p>
+            {(suggest.error || failed) && (
+              <div className="mt-3 flex flex-col items-start gap-2">
+                <ActionError error={suggest.error} />
+                {failed && (
+                  <p role="alert" className="text-sm font-medium text-attention-ink wrap-anywhere">
+                    The lines weren&apos;t suggested: {suggestions.error ?? "the Tagline agent stopped before it finished."} Nothing was saved.
+                  </p>
+                )}
+              </div>
+            )}
+            {done && (
+              <ol data-line-suggestions="" aria-label="Suggested lines" className="mt-3 space-y-2">
+                {done.map((line, i) => (
+                  <Suggestion
+                    key={`${i}-${line}`}
+                    n={i + 1}
+                    line={line}
+                    campaignId={campaignId}
+                    currentVersion={currentVersion}
+                    brief={brief}
+                    onEdit={() => setEditing({ initial: line })}
+                  />
+                ))}
+              </ol>
+            )}
+          </>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+function Suggestion({ n, line, campaignId, currentVersion, brief, onEdit }: { n: number; line: string; campaignId: string; currentVersion: number; brief: StoredBrief; onEdit: () => void }) {
+  const { run, pending, error } = useBriefAction();
+  const textId = `line-suggestion-${n}`;
+  return (
+    <li data-line-suggestion="" className="flex min-w-0 flex-col gap-2 rounded-field bg-surface-2/60 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <p id={textId} data-line-text="" className="min-w-0 font-semibold wrap-anywhere">
+        {line}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <Button type="button" size="sm" disabled={pending} aria-describedby={textId} onClick={() => run(() => saveBrief(campaignId, currentVersion, { ...coreOf(brief), line }))}>
+          {pending ? "Saving…" : "Use this line"}
+        </Button>
+        <Button type="button" size="sm" variant="quiet" aria-describedby={textId} onClick={onEdit}>
+          Edit first
+        </Button>
+      </div>
+      {error && (
+        <div className="sm:basis-full">
+          <ActionError error={error} />
+        </div>
+      )}
+    </li>
+  );
+}
+
+function LineForm({ campaignId, currentVersion, brief, initial, onClose }: { campaignId: string; currentVersion: number; brief: StoredBrief; initial: string; onClose: () => void }) {
+  const [value, setValue] = useState(initial);
+  const { run, pending, error } = useBriefAction();
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => ref.current?.focus(), []);
+  const errorId = useId();
+  const formError = error && !error.fieldErrors?.line ? error : null;
+  const save = () => {
+    // An empty line removes it: the ads then write their own headlines, as before D-4.
+    const { line: _old, ...rest } = coreOf(brief);
+    void _old;
+    const core: BriefCore = value.trim() ? { ...rest, line: value } : rest;
+    run(() => saveBrief(campaignId, currentVersion, core));
+  };
+  return (
+    <form
+      noValidate
+      aria-describedby={formError ? errorId : undefined}
+      className="flex flex-col gap-4"
+      onSubmit={(e) => {
+        e.preventDefault();
+        save();
+      }}
+    >
+      <Field id="edit-line" label="Campaign line" hint="3 to 30 characters. Every paid-social and display headline uses it." error={error?.fieldErrors?.line}>
+        <Input ref={ref} value={value} onChange={(e) => setValue(e.target.value)} autoComplete="off" />
+      </Field>
+      <ActionError error={formError} id={errorId} />
+      <div className="flex flex-wrap gap-3">
+        <Button disabled={pending}>{pending ? "Saving…" : `Save ${sectionPhrase("line")}`}</Button>
+        <Button type="button" variant="quiet" onClick={onClose}>
+          Cancel
+        </Button>
+      </div>
+      <p className="text-sm text-ink-2">Saving checks the brief again and makes version {currentVersion + 1}.</p>
+    </form>
+  );
+}
+
 /* ---------- Hand editing ---------- */
 
 type FormProps = Props & { section: BriefSection; onClose: () => void };
@@ -285,6 +453,7 @@ function SectionForm(props: FormProps) {
 
 type Draft = {
   title: string;
+  line: string;
   summary: string;
   story: string;
   insights: { key: number; text: string; cites: string[] }[];
@@ -296,6 +465,7 @@ type Draft = {
 function toDraft(b: StoredBrief): Draft {
   return {
     title: b.title,
+    line: b.line ?? "",
     summary: b.summary,
     story: b.story,
     insights: keyed(b.insights.map((i) => ({ text: i.text, cites: [...i.cites] }))),
@@ -309,6 +479,8 @@ function fromDraft(d: Draft, section: BriefSection): BriefCore[BriefSection] {
   switch (section) {
     case "title":
       return d.title;
+    case "line":
+      return d.line.trim() ? d.line : undefined;
     case "summary":
       return d.summary;
     case "story":

@@ -2,6 +2,7 @@
 
 import { redirect } from "next/navigation";
 import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { StartRunError } from "@/lib/agents/runs";
 import {
@@ -17,6 +18,7 @@ import {
   StaleBriefError,
   startRevision,
 } from "@/lib/brief/repo";
+import { startSuggestLines } from "@/lib/brief/line";
 import { BRIEF_SECTIONS, type BriefCore, type BriefSection } from "@/lib/brief/schema";
 import { sendEvent } from "@/inngest/client";
 import { decideSignoff, requestSignoff, SignoffError, withdrawSignoff } from "@/lib/approvals/repo";
@@ -61,7 +63,7 @@ export async function retryBrief(campaignId: string): Promise<BriefActionState> 
     console.error("[retryBrief]", err);
     return { error: "Couldn't start the Brief agent. Try again shortly." };
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   return { done: "The Brief agent is writing the brief." };
 }
 
@@ -70,7 +72,7 @@ export async function saveBrief(campaignId: string, baseVersion: number, brief: 
   const member = await requireMember();
   try {
     const version = await saveBriefEdit(member, campaignId, baseVersion, brief, note);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: `Saved as version ${version}.`, version };
   } catch (err) {
     const k = known(err);
@@ -84,7 +86,8 @@ export async function saveBrief(campaignId: string, baseVersion: number, brief: 
 export async function reviseBrief(campaignId: string, baseVersion: number, section: string | null, instruction: string): Promise<BriefActionState> {
   const member = await requireMember();
   const s = section === null || section === "" ? null : (BRIEF_SECTIONS as readonly string[]).includes(section) ? (section as BriefSection) : undefined;
-  if (s === undefined) return { error: "Choose a part of the brief to revise." };
+  // D-4: the campaign line is a person's words; Suggest lines (the Tagline agent) offers some instead.
+  if (s === undefined || s === "line") return { error: "Choose a part of the brief to revise." };
   const text = instruction.trim();
   if (text.length < 3) return { error: "Say what to change." };
   if (text.length > 500) return { error: "Keep the instruction to 500 characters or fewer." };
@@ -96,15 +99,30 @@ export async function reviseBrief(campaignId: string, baseVersion: number, secti
     console.error("[reviseBrief]", err);
     return { error: "Couldn't start the revision. Nothing was changed; try again." };
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   return { done: "The Brief agent is revising. The proposal will appear beside the current brief." };
+}
+
+/** D-4: Suggest lines, the Tagline agent on the current version's context; its three lines show on the Brief stage. */
+export async function suggestLines(campaignId: string, baseVersion: number): Promise<BriefActionState> {
+  const member = await requireMember();
+  try {
+    await startSuggestLines(member, campaignId, baseVersion, sendEvent);
+  } catch (err) {
+    const k = known(err);
+    if (k) return k;
+    console.error("[suggestLines]", err);
+    return { error: "Couldn't start Suggest lines. Nothing was changed; try again." };
+  }
+  revalidateCampaign(campaignId);
+  return { done: "The Tagline agent is suggesting lines." };
 }
 
 export async function useProposal(campaignId: string, runId: string): Promise<BriefActionState> {
   const member = await requireMember();
   try {
     const version = await acceptProposal(member, campaignId, runId);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: `Saved as version ${version}.`, version };
   } catch (err) {
     const k = known(err);
@@ -123,14 +141,14 @@ export async function discardBriefProposal(campaignId: string, runId: string): P
     if (k) return k;
     throw err;
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   return { done: "Proposal discarded. The current version is unchanged." };
 }
 
 export async function dismissFailedRevision(campaignId: string, runId: string): Promise<BriefActionState> {
   const member = await requireMember();
   await dismissRevision(member, campaignId, runId);
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   return { done: "Dismissed." };
 }
 
@@ -138,7 +156,7 @@ export async function restoreBriefVersion(campaignId: string, version: number, b
   const member = await requireMember();
   try {
     const v = await restoreVersion(member, campaignId, version, baseVersion);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done: `Version ${version} restored as version ${v}.`, version: v };
   } catch (err) {
     const k = known(err);
@@ -159,7 +177,7 @@ export async function sendForSignoff(campaignId: string, baseVersion: number): P
     console.error("[sendForSignoff]", err);
     return { error: "Couldn't send the brief for sign-off. Nothing was changed; try again." };
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   revalidatePath("/approvals");
   return { done: "Sent for sign-off. The personas and the test plan are being prepared for it." };
 }
@@ -173,7 +191,7 @@ export async function withdrawFromSignoff(campaignId: string): Promise<BriefActi
     if (k) return k;
     throw err;
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   revalidatePath("/approvals");
   return { done: "Sign-off request withdrawn. The brief is a draft again." };
 }
@@ -183,7 +201,7 @@ export async function decideBriefSignoff(approvalId: string, decision: "approved
   const member = await requireMember();
   try {
     const { campaignId, version } = await decideSignoff(member, approvalId, decision, reason);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     revalidatePath("/approvals");
     return { done: decision === "approved" ? `Version ${version} signed off.` : "Not signed off. The brief is back in draft with your reason.", version };
   } catch (err) {
@@ -204,7 +222,7 @@ export async function askPersonas(campaignId: string): Promise<BriefActionState>
     if (k) return k;
     throw err;
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   return { done: "The Persona agent is reviewing the brief." };
 }
 
@@ -218,7 +236,7 @@ export async function makeTestPlan(campaignId: string): Promise<BriefActionState
     if (k) return k;
     throw err;
   }
-  revalidatePath(`/campaigns/${campaignId}`);
+  revalidateCampaign(campaignId);
   return { done: "Writing the test plan." };
 }
 

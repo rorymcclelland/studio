@@ -15,6 +15,11 @@ const LABELS: Record<string, { text: string; tone: PillTone }> = {
   skipped: { text: "Skipped", tone: "neutral" },
 };
 
+/** A status's words, as the badge shows them. */
+export function statusText(status: string): string {
+  return LABELS[status]?.text ?? status;
+}
+
 /** The status of a run, step or approval, in words. */
 export function StatusBadge({ status }: { status: string }) {
   const l = LABELS[status] ?? { text: status, tone: "neutral" as const };

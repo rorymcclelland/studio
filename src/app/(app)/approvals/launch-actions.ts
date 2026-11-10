@@ -2,6 +2,7 @@
 
 // P9-1 in the inbox: Approve or Refuse a launch request (rule 3).
 import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { decideLaunch, LaunchError } from "@/lib/performance/launch";
 import type { BriefActionState } from "../campaigns/actions";
@@ -11,7 +12,7 @@ export async function decideLaunchRequest(approvalId: string, decision: "approve
   const member = await requireMember();
   try {
     const { campaignId, status } = await decideLaunch(member, approvalId, decision, reason);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     revalidatePath("/approvals");
     return {
       done: status === "live" ? "Approved. The campaign is live in the simulation." : "Refused. The campaign isn't launched, and your reason is shown on it.",

@@ -231,7 +231,7 @@ export async function executePretestRun(ctx: StepContext, step: StepTools): Prom
       notScored: [...failed.map((f) => ({ variantId: f.variantId, reason: f.reason })), ...prepared.skipped],
       campaignId: prepared.campaignId,
       briefVersion: prepared.version,
-      href: `/campaigns/${prepared.campaignId}#creative`,
+      href: `/campaigns/${prepared.campaignId}/creative`,
       hrefLabel: "See the panel's scores",
     };
     if (capped) {

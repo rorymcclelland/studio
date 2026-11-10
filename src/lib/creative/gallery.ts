@@ -35,6 +35,8 @@ import { SIZES, type SizeId } from "./render/sizes";
 import { languageOptions, translateCost, type LanguageOption } from "./translate";
 import { pictureCheckBar, PICTURE_CHECK_KEY, type PictureCheckBar } from "./picture-check";
 import { pretestBar, pretestViews, type PretestBar, type PretestView } from "./pretest";
+import { lockRefusal, RUNNING_IN_LAUNCH, WAITING_FOR_LAUNCH } from "./gallery-filter";
+import { launchHolds, type LaunchHoldView } from "./launch-holds";
 
 // S5-4: what the Creative section of a campaign shows and does. The gallery
 // reads through getCreative(); every action is a mark (pick, discard), a
@@ -44,14 +46,39 @@ import { pretestBar, pretestViews, type PretestBar, type PretestView } from "./p
 // by the ads for each picture, so new or edited words move every current ad on
 // that set, and only when a person chooses them. F-26: an ad made with an
 // older kit can be redrawn with the brand's kit as it is now, in code (no AI
-// cost); F-27: every audience has its own ads, grouped by audience.
+// cost); F-27: every audience has its own ads, grouped by audience. U10-3:
+// an ad in a live launch, or in one waiting for approval, is locked: nothing
+// that changes what it shows (its layout, picture, words, or a discard or
+// redraw) is allowed until the launch ends or is decided (rule 3).
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** A refusal the gallery shows as it is (the message says what to do). */
 export class CreativeError extends Error {}
 
-export { CopyEditError, NOT_SIGNED_OFF };
+export { CopyEditError, NOT_SIGNED_OFF, RUNNING_IN_LAUNCH, WAITING_FOR_LAUNCH, type LaunchHoldView };
+
+/**
+ * Refuses (CreativeError) a change to an ad in a live or waiting launch. With
+ * `words`, also when another current ad on the same words is in one: new or
+ * edited words would re-word it.
+ */
+async function refuseIfLaunched(userId: string, v: { id: string; campaign_id: string; copy_set_id: string }, { words = false } = {}, inTx?: Tx): Promise<void> {
+  const refusal = await asUserIn(inTx, userId, async (tx) => {
+    const ids = [v.id];
+    if (words) {
+      const onWords = await tx`select id from public.ad_variants where copy_set_id = ${v.copy_set_id} and discarded_at is null and id <> ${v.id}`;
+      ids.push(...onWords.map((r) => r.id as string));
+    }
+    const holds = await launchHolds(tx, v.campaign_id, ids);
+    const own = holds.get(v.id);
+    if (own) return lockRefusal(own.status);
+    const others = [...holds.values()];
+    const shared = others.find((h) => h.status === "live") ?? others[0];
+    return shared ? lockRefusal(shared.status, true) : null;
+  });
+  if (refusal) throw new CreativeError(refusal);
+}
 
 export type Badge = {
   key: "contrast" | "fit" | "legal" | "logo" | "simulated" | "kit";
@@ -130,6 +157,8 @@ export type VariantView = {
   translate: { todo: number; estimate: string; reason: string | null };
   /** C8-4: the synthetic panel's scores for this ad (current, or out of date after a change), null if never pre-tested. */
   pretest: PretestView | null;
+  /** U10-3: the live or waiting launch holding this ad (it is locked while it does); null for none. */
+  launch: LaunchHoldView | null;
 };
 
 export type CreativeRunView = {
@@ -413,6 +442,7 @@ export async function getCreative(userId: string, campaignId: string, inTx?: Tx)
         restore,
         ...translated.get(r.id as string)!,
         pretest: null,
+        launch: null,
       };
     });
     const unordered = views.filter((v) => !v.discardedAt && !v.image.discarded && !v.words.discarded);
@@ -432,6 +462,9 @@ export async function getCreative(userId: string, campaignId: string, inTx?: Tx)
     // C8-4: the panel's scores for the current ads (picked or not: a picked ad's scores stay if it is unpicked).
     const scores = await pretestViews(tx, live.map((v) => v.id));
     for (const v of live) v.pretest = scores.get(v.id) ?? null;
+    // U10-3: which ads a live or waiting launch holds.
+    const holds = await launchHolds(tx, campaignId, live.map((v) => v.id));
+    for (const v of live) v.launch = holds.get(v.id) ?? null;
 
     // Ad words with no ad in the gallery, and new words waiting to replace them.
     const withAds = new Set(live.map((v) => v.words.setId));
@@ -593,13 +626,15 @@ function signedOffFor(v: VariantRow) {
 
 async function mark(member: Member, variantId: string, sql: "pick" | "unpick" | "discard", refusal: string) {
   const v = await variantFor(member.userId, variantId);
-  const res = await asUser(member.userId, (tx) =>
-    sql === "pick"
+  const res = await asUser(member.userId, async (tx) => {
+    // U10-3: a running ad isn't discarded (its shortlist mark can still change).
+    if (sql === "discard") await refuseIfLaunched(member.userId, v, {}, tx);
+    return sql === "pick"
       ? tx`update public.ad_variants set picked_at = now() where id = ${v.id} and picked_at is null and discarded_at is null`
       : sql === "unpick"
         ? tx`update public.ad_variants set picked_at = null where id = ${v.id} and picked_at is not null`
-        : tx`update public.ad_variants set discarded_at = now() where id = ${v.id} and discarded_at is null`,
-  );
+        : tx`update public.ad_variants set discarded_at = now() where id = ${v.id} and discarded_at is null`;
+  });
   if (res.count !== 1) throw new CreativeError(refusal);
 }
 
@@ -636,6 +671,8 @@ export async function restoreVariant(member: Member, variantId: string): Promise
           and image_asset_id = ${v.image_asset_id} and copy_set_id = ${v.copy_set_id}
         for update`;
       if (redraw) {
+        // U10-3: undoing a redraw discards the redrawn ad, so not while a launch holds it.
+        await refuseIfLaunched(member.userId, { id: redraw.id as string, campaign_id: v.campaign_id, copy_set_id: v.copy_set_id }, {}, tx);
         await tx`update public.ad_variants set discarded_at = now() where id = ${redraw.id}`;
         await tx`update public.ad_variants set discarded_at = null, picked_at = ${redraw.picked_at as Date | null} where id = ${v.id}`;
       } else {
@@ -652,6 +689,7 @@ export async function restoreVariant(member: Member, variantId: string): Promise
 export async function setLayout(member: Member, variantId: string, layout: string): Promise<{ layout: LayoutId; checks: RenderChecks }> {
   if (!(LAYOUT_IDS as readonly string[]).includes(layout)) throw new CreativeError("Choose Full bleed, Split or Card.");
   const v = await variantFor(member.userId, variantId);
+  await refuseIfLaunched(member.userId, v);
   current(v);
   const parts = await asUser(member.userId, (tx) => loadParts(tx, v.image_asset_id, v.copy_set_id, v.kit));
   if (!parts) throw new CreativeError("That ad's picture or words couldn't be read.");
@@ -665,6 +703,7 @@ export async function setLayout(member: Member, variantId: string, layout: strin
 /** New picture: a costed run (one image call and its check) that, when it passes, replaces this ad with one on the new picture. */
 export async function newPicture(member: Member, variantId: string, send: SendEvent): Promise<string> {
   const v = await variantFor(member.userId, variantId);
+  await refuseIfLaunched(member.userId, v);
   current(v);
   signedOffFor(v);
   const [busy] = await asUser(member.userId, (tx) => tx`
@@ -688,6 +727,7 @@ const PICTURE_BUSY = "A new picture is already being drawn for this ad.";
 /** New words for this ad's set: a Copy run whose replacement waits beside it until a person keeps one (keepWords). */
 export async function newWords(member: Member, variantId: string, send: SendEvent): Promise<string> {
   const v = await variantFor(member.userId, variantId);
+  await refuseIfLaunched(member.userId, v, { words: true });
   current(v);
   signedOffFor(v);
   try {
@@ -731,6 +771,8 @@ function fitErrors(reason: string): Record<string, string> {
  */
 export async function keepWords(member: Member, variantId: string, keep: "new" | "old"): Promise<{ variantIds: string[] }> {
   const v = await variantFor(member.userId, variantId);
+  // Keeping the new words re-words every ad on them; keeping the old ones only discards the waiting words.
+  if (keep === "new") await refuseIfLaunched(member.userId, v, { words: true });
   current(v);
   signedOffFor(v);
   const [waiting] = await asUser(member.userId, (tx) => tx`
@@ -805,6 +847,7 @@ async function moveAdsIn(
  */
 export async function editWords(member: Member, variantId: string, fields: unknown): Promise<{ setId: string; variantId: string | null; variantIds: string[] }> {
   const v = await variantFor(member.userId, variantId);
+  await refuseIfLaunched(member.userId, v, { words: true });
   current(v);
   signedOffFor(v);
   const [s] = await asUser(member.userId, (tx) => tx`select channel from public.copy_sets where id = ${v.copy_set_id}`);
@@ -842,6 +885,8 @@ type OlderAd = { id: string; image_asset_id: string; copy_set_id: string; layout
 type Redraw = { ok: true; id: string; layout: LayoutId; checks: RenderChecks } | { ok: false; id: string; reason: string };
 
 const PICTURE_BEING_DRAWN = "a new picture is being drawn for it";
+const IN_LIVE_LAUNCH = "it is running in a launch (simulated)";
+const IN_WAITING_LAUNCH = "it is in a launch waiting for approval (simulated)";
 
 /** Draws an ad with the brand's kit as it is now, in its own layout (the same picture and words). Nothing is saved; no model is called. */
 async function drawWithKit(userId: string, ad: OlderAd, kit: KitSnapshot, pictures?: PictureCache): Promise<Redraw> {
@@ -904,6 +949,7 @@ const pictureRunsFor = (tx: Tx, campaignId: string) => tx`
  */
 export async function redrawVariant(member: Member, variantId: string): Promise<{ variantId: string }> {
   const v = await variantFor(member.userId, variantId);
+  await refuseIfLaunched(member.userId, v);
   current(v);
   signedOffFor(v);
   const { kit, busy } = await asUser(member.userId, async (tx) => ({
@@ -942,7 +988,8 @@ export async function redrawOlderAds(member: Member, campaignId: string): Promis
           order by v.created_at, v.id`
       : [];
     const busy = new Set((await pictureRunsFor(tx, campaignId)).map((r) => r.variant_id as string));
-    return { c, ads, busy, kit: await kitSnapshot(tx, c.brand_id as string) };
+    const held = await launchHolds(tx, campaignId, ads.map((a) => a.id as string));
+    return { c, ads, busy, held, kit: await kitSnapshot(tx, c.brand_id as string) };
   });
   if (!loaded) throw new CreativeError("That campaign isn't in your workspace.");
   const { c, kit } = loaded;
@@ -954,7 +1001,14 @@ export async function redrawOlderAds(member: Member, campaignId: string): Promis
   const results: Redraw[] = [];
   const pictures: PictureCache = new Map(); // each picture is shared by its ads' words: converted once
   for (const ad of older) {
-    results.push(loaded.busy.has(ad.id) ? { ok: false, id: ad.id, reason: PICTURE_BEING_DRAWN } : await drawWithKit(member.userId, ad, kit, pictures));
+    const hold = loaded.held.get(ad.id);
+    results.push(
+      hold
+        ? { ok: false, id: ad.id, reason: hold.status === "live" ? IN_LIVE_LAUNCH : IN_WAITING_LAUNCH }
+        : loaded.busy.has(ad.id)
+          ? { ok: false, id: ad.id, reason: PICTURE_BEING_DRAWN }
+          : await drawWithKit(member.userId, ad, kit, pictures),
+    );
   }
   const kept = results.flatMap((r) => (r.ok ? [] : [{ id: r.id, reason: r.reason }]));
   const ok = results.filter((r): r is Extract<Redraw, { ok: true }> => r.ok);

@@ -15,7 +15,7 @@ test("F-3 #1: signed out, / is the welcome page with no app data, and app routes
   expect(res?.status()).toBe(200);
   await settle(page);
   await expect(page.getByRole("heading", { level: 1 })).toHaveText("A multi-agent campaign studio for marketing teams");
-  await expect(page.getByText("Fictional brands", { exact: true })).toBeVisible();
+  await expect(page.getByText("Fictional demo brands", { exact: true })).toBeVisible();
   await expect(page.getByText("Simulated data", { exact: true })).toBeVisible();
   await expect(page.getByText("Access is by invitation. Anyone with access can sign in with their email.")).toBeVisible();
   await expect(page.getByText(/Ask Rory for a new sign-in link/)).toHaveCount(0);

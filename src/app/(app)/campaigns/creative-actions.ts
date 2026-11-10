@@ -7,7 +7,7 @@
 // picture, New words) go through the cap. Nothing here spends ad money or
 // publishes (rule 3).
 
-import { revalidatePath } from "next/cache";
+import { revalidateCampaign } from "@/lib/campaigns/revalidate";
 import { requireMember } from "@/lib/auth/session";
 import { StartRunError, type Member } from "@/lib/agents/runs";
 import { sendEvent } from "@/inngest/client";
@@ -48,7 +48,7 @@ async function act(campaignId: string, what: string, fallback: string, fn: (memb
   const member = await requireMember();
   try {
     const done = await fn(member);
-    revalidatePath(`/campaigns/${campaignId}`);
+    revalidateCampaign(campaignId);
     return { done };
   } catch (err) {
     const k = known(err);

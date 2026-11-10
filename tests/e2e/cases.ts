@@ -56,12 +56,20 @@ export type WithdrawnCheck = { kind: "withdrawn"; why: string };
 
 export type Check = BrowserCheck | CiCheck | HandCheck | WithdrawnCheck;
 
-export type Story = { sprint: number; id: string; title: string };
+/**
+ * A sprint's number, or its name when it has one: "10b" is the sprint Rory injected before Sprint 11 on
+ * 10 November 2026 (docs/refinement/sprint-10b.md). The demo page is built with --sprint 10b: scripts/demo-page.mjs
+ * exports sprintArg(raw: string | undefined) => number | string | null ("10" is 10, "10b" is "10b"; empty, missing or
+ * anything but digits and lower-case letters is null), and reads docs/refinement/sprint-<sprint>.md.
+ */
+export type Sprint = number | string;
+
+export type Story = { sprint: Sprint; id: string; title: string };
 
 export type Case = {
   /** "<story>.<number>", for example "C7-1.3". */
   id: string;
-  sprint: number;
+  sprint: Sprint;
   story: string;
   /** The case in a few words. */
   words: string;
@@ -87,6 +95,22 @@ export const STORIES: Story[] = [
   { sprint: 9, id: "P9-4", title: "The Monitor agent: alerts and ask-your-data" },
   { sprint: 9, id: "F-16a", title: "The first real-model eval run, with regression cases" },
   { sprint: 9, id: "F-23", title: "Production deploys wait for the checks" },
+  { sprint: 10, id: "U10-1", title: "Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save" },
+  { sprint: 10, id: "U10-6", title: "Length budgets, checked in CI" },
+  { sprint: 10, id: "U10-2", title: "The campaign in stages, opening on what needs you" },
+  { sprint: 10, id: "U10-3", title: "Ad cards that follow the ad's state, and a filterable gallery" },
+  { sprint: 10, id: "U10-4", title: "Performance: what needs action first" },
+  { sprint: 10, id: "U10-5", title: "Home leads with work" },
+  { sprint: 10, id: "U10-7", title: "The brand page: campaigns first, reference data on request" },
+  { sprint: 10, id: "U10-8", title: "The runs list: filters, the campaign, and every run reachable" },
+  { sprint: 10, id: "BUG-4", title: "The brief's quantities-in-words check and its prompt agree" },
+  { sprint: 10, id: "BUG-11", title: "The brand name never reaches the image-prompt model" },
+  { sprint: "10b", id: "D-1", title: "New brand" },
+  { sprint: "10b", id: "D-2", title: "Fictional versus simulated, and a brand's own names" },
+  { sprint: "10b", id: "D-3", title: "Simulated data for a new brand" },
+  { sprint: "10b", id: "D-4", title: "The campaign's line: typed, or suggested and picked" },
+  { sprint: "10b", id: "D-5", title: "Rule 2, as answered" },
+  { sprint: "10b", id: "D-6", title: "Run-through on production (by hand, Rory)" },
 ];
 
 const SIZES_SPEC = "sizes.spec.ts";
@@ -182,6 +206,164 @@ const EVAL_WORKFLOW = "tests/lib/workflow-files.test.ts";
 const EVAL_RUNNER = "tests/agents/eval-runner.test.ts";
 const REGRESSION = "tests/evals/regression.test.ts";
 const HAND_PACK_9 = "docs/testing/sprint-9-test-pack.md";
+
+// U10-1 Quick fixes (F-36, BUG-13, BUG-14, the kit editor's Save)
+const QUICK_FIXES_SPEC = "quick-fixes.spec.ts";
+const METER_LIB = "tests/lib/spend-meter.test.ts";
+const STATUS_LIB = "tests/lib/campaign-status.test.ts";
+const STATUS_FLOWS = "tests/flows/campaign-status.test.ts";
+const BUILT_COPY = "tests/lib/built-copy.test.ts";
+
+// U10-6 Length budgets: one browser test per page and case, titled with the page's key in
+// tests/e2e/page-budgets.ts (tests/lib/page-budgets.test.ts checks the spec has them all, and
+// tests/lib/cases.test.ts that this list matches the table).
+const PAGE_LENGTH_SPEC = "page-length.spec.ts";
+const PAGE_BUDGETS_LIB = "tests/lib/page-budgets.test.ts";
+const BUDGET_PAGES = [
+  "welcome",
+  "home",
+  "brands",
+  "brand-fernhollow",
+  "brand-quillmoor",
+  "brand-quillmoor-audience",
+  "brand-quillmoor-voice",
+  "brand-quillmoor-legal",
+  "brand-quillmoor-products",
+  "brand-kit-editor",
+  "brand-languages",
+  "campaigns",
+  "campaign-live",
+  "campaign-live-brief",
+  "campaign-live-audience",
+  "campaign-live-creative",
+  "campaign-live-launch",
+  "performance",
+  "campaign-two-audiences",
+  "campaign-two-audiences-creative",
+  "campaign-waiting",
+  "campaign-waiting-brief",
+  "campaign-early",
+  "campaign-early-brief",
+  "approvals",
+  "runs",
+  "run-trail",
+  "run-awaiting",
+  "invites",
+  "not-found-app",
+];
+// U10-2 The campaign in stages: the browser tests, the pure stage and "Needs you" functions
+// (every combination), and the loader's flows against plain Postgres (outside tests/db: CI's
+// Neon job runs tests/db from a US runner). The interface is at the top of the spec.
+const STAGES_SPEC = "campaign-stages.spec.ts";
+const STAGES_LIB = "tests/lib/campaign-stages.test.ts";
+const STAGES_FLOWS = "tests/flows/campaign-stages.test.ts";
+/** U10-2's own pages in tests/e2e/page-budgets.ts (the Creative stage's budgets are U10-3's, Performance's U10-4's). */
+const STAGE_BUDGET_PAGES = [
+  "campaign-live",
+  "campaign-live-brief",
+  "campaign-live-audience",
+  "campaign-live-creative",
+  "campaign-live-launch",
+  "performance",
+  "campaign-two-audiences",
+  "campaign-two-audiences-creative",
+  "campaign-waiting",
+  "campaign-waiting-brief",
+  "campaign-early",
+  "campaign-early-brief",
+];
+/** The specs that walk the campaign page, updated to go through the stage pages (U10-2 case 5). */
+const STAGE_WALKERS =
+  "campaigns, signoff, creative, several-audiences, sizes, languages, compliance, vision, pretest, launch-pack, launch, simulation, performance, monitor and quick-fixes, through the shared helpers (newCampaign, signOffVersion, makeCreative, acceptDontRulesForPicked, openStage, openLaunch, openHistory) and the fullest data";
+
+// U10-3 Ad cards that follow the ad's state, and a filterable gallery: the browser tests (one
+// Fernhollow campaign launched, then ended), the pure filter, card-state and tool functions, and the
+// server's refusals against plain Postgres (outside tests/db, as U10-2's: U10-3 adds no table).
+// The interface is at the top of the spec.
+const GALLERY_SPEC = "creative-gallery.spec.ts";
+const GALLERY_LIB = "tests/lib/gallery-filter.test.ts";
+const GALLERY_FLOWS = "tests/flows/creative-lock.test.ts";
+const GALLERY_JOURNEY =
+  "One Fernhollow campaign with the mock models: 12 ads, two paid-social ads picked, their compliance accepted and launched (approved in the inbox), a third picked after the launch so its compliance needs a decision; the launch is ended in case 3's test, which runs last.";
+
+// U10-4 Performance: what needs action first: the browser tests (one Fernhollow campaign launched and
+// moved to simulated day 14), the pure recovery, ordering and words, and Mark all as seen against plain
+// Postgres (outside tests/db, as U10-2's and U10-3's: U10-4 adds no table). The interface is at the top of the spec.
+const ATTENTION_SPEC = "performance-attention.spec.ts";
+const ATTENTION_LIB = "tests/lib/performance-attention.test.ts";
+const ATTENTION_FLOWS = "tests/flows/performance-attention.test.ts";
+const ATTENTION_JOURNEY =
+  "One Fernhollow campaign with the mock models: three paid-social ads picked, their don't rules accepted and launched (approved in the inbox) with a seed and a cost-per-acquisition threshold set while it waited, found with the pure simulator, so one ad's Below threshold alert is on day 6 and it recovers before day 14, and another ad is below the threshold on day 14. The audit's own campaign (the fullest data) has the same shape; it is measured by U10-6's \"performance\" page, whose main action is the needs-action list.";
+
+// U10-5 Home leads with work: the browser tests (a new invitee's own workspace, empty and then with its work
+// written to the database, and one real tagline run waiting for a choice), the pure list, words and links, and
+// the loader against plain Postgres (outside tests/db, as every Sprint 10 flow: U10-5 adds no table). Answer B1
+// (9 November) folds the approvals inbox in as cases 5 and 6; case 7 is Rory's decision of the same day on the
+// inbox's order. The interface is at the top of the spec.
+const HOME_SPEC = "home-work.spec.ts";
+const HOME_LIB = "tests/lib/home-work.test.ts";
+const HOME_FLOWS = "tests/flows/home-work.test.ts";
+const HOME_JOURNEY =
+  "A new invitee's own workspace (the owner invites them on /invites and they accept), so nothing other specs leave waiting in the dev workspace is on its home. Its work is written to the database as the app leaves it (tests/e2e/home-fixture.ts): a sign-off and a launch waiting, three live campaigns (two with unseen alerts) and one ended with an unseen alert; and a real tagline run, started from the demo card at the bottom of home, waits for a choice.";
+
+// U10-7 The brand page: campaigns first, reference data on request: the browser tests (Quillmoor for the new
+// campaign and its segments, Fernhollow only read), the pure tab parser, and U10-6's budgets for every tab
+// (case 6). Answer B1 (9 November) folds in the kit editor and the languages page as cases 7 and 8. No table and no
+// loader change, so nothing in tests/db or tests/flows. The interface is at the top of the spec.
+const BRAND_PAGE_SPEC = "brand-page.spec.ts";
+const BRAND_TABS_LIB = "tests/lib/brand-tabs.test.ts";
+/** U10-7's pages in tests/e2e/page-budgets.ts: the brand page and its four tabs with Quillmoor's 10 segments and market notes. */
+const BRAND_BUDGET_PAGES = ["brand-fernhollow", "brand-quillmoor", "brand-quillmoor-audience", "brand-quillmoor-voice", "brand-quillmoor-legal", "brand-quillmoor-products"];
+const budgetChecks = (keys: string[]): Check[] =>
+  keys.flatMap((key): Check[] => [
+    { kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px` },
+    { kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #2: the main action of ${key} is within 1.5 screens at 375 px` },
+  ]);
+
+// U10-8 The runs list: filters, the campaign, and every run reachable: the browser tests (a new invitee's own
+// workspace with 60 runs and 25 campaigns written to the database), the pure filters, addresses, cost heading and
+// step numbers, and the paging queries against plain Postgres (outside tests/db, as every Sprint 10 flow: U10-8 adds
+// no table). Answer B1 (9 November) folds in the campaigns list as case 6, with U10-6's budgets for it. The agreed
+// extras are folded into the cases: the simulated label once in the cost heading into 3, the hostile filters into 1
+// and the bad cursor into 2. The interface is at the top of the spec.
+const RUNS_SPEC = "runs-list.spec.ts";
+const RUNS_LIB = "tests/lib/runs-list.test.ts";
+const RUNS_FLOWS = "tests/flows/runs-list.test.ts";
+const RUNS_JOURNEY =
+  "A new invitee's own workspace (the owner invites them on /invites and they accept), so nothing other specs make in the dev workspace is on its lists. Its runs and campaigns are written to the database as the app leaves them (tests/e2e/runs-fixture.ts): 60 finished runs a second apart (the 50th and 51st at the same moment), each with a simulated cost, and 25 campaigns over two fictional brands; and in the dev workspace a campaign and a run whose ids are another workspace's.";
+
+// BUG-4 and BUG-11 (Sprint 10): agent fixes from F-16a's real-model run. CI checks them with the
+// mock model (the unit and regression tests, and the evals in CI's first job); the real models
+// only in a real-model eval run of the affected agents, which needs the keys only Actions has.
+const BRIEF_CHECKS = "tests/lib/brief-checks.test.ts";
+const CI_FIRST_JOB = "Typecheck, lint, unit and database tests, build";
+const EVAL_RUN_10 = (agents: string) =>
+  `CI has no real keys, so the real model is checked by a real-model eval run of ${agents}, which Claude starts in .github/workflows/evals.yml with Rory's approval, each run capped at £1 (the estimate, up to about £3.14 in all, splits it into brief, persona and testPlan; copy; and imagery in three parts). Rory reads the reports at the demo, on the branch e2e-results/evals/sprint-10-bugs (the runs used the fixes' own branch, 9 Nov: £2.23 in all).`;
+
+// Sprint 10b (demo readiness, refined and agreed 10 November 2026): a brand of your own, its simulated data, and the
+// campaign's line. The browser tests use a new invitee's workspace (D-1, D-2, D-3) or the dev workspace's fictional
+// Fernhollow (D-4); every name in them is fictional (rule 2, as answered). Suggest lines is D-4's cut line (Rory's
+// answer Q1), so its tests are apart: suggest-lines.spec.ts and tests/agents/suggest-lines.test.ts.
+const NEW_BRAND_SPEC = "new-brand.spec.ts";
+const LINE_SPEC = "campaign-line.spec.ts";
+const SUGGEST_SPEC = "suggest-lines.spec.ts";
+const NEW_BRAND_LIB = "tests/lib/new-brand.test.ts";
+const NEW_BRAND_DB = "tests/db/new-brand.test.ts";
+const FICTIONAL_DB = "tests/db/fictional-brands.test.ts";
+const OWN_NAMES_LIB = "tests/lib/own-names.test.ts";
+const PROFILE_LIB = "tests/lib/simulated-profile.test.ts";
+const SIM_DATA_FLOWS = "tests/flows/simulated-data.test.ts";
+const LINE_LIB = "tests/lib/campaign-line.test.ts";
+const LINE_AGENTS = "tests/agents/campaign-line.test.ts";
+const LINE_FLOWS = "tests/flows/campaign-line.test.ts";
+const SUGGEST_AGENTS = "tests/agents/suggest-lines.test.ts";
+const NAMES_LIB = "tests/lib/fictional-names.test.ts";
+const OWN_NAMES_FLOWS = "tests/flows/own-names.test.ts";
+const REGION_NAMES_LIB = "tests/lib/region-names.test.ts";
+const E2E_JOB = "End-to-end (app, Inngest dev server, mock model)";
+const NEW_BRAND_JOURNEY =
+  "A new invitee's own workspace (the owner invites them on /invites and they accept), so the Brands page starts empty and nothing other specs make is on it. The tests run in order: D-1 makes Brightwater Kitchen, which D-3 fills.";
+const HAND_PACK_10B = "docs/testing/sprint-10b-test-pack.md";
 
 export const CASES: Case[] = [
   // C7-1 Sizes
@@ -1652,6 +1834,1376 @@ export const CASES: Case[] = [
       {
         kind: "hand",
         why: "Only a real merge to main shows it: Claude records the time from merge to live at the Sprint 9 deploy, after sign-off. With the ruleset, CI's wait (about 40 minutes) comes before the merge, so the time from merge to live is Vercel's build, a few minutes.",
+      },
+    ],
+  },
+  // U10-1 Quick fixes: the spend meter, list status, out-of-date copy, the kit editor's Save
+  {
+    id: "U10-1.1",
+    sprint: 10,
+    story: "U10-1",
+    words: "With a spend reservation in the database, every signed-in page at 375 px has no sideways scroll (F-36, made deterministic).",
+    checks: [
+      {
+        kind: "browser",
+        spec: QUICK_FIXES_SPEC,
+        title: "U10-1 #1: with a spend reservation in the database, every signed-in page at 375 px has no sideways scroll",
+        note: "A 5p reservation is written to the dev workspace for the test, so a call is in flight on every page. The campaign pages are one per status (written to the database), and the live campaign's five stage pages, Performance among them. The design-system spec's own checks at 375 px stay as they are.",
+      },
+    ],
+  },
+  {
+    id: "U10-1.2",
+    sprint: 10,
+    story: "U10-1",
+    words: "While a call is in flight, the meter's text says a call is running (\"Simulated\" and \"1 call running\") and states no amount as real spend.",
+    checks: [
+      {
+        kind: "browser",
+        spec: QUICK_FIXES_SPEC,
+        title: "U10-1 #2: while a call is in flight, the spend meter says a call is running and states no amount as real spend",
+        note: "Other specs' calls may be in flight at the same moment, so the browser checks the words' form (\"<n> call(s) running\"); the exact words for one call, and that they go when none is running, are the component test.",
+      },
+      { kind: "ci", file: METER_LIB, test: "U10-1 #2 the spend meter's words" },
+      { kind: "ci", file: METER_LIB, test: "U10-1 #2 the spend meter as rendered" },
+    ],
+  },
+  {
+    id: "U10-1.3",
+    sprint: 10,
+    story: "U10-1",
+    words: "Each campaign status shows correctly in /campaigns and on the brand page, one campaign per state: Writing the brief, Draft, Waiting for sign-off, Signed off, Launch waiting, Live (simulated day N), Ended.",
+    checks: [
+      {
+        kind: "browser",
+        spec: QUICK_FIXES_SPEC,
+        title: "U10-1 #3: each campaign status shows on /campaigns and on the brand page, one campaign per state",
+        note: "The seven campaigns are written to the database as the app leaves them (status-fixture.ts); building a live one through the UI takes minutes and the list reads only these rows. The queries behind the list are the flows test. The brand page shows its 3 most recent campaigns (U10-7), so the test opens Show all N campaigns there first.",
+      },
+      { kind: "ci", file: STATUS_LIB, test: "U10-1 #3 the status a campaign shows in lists" },
+      { kind: "ci", file: STATUS_FLOWS, test: "U10-1 #3 listCampaigns() reads each campaign's status facts" },
+    ],
+  },
+  {
+    id: "U10-1.4",
+    sprint: 10,
+    story: "U10-1",
+    words: "A status the code doesn't know (a future campaign state) shows \"Draft\", not an error.",
+    checks: [{ kind: "ci", file: STATUS_LIB, test: "U10-1 #4 a status the code doesn't know" }],
+  },
+  {
+    id: "U10-1.5",
+    sprint: 10,
+    story: "U10-1",
+    words: "The welcome page and the test plan no longer say built features are coming (BUG-14).",
+    checks: [
+      {
+        kind: "ci",
+        file: BUILT_COPY,
+        test: "U10-1 #5 copy says what is built",
+        note: "A text check against a list of features built by the end of Sprint 9: no sentence about the future, and nothing under a Coming next heading, names one. The welcome page is rendered as a visitor gets it; the test plan's note is PLAN_NOTE, shown on the campaign page and in the inbox.",
+      },
+    ],
+  },
+  {
+    id: "U10-1.6",
+    sprint: 10,
+    story: "U10-1",
+    words: "At 375 px, Save brand kit is on screen at the top and the bottom of the kit editor.",
+    checks: [{ kind: "browser", spec: QUICK_FIXES_SPEC, title: "U10-1 #6: at 375 px, Save brand kit is on screen at the top and the bottom of the kit editor" }],
+  },
+  // U10-6 Length budgets, checked in CI
+  {
+    id: "U10-6.1",
+    sprint: 10,
+    story: "U10-6",
+    words: "Every page is within its budget at both widths with the audit's fullest data: at most 6 screens at 375 px and 4 at 1440 px (Q7).",
+    checks: [
+      ...BUDGET_PAGES.map((key): Check => ({ kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px` })),
+      {
+        kind: "ci",
+        file: PAGE_BUDGETS_LIB,
+        test: "U10-6 the budgets table",
+        note: "No page is skipped: every page in the table is measured and must be within its budget. (The table can still mark a page as waiting for a story, which skips it with its numbers; none is marked now.)",
+      },
+    ],
+  },
+  {
+    id: "U10-6.2",
+    sprint: 10,
+    story: "U10-6",
+    words: "Each page's main action is within its first 1.5 screens at 375 px.",
+    checks: BUDGET_PAGES.filter((key) => key !== "not-found-app").map((key): Check => ({ kind: "browser", spec: PAGE_LENGTH_SPEC, title: `U10-6 #2: the main action of ${key} is within 1.5 screens at 375 px` })),
+  },
+  {
+    id: "U10-6.3",
+    sprint: 10,
+    story: "U10-6",
+    words: "A page over budget fails with its measured height and the budget in the message.",
+    checks: [
+      {
+        kind: "browser",
+        spec: PAGE_LENGTH_SPEC,
+        title: "U10-6 #3: a page over its budget fails with its measured height and the budget in the message",
+        note: "The spec's own check, run against a deliberately long fixture page (10,000 px, its button 9,000 px down), set as the page's content.",
+      },
+      { kind: "ci", file: PAGE_BUDGETS_LIB, test: "U10-6 #3 a page over budget fails with its measured height and the budget" },
+    ],
+  },
+  // U10-2 The campaign in stages, opening on what needs you
+  {
+    id: "U10-2.1",
+    sprint: 10,
+    story: "U10-2",
+    words: "A live campaign opens on its overview, and its first screen at 375 px and 1440 px shows \"Live (simulated day 14)\", the unseen alert count and the ad below the threshold.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #1: a live campaign opens on its overview, whose first screen at 375 px and 1440 px says it is live on day 14 with its unseen alerts and the ad below the threshold",
+        note: "The campaign is case 2's, launched with one ad and a click-through-rate threshold of 50% (out of any ad's reach), so exactly one ad is below it on day 14. The live state reads as U10-1's list label, \"Live (simulated day 14)\", rather than the case's \"Live (simulated), day 14\", so lists, the overview and the stage bar say the same.",
+      },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #1 the below-threshold line" },
+      { kind: "ci", file: STAGES_FLOWS, test: "#1 #2 #4 live on simulated day 14: the day, the unseen alerts and the ads below the threshold, as the Performance page has them" },
+    ],
+  },
+  {
+    id: "U10-2.2",
+    sprint: 10,
+    story: "U10-2",
+    words: "Each \"Needs you\" item links to the page where it is done, and doing it removes it: send for sign-off, decide a sign-off, decide a compliance review, approve a launch, mark alerts seen.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #2: each Needs you item links to where it is done, and doing it removes it, from sign-off to a live launch",
+        note: "One Fernhollow campaign through every stage, with the mock models. The launch's threshold is set after it is asked for, as the tables' owner (launch-fixture.ts), so its ad falls below it. Until U10-3 the gallery ignores ?show=decide and shows every ad.",
+      },
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #2: marking the alerts seen on Performance removes them from Needs you" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #2 and #3 what needs you" },
+      { kind: "ci", file: STAGES_FLOWS, test: "U10-2 campaignFacts() reads each campaign's stage facts" },
+    ],
+  },
+  {
+    id: "U10-2.3",
+    sprint: 10,
+    story: "U10-2",
+    words: "A campaign with nothing to do says so (\"Nothing needs you right now.\") rather than showing an empty list.",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #3: a campaign with nothing to do says Nothing needs you, not an empty list" },
+      { kind: "ci", file: STAGES_LIB, test: "#3 nothing to do: an empty list, and the words the overview shows instead" },
+    ],
+  },
+  {
+    id: "U10-2.4",
+    sprint: 10,
+    story: "U10-2",
+    words: "The stage bar shows the right state for a campaign in each state, from writing to ended.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #4: the stage bar shows the right state for campaigns waiting for sign-off, signed off, launch waiting, live and ended",
+        note: "Five states, written to the database as the app leaves them (status-fixture.ts); the refinement asks for three. Writing and every other combination are the CI test.",
+      },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #4 the stage bar's stages and their states" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 unknown inputs" },
+      { kind: "ci", file: STAGES_FLOWS, test: "U10-2 campaignFacts() reads each campaign's stage facts" },
+    ],
+  },
+  {
+    id: "U10-2.5",
+    sprint: 10,
+    story: "U10-2",
+    words: "Every action on today's campaign page is reachable from the new pages, at most one click further; history collapses to a line with a count; old links land on the right stage; the existing specs pass through the stage bar.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #5: every action on today's campaign page is on a stage page, at most one click further",
+        note: `The stage-level controls; each ad card's own tools are U10-3's case 8. The existing specs that walk the campaign (${STAGE_WALKERS}) are updated, not deleted, and pass in the same run.`,
+      },
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #5: history is one line with a count on its stage, and opens in place" },
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #5: old links to the campaign page's sections land on the right stage" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #5 old links land on the right stage" },
+    ],
+  },
+  {
+    id: "U10-2.6",
+    sprint: 10,
+    story: "U10-2",
+    words: "Each stage page is within its length budget (U10-6) with the audit's fullest data.",
+    checks: STAGE_BUDGET_PAGES.map(
+      (key): Check => ({
+        kind: "browser",
+        spec: PAGE_LENGTH_SPEC,
+        title: `U10-6 #1: ${key} is within its length budget at 375 px and 1440 px`,
+        note: "U10-6's measurement, with no page skipped. Both Creative stages fit since U10-3 (the checks folded; the live campaign's one group shows six ads, the two-audience campaign's groups three each, 3 columns at 1440 px since R2). The Performance page fits since U10-4, and R1 bounds it whatever the launch's dates (only the newest 3 unseen alerts in full, the rest behind Show all); its launch also starts on a fixed date with no simulator event (11 January 2027), so its length doesn't depend on the calendar.",
+      }),
+    ),
+  },
+  {
+    id: "U10-2.7",
+    sprint: 10,
+    story: "U10-2",
+    words: "Another workspace's campaign id gives the not-found page on every stage route (rule 7).",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #7: another workspace's campaign id gives the not-found page on every stage route" },
+      { kind: "ci", file: STAGES_FLOWS, test: "#7 rule 7: another workspace gets nothing for any of these campaigns, and a malformed or missing id is the same" },
+    ],
+  },
+  {
+    id: "U10-2.8",
+    sprint: 10,
+    story: "U10-2",
+    words: "A stage that isn't reachable yet (Creative before sign-off, Launch before picked ads pass, Performance before launch) shows a one-line reason and a link to the step that unlocks it, not an error.",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #8: a stage that isn't reachable yet says why in one line and links to the step that unlocks it" },
+      { kind: "ci", file: STAGES_LIB, test: "creative: locked before sign-off, with the reason and a link to the sign-off; then Making ads, No ads yet, or the count" },
+      { kind: "ci", file: STAGES_LIB, test: "launch is locked before sign-off, and when no picked ad passes; the link goes to what unlocks it" },
+      { kind: "ci", file: STAGES_LIB, test: "performance: locked until a launch is live or ended; then the unseen alerts" },
+    ],
+  },
+  {
+    id: "U10-2.9",
+    sprint: 10,
+    story: "U10-2",
+    words: "The stage bar never makes the page scroll sideways at 375 px, with the longest labels.",
+    checks: [
+      {
+        kind: "browser",
+        spec: STAGES_SPEC,
+        title: "U10-2 #9: at 375 px the stage bar with the longest labels never makes the page scroll sideways",
+        note: "The longest label is \"Live (simulated, before day 1)\" (30 characters); CI checks no label is longer. On each stage page the current stage is wholly within the bar's visible box as the page opens (a fix made with U10-3: the bar scrolls itself so it is in view).",
+      },
+      { kind: "ci", file: STAGES_LIB, test: "every combination: five stages in order, one short label each, locks exactly as the rules say, and never an error" },
+    ],
+  },
+  {
+    id: "U10-2.10",
+    sprint: 10,
+    story: "U10-2",
+    words: "Keyboard: the stage bar is a nav with aria-current on the current stage; every stage link and \"Needs you\" link works with Enter.",
+    checks: [
+      { kind: "browser", spec: STAGES_SPEC, title: "U10-2 #10: the stage bar is a nav with aria-current, and stage and Needs you links work with Enter" },
+      { kind: "ci", file: STAGES_LIB, test: "U10-2 #10 the stage bar and the Needs you list as rendered" },
+    ],
+  },
+  // U10-3 Ad cards that follow the ad's state, and a filterable gallery
+  {
+    id: "U10-3.1",
+    sprint: 10,
+    story: "U10-3",
+    words: "A launched ad's card offers no Discard, New picture, New words or Edit words, and says it is running (\"Running in the launch (simulated)\").",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #1: a launched ad's card offers no Discard, New picture, New words or Edit words, and says it is running",
+        note: `${GALLERY_JOURNEY} Both launched cards are checked with every menu open, Redraw too; an ad outside the launch keeps its tools.`,
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "#1 an ad in a live or waiting launch offers no Discard, New picture, New words, Edit words or Redraw" },
+      { kind: "ci", file: GALLERY_LIB, test: "#1 a launched ad's card says it is running; one in a waiting launch says so; otherwise nothing" },
+      { kind: "ci", file: GALLERY_FLOWS, test: "#1 #3 each ad's launch: live or waiting for the ads in it, null for the others, and null once it ends" },
+    ],
+  },
+  {
+    id: "U10-3.2",
+    sprint: 10,
+    story: "U10-3",
+    words: "Discarding, redrawing or re-wording a launched ad through the server action is refused with \"That ad is running in a launch (simulated), so it can't change until the launch ends.\"",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #2: discarding a launched ad from a page opened before the launch is refused by the server, and the ad stays",
+        note: "The one action the refinement asks for in the browser: Discard, from a tab opened before the launch, so the button is still there and the server's refusal is what shows.",
+      },
+      {
+        kind: "ci",
+        file: GALLERY_FLOWS,
+        test: "U10-3 #2 the server refuses to change an ad in a live or waiting launch",
+        note: "Each of discard, new picture, redraw with the current kit, new words and edit words, through the gallery's functions and the server actions, for a live launch and one waiting for approval; nothing is written or sent. New or edited words for another ad on the launched ad's words are refused too.",
+      },
+      { kind: "ci", file: GALLERY_FLOWS, test: "#2 another workspace gets the refusal for a missing ad, never the launch's state, and changes nothing" },
+      { kind: "ci", file: GALLERY_LIB, test: "#2 the sentence the server refuses with" },
+    ],
+  },
+  {
+    id: "U10-3.3",
+    sprint: 10,
+    story: "U10-3",
+    words: "Once the launch ends, the tools come back.",
+    checks: [
+      { kind: "browser", spec: GALLERY_SPEC, title: "U10-3 #3: once the launch ends, the tools come back", note: "End the launch on the Launch stage; the cards' tools return, Launched shows none, and Discard then works on the ad the server refused." },
+      { kind: "ci", file: GALLERY_FLOWS, test: "U10-3 #3 once the launch ends, the tools come back" },
+      { kind: "ci", file: GALLERY_LIB, test: "#3 out of a launch (none, or ended), every tool today's card has is offered again, each only when it can be used" },
+    ],
+  },
+  {
+    id: "U10-3.4",
+    sprint: 10,
+    story: "U10-3",
+    words: "Filter Picked shows only picked ads, Needs a decision only ads with an open compliance review, Launched only ads in the live launch; counts match.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #4: each filter shows only its ads, and its count matches",
+        note: "Needs a decision counts picked ads of the signed-off version whose compliance waits for a person, as U10-2's overview does, so its Decide compliance link and the filter agree. The audience filter and groups need a campaign with several audiences; they are checked in CI and measured by U10-6's two-audience page.",
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "U10-3 #4 what each filter shows, and its count" },
+      { kind: "ci", file: GALLERY_FLOWS, test: "#4 the filter's counts from the gallery and its compliance; Needs a decision is the count U10-2's overview shows" },
+    ],
+  },
+  {
+    id: "U10-3.5",
+    sprint: 10,
+    story: "U10-3",
+    words: "The filter survives a reload and a shared link (?show=picked).",
+    checks: [
+      { kind: "browser", spec: GALLERY_SPEC, title: "U10-3 #5: the filter survives a reload and a shared link", note: "The shared link is opened in a second browser context, signed in as the same person." },
+      { kind: "ci", file: GALLERY_LIB, test: "the filter's links: All has no show; the rest carry it, then the audience, so a shared link opens the same view" },
+    ],
+  },
+  {
+    id: "U10-3.6",
+    sprint: 10,
+    story: "U10-3",
+    words: "An unknown filter value shows All.",
+    checks: [
+      { kind: "ci", file: GALLERY_LIB, test: "#6 an unknown filter value shows All" },
+      { kind: "ci", file: GALLERY_LIB, test: "a repeated parameter reads its first value, and an unknown first value is All" },
+    ],
+  },
+  {
+    id: "U10-3.7",
+    sprint: 10,
+    story: "U10-3",
+    words: "A gallery card at 375 px is at most about 450 px tall when its tools are closed (today about 1,000).",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #7: a gallery card at 375 px is at most about 450 px tall with its tools closed",
+        note: "Every card of the 12, launched, needing a decision and not picked. \"About\" is read as 460 px (450 and about 2%).",
+      },
+    ],
+  },
+  {
+    id: "U10-3.8",
+    sprint: 10,
+    story: "U10-3",
+    words: "Every tool on today's card is still reachable from the card's menu, by keyboard.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #8: every tool on today's card is reachable from the card's menus, by keyboard",
+        note: "On a picked ad outside the launch: Edit and More open with Enter and their tools are Tab stops, Edit words opens its dialog, Escape closes, axe finds nothing. Redraw with the current kit shows only on an ad made with an older kit, which needs a kit change (a @brand-kit test); it is checked in CI (adTools) and by F-26's own specs.",
+      },
+    ],
+  },
+  {
+    id: "U10-3.9",
+    sprint: 10,
+    story: "U10-3",
+    words:
+      "(Rory's choice a, 9 November 2026) The checks on the picked ads (compliance, languages, pre-test, picture checks, launch pack) fold into one collapsed section whose summary gives their state in one line, e.g. \"Checks on the 4 picked ads: 1 needs a decision, launch pack ready\", from real counts, saying \"(simulated)\" where the figures are; it opens by itself on ?show=decide or from a link to one of the checks, and any older fragment inside it opens it.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #9: the checks on the picked ads fold into one line with their state, and open from ?show=decide and from a link to one of them",
+        note: "Closed under All, with the line matching the filter row's counts (3 picked, 1 needing a decision) and the pack; opens and closes with Enter; ?show=decide opens with Accept for every picked ad in view; #pretest, #launch-pack, the older #launch-pack-heading and #picked-checks open it and land on their check; a fragment followed on an open page opens it too. U10-2's Decide compliance link (?show=decide) is also followed in campaign-stages.spec.",
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "#9 the line Rory gave: the picked ads, those needing a decision, the launch pack" },
+      { kind: "ci", file: GALLERY_LIB, test: "#9 simulated figures say so (rule 1): mock pre-test scores and mock translations" },
+      { kind: "ci", file: GALLERY_LIB, test: "#9 with nothing picked it says so" },
+    ],
+  },
+  {
+    id: "U10-3.10",
+    sprint: 10,
+    story: "U10-3",
+    words:
+      "(Rory's choice b, 9 November 2026, and his follow-up that day) A gallery with one group shows its first 6 ads; with more than one audience group, each group shows its first 3 (launched, then needs a decision, then picked, then the rest, newest first within each, with Make creative's batches kept in their order), then \"Show all N ads\", which reveals the rest without reloading; a filter (picked, decide, launched) shows every matching ad, with no cut-off; an ad reached by a link (#ad-7, or a tool's return) is shown, its group revealed in full.",
+    checks: [
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #10: each audience shows its first six ads, launched first, and Show all reveals the rest in place; a filter shows every ad; a link to an ad shows it",
+        note: "The journey's 12 ads in one group: six shown, the two launched first, then the one needing a decision; Show all 12 ads by keyboard shows the rest with no navigation and moves focus to the seventh; with seven picked, Picked shows all seven and no button (the four extra picks are undone); #ad-N for the twelfth ad, and Back to Creative from its Sizes page (#ad-<id>), show it in view. The order within a tier, and the cut-off for every filter and number of groups, are checked in CI.",
+      },
+      {
+        kind: "browser",
+        spec: GALLERY_SPEC,
+        title: "U10-3 #10: with two audiences, each group shows its first three ads and Show all 12 ads; Show all reveals that group only; one audience chosen shows six",
+        note: "The fullest data's two-audience Quillmoor campaign (24 ads, nothing picked), only looked at: each group shows 3 of its 12 with Show all 12 ads; Show all in the first, by keyboard, shows its 12 in place and moves focus to the fourth, while the second still shows 3; ?audience= for one of them is one group, so it shows 6. Nothing is picked there, so the filters' every-match rule with two groups is checked in CI.",
+      },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 launched, then needing a decision, then picked, then the rest" },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 newest first within each; ads one run made together keep the order they were given in" },
+      { kind: "ci", file: GALLERY_LIB, test: "#10 under All one group shows its first six, with Show all N ads; a filter shows every ad it matches" },
+      {
+        kind: "ci",
+        file: GALLERY_LIB,
+        test: "#10 with more than one audience group, each shows its first three under All (Rory, 9 November 2026); a filter still shows every ad",
+      },
+    ],
+  },
+  // U10-4 Performance: what needs action first
+  {
+    id: "U10-4.1",
+    sprint: 10,
+    story: "U10-4",
+    words: "On day 14 of the launch, the first screen at 375 px shows the healthy spend share and the below-threshold ad (in Needs action now, with the alert that flagged it).",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #1: on simulated day 14 the first screen at 375 px shows the healthy spend share and the ad below its threshold, with the alert that flagged it",
+        note: `${ATTENTION_JOURNEY} The case names the audit's launch; its campaign's ads and seed are random, so this test builds a launch of the same shape whose days are known. Also checks the page's order (share, needs action, the ads table, the chart and table, Ask) at 1440 px.`,
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #1 what needs action now: ads below the threshold today, then ads with a Tiring alert, each with the alerts that flagged it" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#1 nothing needs action: an empty list before day 1 and when every ad is healthy, and the line the page shows instead" },
+    ],
+  },
+  {
+    id: "U10-4.2",
+    sprint: 10,
+    story: "U10-4",
+    words: "Alerts are newest first; a seen alert is one line; an unseen one is in full.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #2: alerts are newest first; a seen alert is one line that opens in place, and the newest unseen ones are in full",
+        note: "The oldest alert is marked as seen; its line is measured as one line at 1440 px, and it opens in place, by keyboard, to its facts and who saw it. Since R1 (10 November) only the newest 3 unseen alerts are in full; U10-4.8 checks the rest.",
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #2 alerts newest first: by day, then the launch's ad order, then kind" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#2 a seen alert's one line: the ad, the kind and the simulated day" },
+    ],
+  },
+  {
+    id: "U10-4.3",
+    sprint: 10,
+    story: "U10-4",
+    words: "An ad's day-6 alert shows \"Recovered on day N\" once the ad has been at or above its threshold for two days, worked out from the stored simulated days.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #3: an ad's day-6 alert says Recovered on day N once the ad has been at or above its threshold two days in a row, worked out from the stored days",
+        note: "The case names the audit's Ad 1; here it is whichever ad the terms found have alerted on day 6. Seen the day before (no line) and on the day (the line), and on day 14 every alert against the independent reading of the stored rows. N is the second of the two days, as an alert is dated the second of its two missed days.",
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #3 recovered on day N: the second of two days in a row at or above the threshold after the alert's day, not learning" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#3 the alert's own day and the days before it don't count, nor do learning days" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#3 only a Below threshold alert recovers: Tiring and Not compliant never say Recovered" },
+      { kind: "ci", file: ATTENTION_LIB, test: "#3 worked out from stored days alone: on the demo launch's month, every Below threshold alert recovers on the day the independent reading says" },
+    ],
+  },
+  {
+    id: "U10-4.4",
+    sprint: 10,
+    story: "U10-4",
+    words: "Mark all as seen marks every unseen alert of this launch only, records who, and the home line updates; another launch's alerts are unchanged and another workspace is refused.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #4: Mark all as seen marks every unseen alert of this launch, records who, updates the home line, and a stale tab's second press marks nothing again",
+        note: "Other specs' launches may raise alerts at the same time, so the home line is read against the database's count at the same moment. Another launch's alerts and another workspace are the CI tests.",
+      },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "U10-4 #4 Mark all as seen marks every unseen alert of the launch the Performance page shows, records who, and leaves every other launch's alerts as they were" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 the home count goes down by exactly the alerts marked; another workspace's count is its own" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 one guarded statement: two at once, or again, mark nothing twice and keep the first who and when" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 another workspace is refused: B can't mark A's alerts, and a missing or malformed campaign is the same refusal" },
+      { kind: "ci", file: ATTENTION_FLOWS, test: "#4 the server action says how many were marked, or refuses another workspace's campaign" },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #4 the words after Mark all as seen" },
+    ],
+  },
+  {
+    id: "U10-4.5",
+    sprint: 10,
+    story: "U10-4",
+    words: "An alert's link scrolls to and highlights its ad's row.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #5: an alert's link scrolls to its ad's row in the table and highlights it",
+        note: "At 375 px, where the table is screens below the alerts; the row is the fragment's target and looks different from another row. By click and by Enter.",
+      },
+    ],
+  },
+  {
+    id: "U10-4.6",
+    sprint: 10,
+    story: "U10-4",
+    words: "Only the latest answer is open; opening an older one shows its answer and table.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #6: only the latest answer is open; opening an older question shows its answer and its table",
+        note: "Two questions with the mock model: the cost-per-acquisition question (answered with a table), then \"What did our rivals spend?\" (the fixed reply, no table), so the older one has the table.",
+      },
+    ],
+  },
+  {
+    id: "U10-4.7",
+    sprint: 10,
+    story: "U10-4",
+    words: "The chart and table tabs work by keyboard and keep the table alternative for screen readers.",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #7: the chart and table tabs work by keyboard, and the chart keeps its table alternative for screen readers",
+        note: "The tabs pattern: arrows (wrapping), Home and End select, Tab reaches the panel; the chart stays described by the day-by-day table while Chart is selected; axe finds nothing with either tab selected.",
+      },
+    ],
+  },
+  {
+    id: "U10-4.8",
+    sprint: 10,
+    story: "U10-4",
+    words:
+      "(R1, Rory's answer after QA, 10 November 2026) The newest 3 unseen alerts are in full and every other alert is one line, with \"Show all N alerts\" revealing the rest in place: with 5 unseen alerts, 3 are in full and 2 are one line, behind \"Show all 5 alerts\".",
+    checks: [
+      {
+        kind: "browser",
+        spec: ATTENTION_SPEC,
+        title: "U10-4 #8 (R1): with 5 unseen alerts, the newest 3 are in full and the other 2 are one line, behind Show all 5 alerts",
+        note: "The launch's alerts are made exactly 5, all unseen, as the tables' owner: the alert case 2 marked as seen is put back unseen (same alert, same facts), Not compliant alerts are added for its ads (their reason says the test added them), or the oldest removed. At 375 px and 1440 px; Show all 5 alerts is pressed by keyboard and moves focus to the first alert it revealed; an unseen one-line alert opens to its Mark as seen.",
+      },
+      { kind: "ci", file: ATTENTION_LIB, test: "U10-4 #8 (R1) which alerts are shown" },
+    ],
+  },
+  // U10-5 Home leads with work
+  {
+    id: "U10-5.1",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "With approvals and alerts waiting, home's first screen lists them, each linking to its place: a sign-off to the campaign's Brief stage, a launch to its card in Approvals, a run's choice to the run, and unseen alerts per campaign to that campaign's Performance page.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #1: with approvals and alerts waiting, home's first screen lists them at 375 px and 1440 px, each linking to its place",
+        note: `${HOME_JOURNEY} Every item is wholly within the first screen at both widths, in order (the approvals in the inbox's order, then campaigns by their newest unseen alert); the sign-off, launch and run items are followed to their places. Also checks the live campaigns with their simulated day and share, and that the tagline demo is the last card (answer Q4).`,
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #1 what needs you on home: the approvals in the inbox's order, then unseen alerts per campaign, newest first" },
+      { kind: "ci", file: HOME_LIB, test: "#1 each item's words and where it links" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #1 homeNeedsFor() lists the approvals waiting and the unseen alerts per live campaign, each linked to its place" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 live campaigns on home: each with its simulated day and its own share" },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 live campaigns: each with its own share, labelled simulated (rule 1)" },
+    ],
+  },
+  {
+    id: "U10-5.2",
+    sprint: 10,
+    story: "U10-5",
+    words: "With nothing waiting, home says so (\"Nothing needs you right now.\").",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #2: with nothing waiting, home says Nothing needs you right now, and the tagline demo is a small card at the bottom",
+        note: "The invitee's workspace before anything is written to it, at 375 px and 1440 px. The dev workspace always has something waiting from other specs, so it can't show this.",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #2 nothing waiting: an empty list, and the words home shows instead" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #2 nothing waiting: an empty list" },
+    ],
+  },
+  {
+    id: "U10-5.3",
+    sprint: 10,
+    story: "U10-5",
+    words: "The alerts item links to the campaign's Performance page, not the campaigns list.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #3: the alerts item links to the campaign's Performance page, not the list, and marking them seen there removes it",
+        note: "Followed by keyboard to the Performance page, where Mark all as seen (U10-4) removes that campaign's item from home and leaves the other's. An ended launch's alerts never show.",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #3 an alerts item links to its campaign's Performance page, never the campaigns list" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #3 the alerts item links to the campaign's Performance page" },
+    ],
+  },
+  {
+    id: "U10-5.4",
+    sprint: 10,
+    story: "U10-5",
+    words: "Recent runs show their campaign (or \"No campaign\", as for the tagline demo); never another workspace's.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #4: recent runs show their campaign, or No campaign, and never another workspace's campaign",
+        note: "The failure path: a run whose input names the owner's campaign (another workspace) shows No campaign, and that campaign's name and id are nowhere on the page.",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #4 a run's campaign, or No campaign" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #4 listRuns() names each run's campaign" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 rule 7: another workspace sees none of A's approvals, alerts, live campaigns or runs" },
+    ],
+  },
+  {
+    id: "U10-5.5",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) A sign-off card in the approvals inbox shows a summary (version and title, brand, objective, when it closes, one line for its personas and test plan) with the personas and test plan on request, opening in place; the inbox's first Approve is within 1.5 screens at 375 px; Approve from the card works as before.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #5: a sign-off card in the inbox is a summary, with its personas and test plan on request, and Approve near the top",
+        note: "At 375 px, on the invitee's inbox (the sign-off, a launch and three runs' choices): the card is at most one screen tall with its reviews closed (our reading of \"a summary\"), they open with Enter, and approving it removes the item from home. U10-6 measures the inbox with the fullest data (its \"approvals\" page).",
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #5 the sign-off card's one line for its personas and test plan" },
+    ],
+  },
+  {
+    id: "U10-5.6",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "(B1, with U10-2's note) The approvals inbox links each card to the stage where its decision is made: a sign-off to the campaign's Brief stage, a launch to its Launch stage, not the campaign's overview.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #6: the approvals inbox links a sign-off to the campaign's Brief stage and a launch to its Launch stage",
+        note: "Each link is followed, and the stage bar marks that stage as the current one. The specs that found a card by its overview link now use inboxCard() in helpers.ts.",
+      },
+    ],
+  },
+  {
+    id: "U10-5.7",
+    sprint: 10,
+    story: "U10-5",
+    words:
+      "(Rory's decision, 9 November 2026) The approvals inbox lists what has an Approve button first (sign-offs and launches, newest first), then the run choices in their own group after them, newest first, under \"Runs waiting for your choice\"; home's \"Needs you\" lists the approvals in the same order. With run choices newer than a sign-off, the first card is the sign-off and its Approve is within 1.5 screens at 375 px.",
+    checks: [
+      {
+        kind: "browser",
+        spec: HOME_SPEC,
+        title: "U10-5 #7: with run choices newer than a sign-off, the inbox's first card is the sign-off, its Approve within 1.5 screens at 375 px, and the run choices follow in their own group",
+        note: `${HOME_JOURNEY} Two more runs' choices are written, newer than everything else. At 375 px and 1440 px every card's place is checked (the sign-off, the launch asked before it, then the three choices newest first under their heading); at 375 px the sign-off's Approve is the first Approve and within 1.5 screens. Home's approvals are in the same order. U10-6 measures the inbox's first Approve after the whole suite (its "approvals" page).`,
+      },
+      { kind: "ci", file: HOME_LIB, test: "U10-5 #7 the inbox's order: what has an Approve button first, newest first, then the run choices, newest first" },
+      { kind: "ci", file: HOME_FLOWS, test: "U10-5 #1 homeNeedsFor() lists the approvals waiting and the unseen alerts per live campaign, each linked to its place" },
+    ],
+  },
+  // U10-7 The brand page: campaigns first, reference data on request
+  {
+    id: "U10-7.1",
+    sprint: 10,
+    story: "U10-7",
+    words: "At 375 px, the brand page's first screen shows the brand's campaigns with their real status (U10-1) and objective, and a \"New campaign\" button.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #1: at 375 px the brand page's first screen shows its campaigns with their status and objective, and New campaign",
+        note: "On Quillmoor, after case 2's test has started a campaign from its brand page, at 375 px and 1440 px: the first campaign row (its status in U10-1's words, its objective) and New campaign are wholly within the first screen, above the tabs; case 2's campaign shows Draft, never \"Draft v1\", with its objective. U10-6 measures the same button's depth with the fullest data (case 6).",
+      },
+    ],
+  },
+  {
+    id: "U10-7.2",
+    sprint: 10,
+    story: "U10-7",
+    words: "\"New campaign\" opens the form, and submitting it works as it does today.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #2: New campaign opens the form, and submitting it writes the brief as today",
+        note: "On Quillmoor at 1440 px with the mock Brief agent: the form is closed until the button is pressed (aria-expanded), then submitting opens the campaign's overview and version 1 is written.",
+      },
+    ],
+  },
+  {
+    id: "U10-7.3",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "Each tab (Audience: segments and market notes; Voice and visual: the kit summary, linking to the kit editor; Legal and languages; Products and data: products, charts) shows its own section and is in the URL; a shared link opens that tab, and an unknown tab shows the first.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #3: each tab shows its own section and is in the URL; a shared link opens that tab, and an unknown tab shows the first",
+        note: "On Fernhollow, only read. Each ?tab= address opens its tab with its section and the others hidden; choosing a tab puts it in the URL and a reload keeps it, with a search's ?q= kept. The failure path: no tab, an unknown one, one in the wrong case and an old run's #segments or #market link all show Audience. Rule 1: Products and data says Simulated data once for its customers and orders, not on every figure.",
+      },
+      { kind: "ci", file: BRAND_TABS_LIB, test: "U10-7 #3 the brand page's tabs and their address" },
+    ],
+  },
+  {
+    id: "U10-7.4",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "A segment card shows its name, size and one-line definition until it is opened. Nothing is shown twice: the repeated badge sentences go. Rule 1: \"Simulated data\" once per section rather than on every card. Rule 2: market notes may still name real companies, with their sources.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #4: a segment card shows its name, size and one-line definition until opened, and nothing is shown twice",
+        note: "Quillmoor's Audience tab at 375 px, with its segments from the Audience agent and its market notes (made if missing). Tagged @brand-kit so it runs after audience.spec and market.spec, which replace them. Our reading of \"one-line definition\": one sentence. Opening a card is in place, by keyboard, and shows the rest of its facts and Remove.",
+      },
+    ],
+  },
+  {
+    id: "U10-7.5",
+    sprint: 10,
+    story: "U10-7",
+    words: "The brand page's tabs work by keyboard and have the right roles.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #5: the brand page's tabs work by keyboard with the right roles, and axe finds nothing",
+        note: "The tabs pattern U10-4 built (src/components/ui/tabs.tsx): one named tablist, arrows (wrapping), Home and End select and put the tab in the URL, Tab reaches the panel; axe finds nothing with each tab selected, and every tab has AA contrast and no sideways scroll at 375 px and 1440 px.",
+      },
+    ],
+  },
+  {
+    id: "U10-7.6",
+    sprint: 10,
+    story: "U10-7",
+    words: "With Quillmoor's 10 segments and market notes, every tab of the brand page is within budget (U10-6).",
+    checks: budgetChecks(BRAND_BUDGET_PAGES),
+  },
+  {
+    id: "U10-7.7",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) The kit editor has compact list rows and is within its length budget, and Save brand kit is visible without scrolling at 375 px and 1440 px, and stays reachable.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #7: the kit editor is within its length budget, and Save brand kit is on screen without scrolling at 375 px and 1440 px",
+        note: "Fernhollow's kit, only read, at both widths: Save in its save bar is on screen and uncovered at the top and at the bottom of the form (a sticky bar does it; so does anything else that keeps it there), and the page is within U10-6's budget, measured as page-length.spec measures it. The length is measured on Fernhollow's kit editor only: the independent QA (10 November) measured Quillmoor's kit editor at 6.23 screens at 375 px, over the 6-screen budget, and that is returned to the backlog, not fixed in Sprint 10.",
+      },
+      ...budgetChecks(["brand-kit-editor"]),
+    ],
+  },
+  {
+    id: "U10-7.8",
+    sprint: 10,
+    story: "U10-7",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) The brand languages page is the same: within its length budget, with Save languages visible without scrolling at 375 px and 1440 px; and saving still works.",
+    checks: [
+      {
+        kind: "browser",
+        spec: BRAND_PAGE_SPEC,
+        title: "U10-7 #8: the languages page is within its length budget, Save languages is on screen without scrolling at 375 px and 1440 px, and saving still works",
+        note: "Quillmoor's languages, tagged @brand-kit: at 375 px Spanish is left out and saved from where the change was made, the reload shows it, and the demo languages are put back. U10-6 measures Fernhollow's languages page with the fullest data.",
+      },
+      ...budgetChecks(["brand-languages"]),
+    ],
+  },
+  // U10-8 The runs list: filters, the campaign, and every run reachable
+  {
+    id: "U10-8.1",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "Filtering the runs list by campaign, agent or status shows only the matching runs, and the filters survive a reload because they are in the address. Unknown or garbage filter values show all runs with a plain note, never an error; the filters go through asUser() (rule 7).",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #1: filtering by campaign, agent or status shows only the matching runs, and the filters survive a reload",
+        note: `${RUNS_JOURNEY} Each filter from the form (status at 375 px), then all three from a shared address shown in the form, then Clear filters. The failure path: garbage in every filter shows the first page with "Filters not recognised, so not applied: campaign, agent and status."; an unknown agent beside a known status applies the status; a filter no run matches says "No runs match these filters".`,
+      },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #1 the runs list's filters and their address" },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #1 listRunsPage() filters by campaign, agent and status" },
+    ],
+  },
+  {
+    id: "U10-8.2",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "With 60 runs, \"Older runs\" shows runs 51 to 60, and none is shown twice or missed: the page is found by a stable cursor (the last run shown, by created_at then id), not an offset. A bad cursor shows the first page.",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #2: with 60 runs, Older runs shows runs 51 to 60, none shown twice or missed, and a bad cursor shows the first page",
+        note: "At 1440 px and 375 px, on the invitee's 60 runs: the first page's 50 and the second page's 10 are all 60 in order, once each, the tie at the boundary included, and a reload keeps the second page. The failure path: a garbage cursor, an offset (\"50\") and another workspace's run id each show the first page.",
+      },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #2 with 60 runs, the second page is runs 51 to 60, none twice or missed, by created_at then id" },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #2 a bad cursor shows the first page" },
+    ],
+  },
+  {
+    id: "U10-8.3",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "Each row of the runs list names its campaign, or \"No campaign\" for the tagline demo. The simulated cost label appears once, in the cost column's heading, not on every row (rule 1: still said wherever a simulated cost is shown).",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #3: each row names its campaign, or No campaign for the tagline demo, and the simulated label is once, in the cost heading, at 375 px and 1440 px",
+        note: "Every row of the first page at both widths, its campaign and its cost; \"(simulated)\" is in the page's visible text once, in the heading, and the note on what simulated means stays below the table. AA contrast and no sideways scroll at both widths.",
+      },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #3 each run names its campaign, or none" },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 the simulated cost label, once, in the cost column's heading" },
+    ],
+  },
+  {
+    id: "U10-8.4",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "Another workspace's runs never appear, whatever the filters, including another workspace's campaign id in the address (rule 7).",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #4: another workspace's runs and campaign never appear, whatever the filters, including its campaign id in the address",
+        note: "The dev workspace's campaign id in the invitee's address is not applied (\"Filter not recognised, so not applied: campaign.\") and its name is nowhere; the form offers only the invitee's campaigns; six filtered and paged addresses show only the invitee's runs; the run naming the dev workspace's campaign says No campaign.",
+      },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #4 another workspace's runs never appear, whatever the filters" },
+    ],
+  },
+  {
+    id: "U10-8.5",
+    sprint: 10,
+    story: "U10-8",
+    words: "A run trail's steps are numbered without gaps (the shown steps are numbered 1 to n), or the gap is explained.",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #5: a run trail's steps are numbered without gaps",
+        note: "An Imagery run whose steps are recorded at seq 1, 2, 3, 5 and 7 (as Imagery's reserved slots leave them), opened from the filtered list at 1440 px and 375 px, reads Step 1 to Step 5 in seq order. We chose to number the shown steps, the refinement's first option, so no gap needs explaining.",
+      },
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #5 the run trail's steps are numbered without gaps" },
+    ],
+  },
+  {
+    id: "U10-8.6",
+    sprint: 10,
+    story: "U10-8",
+    words:
+      "(B1, Rory's answer during the build, 9 November 2026) The campaigns list gets filters (brand and status) and paging like the runs list: with the suite's campaigns it is within its length budget at 375 px and 1440 px, and filtering and \"Older campaigns\" work.",
+    checks: [
+      {
+        kind: "browser",
+        spec: RUNS_SPEC,
+        title: "U10-8 #6: the campaigns list is within its length budget at 375 px and 1440 px, and filtering and Older paging work",
+        note: "On the invitee's 25 campaigns at both widths: a page of 20 within the budget, measured as page-length.spec measures it, then Older campaigns shows the other 5; brand and status from the form, kept by a reload; garbage filters noted, a garbage cursor and a status no campaign has. U10-6 measures the list after the whole suite (its \"campaigns\" page) with the dev workspace's campaigns.",
+      },
+      ...budgetChecks(["campaigns"]),
+      { kind: "ci", file: RUNS_LIB, test: "U10-8 #6 the campaigns list's filters and their address" },
+      { kind: "ci", file: RUNS_FLOWS, test: "U10-8 #6 listCampaignsPage() filters by brand and status and pages by a stable cursor" },
+    ],
+  },
+  // BUG-4 The brief's quantities-in-words check and its prompt agree
+  {
+    id: "BUG-4.1",
+    sprint: 10,
+    story: "BUG-4",
+    words: 'The Brief agent\'s prompt names every loose quantity the check refuses ("most of", "many people", "many of", "a good share of", "plenty of customers" and the rest) and how to write round them; the check refuses each, and each rewrite passes.',
+    checks: [
+      { kind: "ci", file: BRIEF_CHECKS, test: "BUG-4 the Brief agent's prompt and the quantity check agree" },
+      { kind: "ci", file: REGRESSION, test: "the check refuses every phrase the reports quote, in the sentence written around it, and passes each rewrite" },
+      { kind: "ci", file: REGRESSION, test: "the Brief agent's prompt before the fix named none of them; now it names each one and the way round it" },
+    ],
+  },
+  {
+    id: "BUG-4.2",
+    sprint: 10,
+    story: "BUG-4",
+    words: "A brief refused for a quantity in words is told how to rewrite it (name the group, or use a figure from the context), for its one repair.",
+    checks: [
+      { kind: "ci", file: BRIEF_CHECKS, test: "a refusal tells the model how to rewrite it, for the one repair" },
+      { kind: "ci", file: REGRESSION, test: "the brief eval's grader fails the reconstructed reply and passes it rewritten; the message says how to rewrite it" },
+    ],
+  },
+  {
+    id: "BUG-4.3",
+    sprint: 10,
+    story: "BUG-4",
+    words: "The brief eval's regression case fails any run with an attempt sent back for a quantity in words; brief, copy, persona, testPlan and imagery pass their evals without one.",
+    checks: [
+      { kind: "ci", file: REGRESSION, test: "the regression case fails a run whose first attempt was sent back for a quantity, even when the repair passed" },
+      {
+        kind: "ci",
+        job: CI_FIRST_JOB,
+        note: "Its step \"Agent evals against the mock model\" runs the brief eval's new regression case (\"Regression, 6-7 Nov: loose quantities (Quillmoor sign-ups)\") with the mock model. The fixture is a reconstruction around the words the reports quote, labelled with its sources.",
+      },
+      { kind: "hand", why: EVAL_RUN_10("brief, copy, persona, testPlan and imagery (whose cases make a brief first)") },
+    ],
+  },
+  // BUG-11 The brand name never reaches the image-prompt model
+  {
+    id: "BUG-11.1",
+    sprint: 10,
+    story: "BUG-11",
+    words: "Every text the image-prompt model is given (the brief, the palette's names, the tone and the do and don't rules) has the brand's whole name, its first word and their possessives taken out, however the input was built.",
+    checks: [
+      { kind: "ci", file: IMAGERY_CI, test: "takes out the whole name, its first word and their possessives, in any case, and keeps the sentence's sense" },
+      { kind: "ci", file: IMAGERY_CI, test: "forImageModel cleans every text the model is given: the brief, the palette's names, the tone and the do and don't rules, and the market notes' names" },
+      { kind: "ci", file: IMAGERY_CI, test: "a signed-off Fernhollow brief that names the brand, with a don't rule that does too, reaches the model with no form of the name" },
+      { kind: "ci", file: REGRESSION, test: "now no line the model is sent names the brand, whoever builds the input; the possessive keeps its sense" },
+    ],
+  },
+  {
+    id: "BUG-11.2",
+    sprint: 10,
+    story: "BUG-11",
+    words: "A picture prompt that names the brand in any form (lower case, capitals, possessive, the whole name) is refused, with the words named.",
+    checks: [
+      { kind: "ci", file: IMAGERY_CI, test: "finds the name in a prompt the same way" },
+      { kind: "ci", file: IMAGERY_CI, test: "the prompt checks refuse a prompt with the name in any form, and say which words" },
+      { kind: "ci", file: REGRESSION, test: "the prompt checks refuse the brand's name in every form; the check before the fix let lower case and capitals through" },
+    ],
+  },
+  {
+    id: "BUG-11.3",
+    sprint: 10,
+    story: "BUG-11",
+    words: "The imagery eval reads every line the model was given for the brand's name, and its regression case (the 7 Nov Fernhollow brief) fails a prompt that names the brand and passes the fix.",
+    checks: [
+      { kind: "ci", file: REGRESSION, test: "the clean-up before the fix left the short and possessive forms in the brief, and the eval's grader fails that prompt" },
+      { kind: "ci", file: REGRESSION, test: "the eval's regression case passes the fixed reply through the step, and fails a reply that names the brand" },
+      {
+        kind: "ci",
+        job: CI_FIRST_JOB,
+        note: "Its step \"Agent evals against the mock model\" runs the imagery eval's new regression case (\"Regression, 7 Nov: the brand's name in the brief (Fernhollow)\") with the mock model. The fixture is a reconstruction around the report's finding, labelled with its sources.",
+      },
+      { kind: "hand", why: EVAL_RUN_10("imagery") },
+    ],
+  },
+  // ---------------------------------------------------------------- Sprint 10b
+  // D-1 New brand
+  {
+    id: "D-1.1",
+    sprint: "10b",
+    story: "D-1",
+    words:
+      "\"Brightwater Kitchen\" with a category creates a brand in the reader's workspace (through createBrand() and asUser(), neither fictional nor simulated), opens its kit editor, and is listed on /brands. The empty states on /brands and /campaigns offer both New brand and Add demo brands.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title:
+          "D-1 #1: Brightwater Kitchen with a category is created in the reader's workspace, opens its kit editor and is listed on /brands; the empty states offer New brand and Add demo brands",
+        note: `${NEW_BRAND_JOURNEY} The short name fills itself in from the name; the kit editor has "Also known as" and no "Demo brand" pill; the database row is in the invitee's workspace, not fictional and not simulated.`,
+      },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #1 createBrand() makes the brand in the reader's workspace, neither fictional nor simulated, with no data" },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #1 the short name is filled in from the name" },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #1 a name with a category, short name and description passes, trimmed" },
+    ],
+  },
+  {
+    id: "D-1.2",
+    sprint: "10b",
+    story: "D-1",
+    words: "A short name another brand in the workspace already uses is refused with the field error (\"Already used by another brand.\"), and nothing is created.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #2: a short name another brand in the workspace uses is refused with the field error, and nothing is created",
+        note: "Brightwater Kitchen Two with Brightwater Kitchen's short name: the form's alert, the error beside Short name, the same address, and the workspace's brand count unchanged.",
+      },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #2 a short name another brand in the workspace uses is refused with the field error, and nothing is made" },
+    ],
+  },
+  {
+    id: "D-1.3",
+    sprint: "10b",
+    story: "D-1",
+    words: "An empty name, and a name of 81 characters, are refused with field errors (\"Give the brand a name.\", \"Name must be 80 characters or fewer.\"), and nothing is created.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #3: an empty name, and a name of 81 characters, are refused with field errors, and nothing is created",
+        note: "Each error beside the Name field, with focus on it; 80 characters clears the error; the workspace's brand count unchanged.",
+      },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #3 an empty name, and a name of 81 characters, are refused with the field's words; 80 is fine" },
+    ],
+  },
+  {
+    id: "D-1.4",
+    sprint: "10b",
+    story: "D-1",
+    words: "Hostile input: a name containing markup or SQL is stored as text and shown escaped. Another workspace never sees the brand (rule 7, a cross-workspace database test).",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #4: a name with markup and SQL is stored as text and shown escaped",
+        note: "The name is stored as typed, shown as text on /brands and on its page, no element is made from it and no script runs. Another workspace is the database test.",
+      },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #4 another workspace never sees, changes or removes the new brand" },
+      { kind: "ci", file: NEW_BRAND_DB, test: "D-1 #4 markup and SQL in a name are stored as text, exactly as typed" },
+      { kind: "ci", file: NEW_BRAND_LIB, test: "D-1 #4 a name with markup and SQL passes as text, unchanged" },
+    ],
+  },
+  {
+    id: "D-1.5",
+    sprint: "10b",
+    story: "D-1",
+    words: "The New brand form fits within 1.5 screens at 375 px. AA contrast and no sideways scroll at 375 and 1440 px.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-1 #5: the New brand form fits within 1.5 screens at 375 px, with AA contrast and no sideways scroll at 375 px and 1440 px",
+        note: "The Create brand button's bottom edge is within 1.5 screens of 812 px at 375 px; contrast and sideways scroll at both widths, with and without field errors.",
+      },
+    ],
+  },
+  // D-2 Fictional versus simulated, and a brand's own names
+  {
+    id: "D-2.1",
+    sprint: "10b",
+    story: "D-2",
+    words: "After the migration (brands.is_fictional and brands.own_names), Fernhollow and Quillmoor are fictional and simulated; a new brand is neither.",
+    checks: [
+      {
+        kind: "ci",
+        file: FICTIONAL_DB,
+        test: "D-2 #1 fictional versus simulated, after the migration",
+        note: "The columns and defaults, the backfill of the demo brands before the guard holds is_fictional, the demo loader and createBrand(), the guard (is_fictional never changes; is_simulated only to true), at most 5 own names, and another workspace.",
+      },
+      {
+        kind: "ci",
+        file: FICTIONAL_DB,
+        test: "review fix S1 (rule 2): a fictional brand has no own names: the database refuses them (23514) and updateBrand refuses them with a field error; the demo brands load",
+        note: "Review fix S1: the check brands_fictional_no_own_names (migration 20261110000002), updateBrand()'s field error, and the demo brands loading with none. The kit editor hides Also known as for a fictional brand.",
+      },
+    ],
+  },
+  {
+    id: "D-2.2",
+    sprint: "10b",
+    story: "D-2",
+    words: "A new brand with generated data shows \"Simulated data\" and no \"Demo brand\" pill. Its launch pack README makes no claim that the brand is fictional.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title: "D-2 #2: a new brand with generated data shows Simulated data and no Demo brand pill, and a demo brand still shows Demo brand",
+        note: "Brightwater Kitchen after D-3 #1, on /brands, its page, its kit editor and its languages page; the owner's Fernhollow kit editor still says Demo brand. The README's words are the unit test.",
+      },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #2 the launch pack README says the brand is fictional only when it is fictional, not when its data is simulated" },
+      { kind: "ci", file: "tests/db/pack.test.ts", test: "review fix 6: the README says the brand is fictional only for a simulated demo brand, and the legal lines only where the brand has them" },
+    ],
+  },
+  {
+    id: "D-2.3",
+    sprint: "10b",
+    story: "D-2",
+    words: "A brand with own name \"Brightwater\", whose market notes name Brightwater: a brief and a headline saying \"Brightwater\" pass. A different company in the same notes is still refused.",
+    checks: [
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 a brief saying Brightwater passes when it is an own name; Cairnwick Outdoor from the same notes is still refused" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 a headline saying Brightwater passes the copy checks; Cairnwick Outdoor is still refused" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 a translation saying Brightwater passes; Cairnwick Outdoor is still refused" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 an uploaded ad naming Brightwater passes the real-name rule; one naming Cairnwick Outdoor fails" },
+      { kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #3 refusableNames() drops the brand's name and its own names from the market notes' names, ignoring case and spacing" },
+      {
+        kind: "ci",
+        file: OWN_NAMES_FLOWS,
+        test: "D-2 #3 own names through the brief and copy repos (QA finding 7)",
+        note: "QA finding 7: Tidewell Moments (a real brand) with own name Brightwater and a market note naming Brightwater and Cairnwick Outdoor, through saveBriefEdit() and saveCopyEdit(): Brightwater passes in the brief, its campaign line and a copy set; Cairnwick Outdoor is refused.",
+      },
+    ],
+  },
+  {
+    id: "D-2.4",
+    sprint: "10b",
+    story: "D-2",
+    words: "Own names: more than 5, or an empty one, are refused with field errors. A name the brand also bans is refused.",
+    checks: [{ kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #4 own names: more than 5, or an empty one, are refused with field errors, and so is a name the brand also bans" }],
+  },
+  {
+    id: "D-2.5",
+    sprint: "10b",
+    story: "D-2",
+    words: "The imagery prompt contains neither the brand's name nor its own names (rule 8 and the picture check unchanged).",
+    checks: [{ kind: "ci", file: OWN_NAMES_LIB, test: "D-2 #5 the imagery prompt contains neither the brand's name nor its own names, and a prompt naming an own name is refused" }],
+  },
+  // D-3 Simulated data for a new brand
+  {
+    id: "D-3.1",
+    sprint: "10b",
+    story: "D-3",
+    words: "A profile with 3 products and 2,000 customers creates them, within 5% of the orders the generator promises. The customer summary shows counts and \"Simulated data\".",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title:
+          "D-3 #1: a profile of 3 products and 2,000 customers makes them, with the orders within 5% of the generator's promise, and the customer summary shows the counts and Simulated data",
+        note: `${NEW_BRAND_JOURNEY} Generate simulated data from the Products and data tab, the form's defaults, then the database's counts against profileToBrief()'s promise and the summary's figures.`,
+      },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #1 a profile with 3 products and 2,000 customers saves them, with the orders within 5% of the generator's promise, the brand simulated and its context synced" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #1 the brief follows the profile: customers, regions, busiest months and popularity; the data lands within 5% of its promised orders" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #1 Japan's regions: every customer is in one of the 8, and every region has customers" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 the region sets: the 12 UK regions, and Japan's 8 regions in order" },
+      {
+        kind: "ci",
+        file: REGION_NAMES_LIB,
+        test: "QA: Japan's places are ordinary words for a brand whose customers are there",
+        note: "QA finding (Japan's places): with Japan's regions, copy and translations saying Japanese, Tokyo or Kyushu-Okinawa pass and a market note naming Japan needs no declaration; with UK regions the name check is unchanged.",
+      },
+      {
+        kind: "ci",
+        file: "tests/lib/market-prompt.test.ts",
+        test: "QA: the country is Japan only when most customers are in Japan's regions",
+        note: "QA finding (the Market agent always researched the UK): the country comes from the brand's customers' regions, with a prompt test for each country in the same file.",
+      },
+    ],
+  },
+  {
+    id: "D-3.2",
+    sprint: "10b",
+    story: "D-3",
+    words: "The same profile, brand and day produces the same data.",
+    checks: [{ kind: "ci", file: PROFILE_LIB, test: "D-3 #2 the same profile, brand and day give the same data; another day or brand gives other data" }],
+  },
+  {
+    id: "D-3.3",
+    sprint: "10b",
+    story: "D-3",
+    words: "The Audience agent (mock model) finds sized segments for the new brand. Each size equals a direct SQL count.",
+    checks: [{ kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #3 the Audience agent (mock model) finds sized segments for the new brand, each size equal to a direct SQL count" }],
+  },
+  {
+    id: "D-3.4",
+    sprint: "10b",
+    story: "D-3",
+    words: "Refused: no products, 11 products, a price of 0 or more than £10,000, a customer count outside 500 to 20,000, or a brand that already has customers. Field errors, and nothing is saved.",
+    checks: [
+      {
+        kind: "browser",
+        spec: NEW_BRAND_SPEC,
+        title:
+          "D-3 #4: no products, a price of 0 or over £10,000, and a customer count outside 500 to 20,000 are refused with field errors and nothing saved; a brand with customers has no form",
+        note: "On a second new brand, Brightwater Pantry. 11 products can't be entered (Add a product stops at 10), so that refusal is the unit and flow tests'.",
+      },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #4 refused with field errors, and nothing saved: no products, 11 products, a price of 0 or over £10,000, and a customer count outside 500 to 20,000" },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #4 a brand that already has customers is refused, and nothing changes" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #4 refused with field errors: no products, 11 products, a price of 0 or over £10,000, and a customer count outside 500 to 20,000" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #4 the other fields' words: a product's name and popularity, the region set and the busiest months" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #4 prices are read from pounds as a person types them" },
+    ],
+  },
+  {
+    id: "D-3.5",
+    sprint: "10b",
+    story: "D-3",
+    words: "Hostile input: a product name with markup or SQL is stored as text. Another workspace's brand id is refused (rule 7).",
+    checks: [
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #5 another workspace's brand id, or a malformed one, is refused and nothing is saved in either workspace" },
+      { kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #5 a product name with markup or SQL is stored as text" },
+      { kind: "ci", file: PROFILE_LIB, test: "D-3 #5 a product name with markup or SQL is kept as text" },
+      {
+        kind: "ci",
+        file: "tests/lib/record-paths.test.ts",
+        test: "review fix N2: a malformed brand id on Generate simulated data is a 404; a real one is left alone",
+        note: "Review fix N2: /brands/<id>/simulated-data is a record page in src/proxy.ts.",
+      },
+    ],
+  },
+  {
+    id: "D-3.6",
+    sprint: "10b",
+    story: "D-3",
+    words: "Generating 20,000 customers finishes in under 20 seconds on CI. Measured in the flow test.",
+    checks: [{ kind: "ci", file: SIM_DATA_FLOWS, test: "D-3 #6 generating 20,000 customers finishes in under 20 seconds" }],
+  },
+  // D-4 The campaign's line: typed, or suggested and picked
+  {
+    id: "D-4.1",
+    sprint: "10b",
+    story: "D-4",
+    words: "Type a line, save it (a new version), send for sign-off, approve, Make creative (mock): every social and display ad's headline is the line.",
+    checks: [
+      {
+        kind: "browser",
+        spec: LINE_SPEC,
+        title: "D-4 #1: a typed line, saved as a new version and signed off, is the headline of every social and display ad Make creative makes",
+        note: "A Fernhollow brief: a line of 31 characters refused beside the field, then \"Walk further this winter\" as version 2, display added as version 3, signed off, then every ad's headline in the gallery.",
+      },
+      { kind: "ci", file: LINE_FLOWS, test: "D-4 #1 the line is signed off with the brief, and every paid-social and display headline is the line exactly; search keeps its own" },
+      {
+        kind: "ci",
+        file: "tests/lib/render-line-sizes.test.ts",
+        test: "728 × 90 leaderboard: the worst-case line is refused with the reason, with and without legal lines, for both kits",
+        note: "QA finding 6: a worst-case 30-character line in wide capitals is drawn as the headline of every paid-social and display size and layout, for both demo kits, with and without legal lines. Every size holds it except the 728 × 90 leaderboard, which refuses the size with its reason (pinned here, reported to Rory); ordinary 30-character lines fit it.",
+      },
+    ],
+  },
+  {
+    id: "D-4.2",
+    sprint: "10b",
+    story: "D-4",
+    words:
+      "Suggest lines (mock) shows 3 lines, each 30 characters or fewer. Picking one saves it as a new version and resets sign-off as editing does today. (The cut line: Rory's answer Q1.)",
+    checks: [
+      {
+        kind: "browser",
+        spec: SUGGEST_SPEC,
+        title: "D-4 #2: Suggest lines (mock) shows 3 lines of 30 characters or fewer; picking one saves it as a new version and resets sign-off as editing does",
+        note: "The cost on the button before the click; Use this line as version 2; signed off; then Edit first on a second suggestion as version 3, with version 2 still signed off and version 3 to send.",
+      },
+      { kind: "ci", file: SUGGEST_AGENTS, test: "D-4 Suggest lines (the cut line): the Tagline agent with a campaign's context" },
+      {
+        kind: "ci",
+        file: SUGGEST_AGENTS,
+        test: "D-4 #2 review fix B1: a reply with a line holding a figure is repaired once, then the run fails with the reason and nothing is saved",
+        note: "Review fix B1: the Tagline agent's check, with a campaign, refuses figures, quantities in words and names other than the brand's own, so the repair asks again.",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #2 review fix B1: with a campaign, the Tagline agent's check refuses figures, quantities and names other than the brand's own; the home card is unchanged",
+      },
+    ],
+  },
+  {
+    id: "D-4.3",
+    sprint: "10b",
+    story: "D-4",
+    words: "A line of 31 characters is refused with a field error. A line with a banned term, or naming a company from the market notes, is refused by the brief checks.",
+    checks: [
+      { kind: "ci", file: LINE_LIB, test: "D-4 #3 a line of 31 characters is refused with the field's words; 3 to 30 characters pass, trimmed" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #3 a line with a banned term, a claim that needs evidence, or a company from the market notes is refused by the brief checks" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #3 the line is a section of the brief: versioned, compared and edited like the others" },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #3 review fix B1: a line with a figure or a quantity in words is refused by the brief checks, even as a person's edit",
+        note: "Review fix B1 (rules 1 and 2): a hand edit's allowUnsourcedNumbers no longer lets a figure into the line (\"Loved by 10,000 cooks\").",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #3 review fix B1: a line naming another company, quoting anyone or showing a rating is refused; the brand's own names pass",
+      },
+      {
+        kind: "ci",
+        file: OWN_NAMES_FLOWS,
+        test: "D-4 #3 review fix B1: a person's line with a figure, or naming another company, is refused by saveBriefEdit, and no version is saved",
+        note: "Through the repo, on a real brand's campaign: the figure, another company's name and a quote are refused; its own name is the D-2.3 test in the same file.",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #3 review fix N5: a line with a line break, a tab or a control character is refused with a field error",
+      },
+    ],
+  },
+  {
+    id: "D-4.4",
+    sprint: "10b",
+    story: "D-4",
+    words: "A brief with no line works as today. The existing creative specs pass unchanged.",
+    checks: [
+      { kind: "ci", file: LINE_FLOWS, test: "D-4 #4 a brief with no line works as today: Make creative writes the alternatives' own headlines" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #4 a brief with no line works as today: old versions parse, and Copy writes its own headlines" },
+      {
+        kind: "ci",
+        job: E2E_JOB,
+        note: "The existing creative specs (creative.spec.ts, creative-gallery.spec.ts, several-audiences.spec.ts, languages.spec.ts and launch-pack.spec.ts) set no line and run unchanged in this job.",
+      },
+    ],
+  },
+  {
+    id: "D-4.5",
+    sprint: "10b",
+    story: "D-4",
+    words: "A Copy reply whose headline differs from the line is repaired once, then the set is refused.",
+    checks: [
+      { kind: "ci", file: LINE_AGENTS, test: "D-4 #5 a Copy reply whose headline differs from the line is repaired once, naming the line" },
+      { kind: "ci", file: LINE_AGENTS, test: "D-4 #5 a Copy reply off the line twice is refused, and the step fails with the reason" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #5 with a line, every paid-social and display headline must be the line exactly; search keeps its own" },
+      { kind: "ci", file: LINE_LIB, test: "D-4 #5 the copy rules hold the line for a person's edit too" },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #5 review fix B1: a line headline is still held to banned terms, claims and the market notes' companies added after sign-off",
+        note: "Review fix B1: only the length and voice checks are skipped for a line headline; the kit and market notes can change after sign-off.",
+      },
+      {
+        kind: "ci",
+        file: LINE_LIB,
+        test: "D-4 #5 review fix B1: the line's words aren't the brand's: a body copying a name from the line is refused",
+      },
+    ],
+  },
+  {
+    id: "D-4.6",
+    sprint: "10b",
+    story: "D-4",
+    words: "A translated campaign uses the same translated line in every ad of that language.",
+    checks: [{ kind: "ci", file: LINE_FLOWS, test: "D-4 #6 a translated campaign uses the same translated line in every ad of that language" }],
+  },
+  {
+    id: "D-4.7",
+    sprint: "10b",
+    story: "D-4",
+    words: "Hostile input: a line telling the model to ignore its instructions is treated as data. The Tagline agent's existing injection cases still pass.",
+    checks: [
+      { kind: "ci", file: LINE_AGENTS, test: "D-4 #7 a line telling the model to ignore its instructions is data: it is quoted in the prompt as data, used word for word, and an obedient reply fails" },
+      { kind: "ci", file: "tests/agents/run.test.ts", test: "S1-5 #7: hostile brand names are rejected or stored as plain text, and output still validates" },
+      {
+        kind: "ci",
+        file: SUGGEST_AGENTS,
+        test: "D-4 #7 hostile input in the campaign's story is data: quoted in the prompt as JSON, and an obedient reply fails",
+        note: "Suggest lines' part, on the cut line with D-4.2.",
+      },
+    ],
+  },
+  // D-5 Rule 2, as answered
+  {
+    id: "D-5.1",
+    sprint: "10b",
+    story: "D-5",
+    words: "The case list's guard finds no real company names in seeds and fixtures. Existing CI check, extended to the new fixtures.",
+    checks: [
+      { kind: "ci", file: NAMES_LIB, test: "D-5 #1 no real company names in the seeds and fixtures, Sprint 10b's new fixtures and tests included" },
+      { kind: "ci", file: NAMES_LIB, test: "D-5 #1 the check finds a real name in any case and form, and only as a whole name" },
+      { kind: "ci", file: NAMES_LIB, test: "D-5 rule 2 is reworded as Rory answered, with a decision record, and the README no longer says every brand is fictional" },
+      {
+        kind: "ci",
+        file: NAMES_LIB,
+        test: "D-5 the sign-in, invite and welcome pages and the sign-in email say the demo brands are fictional, never every brand, and that a brand you add may be real",
+        note: "QA finding (rule 1): the copy Rory reads while signing in said every brand is fictional. The check also scans every file under src/app, src/components, src/lib/auth and src/lib/email, and the README.",
+      },
+      { kind: "ci", file: NAMES_LIB, test: "D-5 the check for 'every brand is fictional' catches the old sentences and passes the new ones" },
+      { kind: "ci", file: "tests/lib/demo-generate.test.ts", test: "S2-4 #7: no real company, product or trademark names; the kit is valid" },
+    ],
+  },
+  // D-6 Run-through on production (by hand, Rory)
+  {
+    id: "D-6.1",
+    sprint: "10b",
+    story: "D-6",
+    words: "After the deploy, Rory runs the demo journey on production with real models, as his own brand, from a new brand to 14 simulated days on the Performance page.",
+    checks: [
+      {
+        kind: "hand",
+        why: `CI runs the mock model and has no real keys, so the journey with real models (a brand of Rory's own with its kit, simulated data and audiences, market notes, a campaign with its line, typed or suggested, the brief, sign-off, personas and the test plan, creative, the pre-test, the launch pack, launch, and the Performance page over 14 simulated days) is checked by Rory on production after the deploy on the evening of 10 November 2026, before the demo at 08:45 on 11 November, with DAILY_CAP_PENCE raised in Vercel for 10 and 11 November. Each step and its expected cost are in ${HAND_PACK_10B}.`,
       },
     ],
   },

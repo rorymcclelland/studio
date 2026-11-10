@@ -104,7 +104,7 @@ export async function executePictureCheckRun(ctx: StepContext, step: StepTools):
       alreadyChecked: p.skipped,
     };
     await systemStep(ctx, 2 + p.jobs.length, "Save the results", true, { pictures: p.jobs.length }, record, null, started);
-    const output = { summary, ...record, campaignId: p.campaignId, href: `/campaigns/${p.campaignId}#creative`, hrefLabel: "See the campaign" };
+    const output = { summary, ...record, campaignId: p.campaignId, href: `/campaigns/${p.campaignId}/creative`, hrefLabel: "See the campaign" };
     if (capped) {
       await setRun(ctx, "stopped_cap", { output, error: `Daily AI cap reached: ${ok.length} of ${plural(p.jobs.length, "picture")} checked.` });
       return "stopped_cap";

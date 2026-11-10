@@ -13,18 +13,24 @@
 // SHOTS_DIR=<folder> saves a screenshot of each.
 import { expect, test, type Page } from "@playwright/test";
 import {
+  adTool,
   caption,
   contrastViolations,
   demoBrandId,
   expectNoHorizontalScroll,
   makeCreative,
   newCampaign,
+  openAdMenu,
+  openStage,
   saveShot,
   settle,
   signIn,
   signOffVersion,
+  stagePath,
   step,
   untilShown,
+  openPickedChecks,
+  showAllAds,
 } from "./helpers";
 
 const OBJECTIVE = "Bring lapsed savers back to the Plus plan in January";
@@ -82,21 +88,28 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
   await caption(page, "A signed-off Quillmoor brief, then Make creative (simulated pictures)");
   await page.goto("/campaigns");
   await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
-  await page.getByLabel("Objective").fill(OBJECTIVE);
-  await page.getByRole("button", { name: "Write the brief" }).click();
+  // U10-8: the list's filters have a Brand too, so the form is found by its region.
+  const form = page.getByRole("region", { name: "New campaign" });
+  await form.getByLabel("Brand").selectOption({ label: "Quillmoor Money" });
+  await form.getByLabel("Objective").fill(OBJECTIVE);
+  await form.getByRole("button", { name: "Write the brief" }).click();
+  // It opens on the overview (U10-2); the brief and its sign-off are on the Brief stage.
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
+  const path = new URL(page.url()).pathname;
+  await openStage(page, "brief", path);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
   const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
   await panel.getByRole("button", { name: "Send version 1 for sign-off" }).click();
   await expect(toast(page, "Sent for sign-off")).toBeVisible();
   await panel.getByRole("button", { name: "Approve version 1" }).click();
   await expect(toast(page, "Version 1 signed off.")).toBeVisible();
-  // Read the signed-off page afresh (as F-26 does): on a slow dev server the action's re-render can lag.
-  await page.reload();
-  await settle(page);
+  // The ads are made on the Creative stage, opened afresh after the sign-off.
+  await openStage(page, "creative", path);
   await creative(page).getByRole("button", { name: /^Make creative/ }).click();
   await untilShown(page, () => expect(ads(page)).toHaveCount(12, { timeout: 10_000 }));
+  // U10-3: every ad shown, and the checks on the picked ads (Languages among them) opened.
+  await showAllAds(page);
+  await openPickedChecks(page);
 
   // Before anything is picked, Translate the picked ads says why it can't run.
   await caption(page, "Before anything is picked, Translate says why it can't run");
@@ -110,9 +123,13 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
   const first = ads(page).first();
   const words = (await first.getAttribute("data-words"))!;
   expect(words).toMatch(/^[0-9a-f-]{36}$/);
-  await first.getByRole("button", { name: "Pick ad 1" }).click();
+  const pick = await adTool(first, "pick");
+  await expect(pick).toHaveAccessibleName("Pick ad 1");
+  await pick.click();
   // Server actions re-render the campaign page; on a busy dev server that can take several seconds.
   await expect(toast(page, "Picked for the shortlist.")).toBeVisible({ timeout: 30_000 });
+  // U10-3: Translate, the translations and About the ad are in the card's More menu.
+  await openAdMenu(first, "more");
   const translate = first.getByRole("button", { name: /^Translate\s*\((about \d+p|under 1p), at most \d+p\)$/ });
   await expect(translate).toBeEnabled({ timeout: 30_000 });
   await translate.click();
@@ -137,6 +154,7 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
 
   // #1: the German translation carries the kit's German legal lines (never machine-translated), shown in the ad's details.
   await caption(page, "C7-2.1: the German translation carries the brand's German legal lines");
+  await openAdMenu(first, "more");
   await first.locator("summary").filter({ hasText: "About ad 1" }).click();
   const german = first.locator("[data-translation-words=de-DE]");
   await expect(german).toBeVisible();
@@ -146,6 +164,7 @@ test("C7-2: the demo brand's languages, Translate on a picked ad, machine-transl
 
   // #2: the German ad in every size of its channel, badged, with the language switcher.
   await caption(page, "C7-2.2: the German ad drawn in all four sizes of its channel, each with its checks");
+  await openAdMenu(first, "more");
   await first.locator("[data-translation=de-DE] a").click();
   await page.waitForURL(/\/sizes\?lang=de-DE$/);
   await settle(page);
@@ -189,13 +208,16 @@ test(
     let campaignPath = "";
 
     await step(page, "A signed-off Fernhollow brief and its ads (simulated pictures)", async () => {
-      campaignPath = await newCampaign(page, "Fernhollow Outfitters", "Win back lapsed customers for the winter range in three more languages");
+      campaignPath = stagePath(await newCampaign(page, "Fernhollow Outfitters", "Win back lapsed customers for the winter range in three more languages"), "creative");
       await signOffVersion(page, 1);
       await makeCreative(page, 12);
     });
 
     await step(page, "Pick an ad: French, German and Spanish are all offered", async () => {
-      await ads(page).first().getByRole("button", { name: "Pick ad 1" }).click();
+      await openPickedChecks(page);
+      const pick = await adTool(ads(page).first(), "pick");
+      await expect(pick).toHaveAccessibleName("Pick ad 1");
+      await pick.click();
       await expect(toast(page, "Picked for the shortlist.")).toBeVisible({ timeout: 30_000 });
       await expect(bar.locator("[data-language]")).toHaveText(["French", "German", "Spanish"]);
       await expect(bar.getByRole("button", { name: /^Translate the picked ads/ })).toBeEnabled({ timeout: 30_000 });
@@ -216,6 +238,7 @@ test(
       await step(page, "C7-2.5: back on the campaign, German is left out and the reason shows beside Translate", async () => {
         await page.goto(campaignPath);
         await settle(page);
+        await openPickedChecks(page);
         await expect(bar.locator("[data-language=de-DE]")).toHaveText("German: no legal lines");
         const note = bar.locator("[data-translate-note]");
         await expect(note).toHaveText(/^German is left out: .*no German legal lines, so its ads can't go out in German/);

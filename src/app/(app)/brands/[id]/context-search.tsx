@@ -27,11 +27,7 @@ export function ContextSearch({
       <h2 id="search" className="text-2xl font-strong tracking-tight">
         Search what Studio knows
       </h2>
-      <p className="mt-1 max-w-prose text-ink-2">
-        The Business Context store holds this brand&apos;s kit, products and customer summaries. Agents read it from
-        here.
-      </p>
-      <Form action="" scroll={false} role="search" className="mt-5 flex flex-col gap-3 sm:flex-row sm:items-end">
+      <Form action="" scroll={false} role="search" className="mt-3 flex flex-row items-end gap-3">
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <label htmlFor="context-q" className="font-semibold">
             Search the context for {brandName}
@@ -42,17 +38,18 @@ export function ContextSearch({
             type="search"
             defaultValue={query}
             maxLength={MAX_QUERY}
-            placeholder="For example, lapsed or waterproof"
+            placeholder="For example, lapsed"
             autoComplete="off"
           />
         </div>
         <Button>Search</Button>
       </Form>
 
-      <div className="mt-5">
+      <div className="mt-3">
         {!query ? (
           <p className="text-sm text-ink-2">
-            Search by word or phrase: a product, a rule, a segment such as &ldquo;lapsed&rdquo; or &ldquo;repeat&rdquo;.
+            Search by word or phrase in the kit, products and customer summaries that agents read: a product, a rule,
+            a segment such as &ldquo;lapsed&rdquo; or &ldquo;repeat&rdquo;.
           </p>
         ) : (
           <>

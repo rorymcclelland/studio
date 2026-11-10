@@ -283,3 +283,25 @@ About ten days, with the brand page and runs list joining (Q6). U10-2 is the ris
 | Q8 | No mock-up; judge from the demo | No design step before U10-2 |
 
 U10-1 to U10-8, BUG-4 and BUG-11 are Ready, Sprint 10. Building starts when Rory says go.
+
+### Answer during the build (9 November)
+
+| # | Question | Answer | Effect |
+| --- | --- | --- | --- |
+| B1 | Four pages are over the budgets with no story: the kit editor (7.2 screens at 375 px), brand languages (Save 3.4 screens down), the campaigns list (about 6.2 screens with the suite's campaigns) and the approvals inbox (first Approve 1.9 screens down) | Fold them into existing stories | U10-7 takes the kit editor and languages (compact list rows, Save always on screen); U10-8 takes the campaigns list (filters and paging, like the runs list); U10-5 takes the approvals inbox (a sign-off card shows a summary, with the personas and test plan on request). About a day more |
+| B2 | BUG-4 and BUG-11's real-model check costs up to about £3.14 in five runs, not the 60p estimated | All five runs | Runs on `sprint-10-bugs`, each capped at £1; reports on `e2e-results/evals/sprint-10-bugs` |
+
+### Answers after QA and review (10 November)
+
+The independent QA found the Performance page's length depended on the launch's dates (every unseen alert was shown in full, and a window with Black Friday or bank holidays adds alerts), and that the Creative gallery's 4 columns at 1440 px left the fourth empty with three ads per group.
+
+| # | Question | Answer | Effect |
+| --- | --- | --- | --- |
+| R1 | How should the Performance page handle many alerts? | The newest 3 unseen alerts in full, the rest one line each, with "Show all N alerts" | U10-4: the page is bounded whatever the dates; its length test is also pinned to a launch start with no calendar events |
+| R2 | Creative gallery columns at 1440 px | 3 columns at 1440 px | U10-3: rows are always full (3, or 3 and 3); "three ads per group" stands |
+
+The review's should-fix items (the campaigns list's cursor, and the spend meter's app-wide figures read only for the owner) are fixed; see the commit "Sprint 10 review fixes".
+
+### Sign-off and release approval (Rory, 10 November, 09:42)
+
+Rory approved in advance Sprint 10's sign-off, its production database change (`20261109000001_spend_meter.sql`) and its merge, on the conditions recorded in docs/refinement/sprint-10b.md (CI fully green, no QA or review blocker, the migration's fingerprint matches, no production errors after the deploy). He still gets the demo page before the merge and can hold it.

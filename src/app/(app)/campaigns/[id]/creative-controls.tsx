@@ -87,11 +87,47 @@ export function MakeCreativeButton({
   );
 }
 
-type AdProps = {
+/** U10-3: Pick or Unpick, on the card's face (a mark only: nothing is published or spent). */
+export function PickButton({ campaignId, variantId, number, picked }: { campaignId: string; variantId: string; number: number; picked: boolean }) {
+  const { run, pending, error } = useBriefAction();
+  return (
+    <>
+      <Button
+        type="button"
+        size="sm"
+        variant="quiet"
+        disabled={pending}
+        aria-label={picked ? `Unpick ad ${number}` : `Pick ad ${number}`}
+        onClick={() => run(() => pickAd(campaignId, variantId, !picked))}
+      >
+        {pending ? "Saving…" : picked ? "Unpick" : "Pick"}
+      </Button>
+      {error && (
+        <div className="basis-full">
+          <ActionError error={error} />
+        </div>
+      )}
+    </>
+  );
+}
+
+/** U10-3: Discard, in the card's More menu (not offered while a launch holds the ad). */
+export function DiscardAdButton({ campaignId, variantId, number }: { campaignId: string; variantId: string; number: number }) {
+  const { run, pending, error } = useBriefAction();
+  return (
+    <div className="flex min-w-0 flex-col items-start gap-2">
+      <Button type="button" size="sm" variant="quiet" disabled={pending} aria-label={`Discard ad ${number}`} onClick={() => run(() => discardAd(campaignId, variantId))}>
+        {pending ? "Discarding…" : "Discard"}
+      </Button>
+      <ActionError error={error} />
+    </div>
+  );
+}
+
+type EditProps = {
   campaignId: string;
   variantId: string;
   number: number;
-  picked: boolean;
   layout: string;
   layouts: { id: string; name: string }[];
   estimates: { newPicture: string; newWords: string };
@@ -105,8 +141,12 @@ type AdProps = {
   olderKit: boolean;
 };
 
-/** The layout switcher, Redraw with current kit (F-26), Pick, Discard, New picture, New words and Edit words for one ad. */
-export function AdControls(p: AdProps) {
+/**
+ * U10-3: the card's Edit menu: the layout switch, Redraw with current kit
+ * (F-26, older kit only), New picture, New words and Edit words for one ad.
+ * Not offered while a launch holds the ad (the server refuses them too).
+ */
+export function EditTools(p: EditProps) {
   const { run, pending, error } = useBriefAction();
   const [doing, setDoing] = useState<string | null>(null);
   const go = (what: string, call: () => Promise<BriefActionState>) => {
@@ -142,12 +182,12 @@ export function AdControls(p: AdProps) {
         </div>
       </fieldset>
 
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-1 gap-2">
         {p.olderKit && (
           <Button
             type="button"
             size="sm"
-            className="col-span-2 flex-wrap px-3"
+            className="flex-wrap px-3"
             disabled={pending || !!p.busy.picture}
             aria-label={`Redraw ${name} with the current kit, no AI cost`}
             onClick={() => go("redraw", () => redrawAd(p.campaignId, p.variantId))}
@@ -159,27 +199,7 @@ export function AdControls(p: AdProps) {
           type="button"
           size="sm"
           variant="quiet"
-          disabled={pending}
-          aria-label={p.picked ? `Unpick ${name}` : `Pick ${name}`}
-          onClick={() => go("pick", () => pickAd(p.campaignId, p.variantId, !p.picked))}
-        >
-          {busyNow("pick") ? "Saving…" : p.picked ? "Unpick" : "Pick"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="quiet"
-          disabled={pending}
-          aria-label={`Discard ${name}`}
-          onClick={() => go("discard", () => discardAd(p.campaignId, p.variantId))}
-        >
-          {busyNow("discard") ? "Discarding…" : "Discard"}
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="quiet"
-          className="col-span-2 flex-wrap px-3"
+          className="flex-wrap px-3"
           disabled={pending || !!p.busy.picture}
           aria-label={p.busy.picture ? `Drawing a new picture for ${name}` : `New picture for ${name}, ${p.estimates.newPicture}`}
           onClick={() => go("picture", () => newAdPicture(p.campaignId, p.variantId))}
@@ -190,7 +210,7 @@ export function AdControls(p: AdProps) {
           type="button"
           size="sm"
           variant="quiet"
-          className="col-span-2 flex-wrap px-3"
+          className="flex-wrap px-3"
           disabled={pending || !!p.busy.words || p.pendingWords}
           aria-label={
             p.busy.words
@@ -204,8 +224,7 @@ export function AdControls(p: AdProps) {
           {busyNow("words") ? "Starting…" : p.busy.words ? "Writing new words…" : <Costed label="New words" estimate={p.estimates.newWords} />}
         </Button>
         <WordsDialog
-          className="col-span-2"
-          openLabel="Edit words"
+          openLabel="Edit the words"
           openAriaLabel={`Edit the words for ${name}`}
           disabled={pending || !!p.busy.words || p.pendingWords}
           title={`Edit the words for ad ${p.number}`}
@@ -216,7 +235,7 @@ export function AdControls(p: AdProps) {
           }
           fields={p.fields}
           initial={p.words}
-          save={(values) => editAdWords(p.campaignId, p.variantId, values as AdProps["words"])}
+          save={(values) => editAdWords(p.campaignId, p.variantId, values as EditProps["words"])}
         />
       </div>
       {p.usedIn > 1 && <p className="text-sm text-ink-2">Words used in {p.usedIn} ads: New words and Edit words change them all.</p>}
@@ -316,7 +335,18 @@ export function RedrawAllButton({ campaignId, count }: { campaignId: string; cou
 }
 
 /** Keep the new words or the old, after New words on an ad. */
-export function KeepWordsButtons({ campaignId, variantId, usedIn }: { campaignId: string; variantId: string; usedIn: number }) {
+export function KeepWordsButtons({
+  campaignId,
+  variantId,
+  usedIn,
+  locked = null,
+}: {
+  campaignId: string;
+  variantId: string;
+  usedIn: number;
+  /** U10-3: why the new words can't be kept yet (a launch holds an ad on these words); the old ones can be. */
+  locked?: string | null;
+}) {
   const { run, pending, error } = useBriefAction();
   const [doing, setDoing] = useState<"new" | "old" | null>(null);
   const keep = (k: "new" | "old") => {
@@ -326,16 +356,18 @@ export function KeepWordsButtons({ campaignId, variantId, usedIn }: { campaignId
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap gap-2">
-        <Button type="button" size="sm" disabled={pending} onClick={() => keep("new")}>
-          {pending && doing === "new" ? "Keeping…" : "Keep the new words"}
-        </Button>
+        {!locked && (
+          <Button type="button" size="sm" disabled={pending} onClick={() => keep("new")}>
+            {pending && doing === "new" ? "Keeping…" : "Keep the new words"}
+          </Button>
+        )}
         <Button type="button" size="sm" variant="quiet" disabled={pending} onClick={() => keep("old")}>
           {pending && doing === "old" ? "Keeping…" : "Keep the old words"}
         </Button>
       </div>
       <p className="text-sm">
-        {usedIn > 1 ? `Either choice applies to all ${usedIn} ads that use these words. ` : ""}New words and Edit words wait until
-        you choose.
+        {locked ??
+          `${usedIn > 1 ? `Either choice applies to all ${usedIn} ads that use these words. ` : ""}New words and Edit words wait until you choose.`}
       </p>
       <ActionError error={error} />
     </div>

@@ -152,8 +152,8 @@ Evidence: 532 unit, database and agent tests and 55 end-to-end specs; CI green o
 | F-28 | The `postgres` 3.4.9 patch (decision 0016): report the three bugs upstream, drop the patch when a release fixes them, and watch production's logs for connection errors for a week (behaviour under a real Vercel suspension is unverified) | Cutover day | Backlog, from Sprint 6 review; Ready, Sprint 7 |
 | F-29 | `NEON_API_KEY` is a repository secret, so CI on any branch can fetch any branch's connection string, production's included. Move the CI job to a GitHub environment or use a narrower key | Sprint 6 review, note | Done, 5 Nov 2026 with F-34: `NEON_API_KEY` is now a key scoped to the CI project only |
 | F-34 | Neon alert (early November): `campaign-studio` reached 100% of its 1 GB storage, which blocks writes on production. Cause: CI's throwaway branches in the same project (production has written 48 MB in all). Fix: CI in its own Neon project, `campaign-studio-ci` (decision 0015 update); the old `ci` branch stays as `preview`'s parent | Neon alert, Rory, 5 Nov 2026 | Done, 5 Nov 2026 (merged as `85f4cc0` with Rory's approval; CI passed on the new project with his project-scoped key) |
-| F-31 | Try `postgres` 4.0.0 (released 29 Oct 2026, a rewrite of the connection code that checks for a closed connection before writing): upgrade on a branch, run the dropped-connection tests without the 3.4.9 patch, and drop the patch if they pass; keep it if not. Replaces reporting the 3.4.9 bugs upstream (F-28) | Sprint 7, F-28 | Backlog, from Sprint 7 (Rory, 2 Nov) |
-| F-30 | A database error caught inside an `asUser` callback could let later statements run on a connection that has reconnected, outside the transaction and its role. Don't swallow database errors there; optionally make a transaction refuse statements after its connection closes | Connection-fix review, note | Backlog, from Sprint 6 review |
+| F-31 | Try `postgres` 4.0.0 (released 29 Oct 2026, a rewrite of the connection code that checks for a closed connection before writing): upgrade on a branch, run the dropped-connection tests without the 3.4.9 patch, and drop the patch if they pass; keep it if not. Replaces reporting the 3.4.9 bugs upstream (F-28) | Sprint 7, F-28 | Ready, Sprint 11 (newest 4.x, half-day time-box) |
+| F-30 | A database error caught inside an `asUser` callback could let later statements run on a connection that has reconnected, outside the transaction and its role. Don't swallow database errors there; optionally make a transaction refuse statements after its connection closes | Connection-fix review, note | Ready, Sprint 11 (with F-31) |
 | F-23 | Folded: on this plan GitHub doesn't enforce required checks or reviewers on a private repository, so F-23 needs Vercel's own "wait for checks" or a plan change | Sprint 6 review | Folded into F-23 |
 
 ## Sprint 7: Creative II, sizes, languages and the launch pack (closed 3 November 2026)
@@ -227,8 +227,8 @@ F-16a's first real-model runs (6 and 7 November; reports on `e2e-results/evals/s
 
 | ID | Item | Source | Status |
 | --- | --- | --- | --- |
-| BUG-2 | Audience on Haiku: 0 of 4. Two replies aren't valid JSON; two put numbers in segment text, which the checks refuse | F-16a run B | Backlog, from F-16a's run |
-| BUG-3 | Persona on Haiku: 0 of 4. Two replies aren't valid JSON; two fail in the brief step (BUG-4) | F-16a run B | Backlog, from F-16a's run |
+| BUG-2 | Audience on Haiku: 0 of 4. Two replies aren't valid JSON; two put numbers in segment text, which the checks refuse | F-16a run B | Ready, Sprint 11 |
+| BUG-3 | Persona on Haiku: 0 of 4. Two replies aren't valid JSON; two fail in the brief step (BUG-4) | F-16a run B | Ready, Sprint 11 |
 | BUG-4 | The brief's quantities-in-words check refuses "most of", "Many people", "a good share of" and "Plenty of customers", and the brief keeps writing them: it fails cases in brief, copy, persona, testPlan and imagery (whose cases make a brief first). The prompt and the check disagree | F-16a runs A, B and imagery part 2 | Backlog, from F-16a's run |
 | BUG-5 | Localise: 3 of 6. French and Spanish paid-social bodies don't fit 1080 × 1080 Full bleed; one French headline is 41 characters (limit 40) | F-16a run B | Backlog, from F-16a's run |
 | BUG-6 | Brief: the Quillmoor win-back brief mentions a guarantee; one insight cites more than the schema's four sources | F-16a run A | Backlog, from F-16a's run |
@@ -241,7 +241,9 @@ F-16a's first real-model runs (6 and 7 November; reports on `e2e-results/evals/s
 | F-36 | Every signed-in page scrolls sideways at 375 px while any model call is in flight: the header's spend meter (`src/components/spend-meter.tsx`) is one row that doesn't wrap, with 1 px to spare, and a spend reservation turns its pill from "Simulated" to "42.62p simulated" (387 px). That is why the design-system browser test failed on `main` after pull requests #2 and #3 and passed on a re-run: another spec's run has to be in flight at that moment (found by the UX audit, 8 Nov). It happens on production too | Sprint 9 deploy; UX audit | Folded into U10-1, Sprint 10 |
 | BUG-13 | Every campaign reads "Draft vN" on /campaigns and the brand page, whether it is live, signed off or waiting (`campaignStatus()` in `src/app/(app)/campaigns/campaign-list.tsx`) | UX audit, 8 Nov | Folded into U10-1, Sprint 10 |
 | BUG-14 | Out-of-date copy, against rule 1: the welcome page's "Coming next" lists compliance and Performance, which are built, and the test plan says the simulator "is not built yet" (campaign page and inbox) | UX audit, 8 Nov | Folded into U10-1, Sprint 10 |
-| F-35 | The monitor workflow's plan and answer steps catch every error, so a transient database or Inngest error becomes a permanent "AI unreached" refusal instead of a retry | BUG-10 investigation | Backlog, from Sprint 9 |
+| F-35 | The monitor workflow's plan and answer steps catch every error, so a transient database or Inngest error becomes a permanent "AI unreached" refusal instead of a retry | BUG-10 investigation | Ready, Sprint 11 |
+| BUG-15 | Persona named a real brand: in the Fernhollow product-launch case, the persona Marion names a real company, against rule 2 | F-16a runs for the Sprint 10 bug fixes (9 Nov, `e2e-results/evals/sprint-10-bugs`) | Backlog, from Sprint 10 |
+| F-37 | `discardCopySet` and `saveCopyEdit` don't check for a live or waiting launch on the server; the page only offers them for word sets with no ads, so nothing can reach them today | U10-3 build | Backlog, from Sprint 10 |
 
 ## Sprint 10: UX, shorter pages with the same look (refined and confirmed 9 November 2026)
 
@@ -260,19 +262,37 @@ Every page puts what needs a person at the top, in Studio's existing design. Fro
 | BUG-4 | The brief's quantities-in-words check and its prompt agree | S | Ready, Sprint 10 |
 | BUG-11 | The brand name never reaches the image-prompt model | S | Ready, Sprint 10 |
 
+F-16a runs for BUG-4 and BUG-11 (9 Nov, five runs with Rory's approval, £2.23 in all, reports on `e2e-results/evals/sprint-10-bugs`): no loose-quantity failures remain and the brand-name check passes. Remaining failures are BUG-6, BUG-3, one testPlan reply that isn't valid JSON and BUG-12; one new finding, BUG-15.
+
+## Sprint 11: Performance II, plus reliability (refined 9 November 2026)
+
+Campaigns that heal themselves: Studio forecasts fatigue, explains problems and proposes fixes, and a person approves every change. Every number is worked out by code; an AI model writes the explanations (Rory, Q1), checked figure by figure. Starts only after Sprint 10 is signed off and merged. Detail: `docs/refinement/sprint-11.md`.
+
+| ID | Item | Size | Status |
+| --- | --- | --- | --- |
+| F-31 with F-30 | The newest `postgres` 4.x driver (half a day, else keep 3.4.9 and its patch); no hidden database errors inside transactions | S | Ready, Sprint 11 |
+| F-35 | Monitor steps retry passing errors; when every retry fails: "Studio couldn't reach its database or the AI just now. Ask again." | S | Ready, Sprint 11 |
+| BUG-2, BUG-3 | Audience and Persona fixed in a set order; the check allows the segment definitions' own figures; an agent that still fails moves to Sonnet | M | Ready, Sprint 11 |
+| P11-1 | Fatigue forecast from the days so far, an estimate with a range | M | Ready, Sprint 11 |
+| P11-2 | Diagnostics: code finds the cause, an AI agent writes the plain "Why" | M | Ready, Sprint 11 |
+| P11-3 | Budget moves between ads on a live launch, each approved; the record of changes to a live launch | M (large) | Ready, Sprint 11 |
+| P11-4 | Swaps and pauses, each approved | M | Ready, Sprint 11 |
+| P11-5 | Studio proposes the fix: code chooses it, an AI agent explains it; one open proposal per launch | M (large) | Ready, Sprint 11 |
+| P11-6 | The test plan's sample sizes and run lengths (20% lift, 95% confidence, 80% power, as Studio's assumptions) | M | Ready, Sprint 11 |
+
 ## Not yet in a sprint (ranked)
 
 Re-ranked at the Sprint 9 close (8 November); Sprint 10 (UX) is above, with F-36, BUG-13, BUG-14, BUG-4 and BUG-11 folded in.
 
-1. BUG-2 and BUG-3: Audience and Persona on Haiku fail every case (M). May need a model change; refine with BUG-4's fix in place.
-2. F-30 with F-31: don't swallow database errors inside transactions; try `postgres` 4.0.0 (S).
-3. F-35: monitor steps retry transient errors instead of refusing (S).
+1. Sprint 11 (above): Performance II with BUG-2, BUG-3, F-30, F-31 and F-35.
+2. BUG-15 (S) and F-37 (S), from Sprint 10.
+3. (BUG-2, BUG-3, F-30, F-31 and F-35 moved into Sprint 11.)
 4. BUG-5, BUG-6, BUG-7, BUG-8, BUG-12: the other eval findings (S each).
 5. F-32: keep the results branch small (S).
 6. BUG-9: eval reports undercount errored cases (S).
 7. F-20, F-19, F-25, F-24, F-26, F-27, F-10 (S each), then F-9, the dark theme.
 8. The 1440 px header on one row (from the UX audit) (S).
-9. Sprint 11, Performance II (fatigue forecasts, swaps, diagnostics, budget, the test plan's sample sizes), and Sprint 12, the flywheel, demo mode and launch: each moves back one sprint.
+9. Sprint 12: the flywheel, demo mode and launch.
 10. Later-backlog items from the roadmap: multi-tenancy screens, Slack approvals, CSV import, Figma import, short video, live ad-platform connectors, skills authoring and role-based views.
 
 ## Decisions
@@ -305,3 +325,4 @@ Re-ranked at the Sprint 9 close (8 November); Sprint 10 (UX) is above, with F-36
 | 7 Nov 2026 | Sprint 9 signed off from the demo page (CI run 42297709001) and deployed with Rory's approval: three migrations applied to a trial branch, production and preview (each matches a fresh build in all 11 fingerprint parts), then pull request #3 merged to `main` as `94b9781` once its checks passed; GitHub refused the merge twice while checks were running (F-23 case 1); live 74 s after the merge (F-23 case 2); health OK, no runtime errors |
 | 8 Nov 2026 | Sprint 9 closed: F-23, P9-1 to P9-4, F-16a, F-28a and N-9a done (P9-4's real-model answers are Rory's hand check, N-9b); N-7a returned (12 Nov); new rows BUG-2 to BUG-12 from F-16a, BUG-13 and BUG-14 from the UX audit, F-35, F-36 and N-9b. Rory asked for a UX sprint next, before Performance II; its refinement starts with a page-length audit |
 | 9 Nov 2026 | Sprint 10 (UX: shorter pages with the same look) refined from the UX audit and confirmed: stage pages with a stage bar, opening on an overview; ad tools by state with launched ads locked; the tagline demo to a small card; BUG-4 and BUG-11 join; the brand page and runs list join; length budgets of 6 screens at 375 px and 4 at 1440 px; no mock-up first |
+| 9 Nov 2026 | Sprint 11 (Performance II plus BUG-2, BUG-3, F-30, F-31 and F-35) refined; Rory answered 13 questions: code works out every number and an AI model writes the explanations (against the recommendation); the rest as recommended; all nine items kept, accepting a longer sprint (about 12 days). Local test database started fresh before each long run (decision 0027) |

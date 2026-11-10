@@ -4,10 +4,11 @@
 // alert or campaign is the same refusal as one that isn't there.
 import type { Member } from "@/lib/agents/runs";
 import { asUser, type Tx } from "@/lib/db/scoped";
-import { ALERT_KINDS, alertLine, type Alert, type AlertKind } from "./alerts";
+import { ALERT_KINDS, ALERT_NAMES, alertLine, type Alert, type AlertKind } from "./alerts";
 import { launchAdsFor, type LaunchAd } from "./launch";
 
 export const ALERT_NOT_FOUND = "That alert isn't in your workspace.";
+export const ALERT_CAMPAIGN_NOT_FOUND = "That campaign isn't in your workspace.";
 
 export class AlertError extends Error {
   constructor(message: string) {
@@ -39,6 +40,18 @@ const ALERT_COLUMNS = (tx: Tx) => tx`
 
 type Row = Record<string, unknown>;
 
+/**
+ * An alert's line from its stored facts. Facts the line can't be worded from
+ * (an older or hand-written row) still give a plain line, never a broken page.
+ */
+function lineOf(alert: Alert, adNumber: number): string {
+  try {
+    return alertLine(alert, adNumber);
+  } catch {
+    return `${adNumber > 0 ? `Ad ${adNumber}` : "An ad no longer in the gallery"}: ${ALERT_NAMES[alert.kind]} on simulated day ${alert.day}. Its stored details can't be shown.`;
+  }
+}
+
 /** Alerts as people see them: each ad by its gallery number, each with its line. */
 function toViews(rows: Row[], numbers: Map<string, number>): AlertView[] {
   return rows.map((r) => {
@@ -52,7 +65,7 @@ function toViews(rows: Row[], numbers: Map<string, number>): AlertView[] {
       kind: r.kind as AlertKind,
       day: r.day as number,
       facts: r.facts as Alert["facts"],
-      line: alertLine(alert, adNumber),
+      line: lineOf(alert, adNumber),
       seenBy: (r.seen_by as string | null) ?? null,
       seenByName: r.seen_by ? ((r.seen_by_name as string | null) ?? null) : null,
       seenAt: (r.seen_at as Date | null) ?? null,
@@ -116,6 +129,34 @@ export async function markAlertSeen(member: Member, alertId: string): Promise<Al
   if (!read) throw new AlertError(ALERT_NOT_FOUND);
   const [view] = toViews([read as Row], await adNumbers(member.userId, read.campaign_id as string, read.ads as LaunchAd[]));
   return view;
+}
+
+/**
+ * U10-4: Mark all as seen. Marks every unseen alert of the launch the
+ * Performance view shows (live, else the newest ended, as listAlerts reads
+ * it) as seen by the member, now, in one statement guarded as markAlertSeen
+ * is ("and seen_at is null"), so two at once mark each alert once and an
+ * alert already seen keeps its who and when. Returns how many it marked (0
+ * with nothing to mark or no launch). A malformed, missing or another
+ * workspace's campaign is the same refusal, and nothing changes.
+ */
+export async function markAllAlertsSeen(member: Member, campaignId: string): Promise<number> {
+  if (typeof campaignId !== "string" || !UUID.test(campaignId)) throw new AlertError(ALERT_CAMPAIGN_NOT_FOUND);
+  const [r] = await asUser(member.userId, (tx) => tx`
+    with campaign as (
+      select c.id from public.campaigns c where c.id = ${campaignId}
+    ), launch as (
+      select l.id from public.launches l join campaign c on c.id = l.campaign_id
+      where l.status in ('live', 'ended')
+      order by (l.status = 'live') desc, l.created_at desc, l.id desc limit 1
+    ), marked as (
+      update public.performance_alerts a set seen_by = ${member.userId}, seen_at = now()
+      where a.launch_id = (select id from launch) and a.seen_at is null
+      returning a.id
+    )
+    select (select count(*) from campaign)::int as found, (select count(*) from marked)::int as n`);
+  if (!r || (r.found as number) === 0) throw new AlertError(ALERT_CAMPAIGN_NOT_FOUND);
+  return r.n as number;
 }
 
 /** Unseen alerts on the workspace's live launches, for Studio's home. */

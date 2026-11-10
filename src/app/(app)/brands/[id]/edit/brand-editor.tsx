@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState, useTransition } from "react";
 import { Button, ButtonLink } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { cx } from "@/components/ui/cx";
@@ -9,9 +9,10 @@ import { Input, Textarea } from "@/components/ui/input";
 import { useToast } from "@/components/ui/toast";
 import { useLeaveGuard } from "@/components/use-leave-guard";
 import { parseBrandInput } from "@/lib/brands/schema";
+import { brandTabHref } from "@/lib/brands/tabs";
 import { saveBrand, type BrandDraft } from "../../actions";
 
-type ListKey = "toneWords" | "doRules" | "dontRules" | "legalLines" | "bannedTerms" | "evidenceClaims";
+type ListKey = "toneWords" | "doRules" | "dontRules" | "legalLines" | "bannedTerms" | "evidenceClaims" | "ownNames";
 type Row = { key: number; value: string };
 type ColourRow = { key: number; name: string; hex: string };
 type Draft = Omit<Required<BrandDraft>, ListKey | "palette"> & Record<ListKey, Row[]> & { palette: ColourRow[] };
@@ -38,6 +39,7 @@ function toDraft(k: BrandDraft): Draft {
     legalLines: rows(k.legalLines),
     bannedTerms: rows(k.bannedTerms),
     evidenceClaims: rows(k.evidenceClaims),
+    ownNames: rows(k.ownNames),
     palette: (k.palette ?? []).map((c) => ({ key: nextKey++, name: c.name, hex: c.hex })),
   };
 }
@@ -59,6 +61,7 @@ function toInput(d: Draft): BrandDraft {
     legalLines: values(d.legalLines),
     bannedTerms: values(d.bannedTerms),
     evidenceClaims: values(d.evidenceClaims),
+    ownNames: values(d.ownNames),
   };
 }
 
@@ -81,7 +84,24 @@ function canonical(v: unknown): string {
   return JSON.stringify(v ?? null);
 }
 
-export function BrandEditor({ brandId, initial }: { brandId: string; initial: BrandDraft }) {
+/**
+ * The kit editor. `lead` (the logo section, which saves on its own) is shown
+ * above the form, inside the same block as the save bar, so the bar stays in
+ * view from the top of the page to the bottom (U10-1).
+ */
+export function BrandEditor({
+  brandId,
+  initial,
+  lead,
+  isFictional = false,
+}: {
+  brandId: string;
+  initial: BrandDraft;
+  lead?: React.ReactNode;
+  /** Review fix S1: a fictional demo brand has no other names (rule 2), so "Also known as" is not shown. */
+  isFictional?: boolean;
+}) {
+  const formId = useId();
   const [draft, setDraft] = useState<Draft>(() => toDraft(initial));
   const [baseline, setBaseline] = useState<BrandDraft>(initial);
   const [errors, setErrors] = useState<Errors>({});
@@ -169,209 +189,234 @@ export function BrandEditor({ brandId, initial }: { brandId: string; initial: Br
       setErrors({});
       setBaseline(input);
       toast({ message: res.done, tone: "good" });
-      leaveTo(`/brands/${brandId}`);
+      // U10-7: back to the brand page's Voice and visual tab, where most of the kit shows.
+      leaveTo(brandTabHref(brandId, "voice"));
     });
   }
 
   return (
-    <form onSubmit={onSubmit} noValidate className="space-y-6" aria-describedby={formError ? "form-error" : undefined}>
-      <Section id="identity" title="Identity" intro="How the brand is named and described to agents.">
-        <div className="grid gap-6 md:grid-cols-2">
-          <Field id={fieldId("name")} label="Name" hint="As customers see it." error={errors.name}>
-            <Input
-              value={draft.name}
-              maxLength={120}
-              onChange={(e) => {
-                set("name", e.target.value);
-                clearError("name");
-              }}
+    // Controls scrolled into view by focus stop above the sticky save bar, not under it.
+    <div className="space-y-4 [&_:is(input,textarea,select,button,a)]:scroll-mb-36">
+      {lead}
+      <form id={formId} onSubmit={onSubmit} noValidate className="space-y-4" aria-describedby={formError ? "form-error" : undefined}>
+        <Section id="identity" title="Identity" intro="How the brand is named and described to agents.">
+          <div className="grid gap-5 md:grid-cols-3">
+            <Field id={fieldId("name")} label="Name" hint="As customers see it." error={errors.name}>
+              <Input
+                value={draft.name}
+                maxLength={120}
+                onChange={(e) => {
+                  set("name", e.target.value);
+                  clearError("name");
+                }}
+              />
+            </Field>
+            <Field
+              id={fieldId("slug")}
+              label="Short name"
+              hint="Lower-case letters, numbers and hyphens. Agents and addresses use it."
+              error={errors.slug}
+            >
+              <Input
+                value={draft.slug}
+                maxLength={60}
+                autoCapitalize="none"
+                spellCheck={false}
+                onChange={(e) => {
+                  set("slug", e.target.value);
+                  clearError("slug");
+                }}
+              />
+            </Field>
+            <Field id={fieldId("category")} label="Category" hint="For example, outdoor apparel." error={errors.category}>
+              <Input
+                value={draft.category}
+                maxLength={80}
+                onChange={(e) => {
+                  set("category", e.target.value);
+                  clearError("category");
+                }}
+              />
+            </Field>
+            <Field
+              id={fieldId("description")}
+              label="Description"
+              hint="One or two sentences. Up to 500 characters."
+              error={errors.description}
+              className="md:col-span-3"
+            >
+              <Textarea
+                rows={2}
+                value={draft.description}
+                onChange={(e) => {
+                  set("description", e.target.value);
+                  clearError("description");
+                }}
+              />
+            </Field>
+          </div>
+          {!isFictional && (
+            <ListField
+              field="ownNames"
+              label="Also known as"
+              itemLabel="Own name"
+              hint="Other names this brand's ads may use, such as a parent brand's. Up to 5, 80 characters each."
+              max={5}
+              rows={draft.ownNames}
+              errors={errors}
+              onChange={(v) => set("ownNames", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
             />
-          </Field>
+          )}
+        </Section>
+
+        <Section id="voice" title="Voice" intro="How the brand sounds, and what it always or never does.">
+          <ListField
+            field="toneWords"
+            label="Tone words"
+            itemLabel="Tone word"
+            hint="Up to 12 words, 30 characters each."
+            max={12}
+            rows={draft.toneWords}
+            errors={errors}
+            onChange={(v) => set("toneWords", v)}
+            clearError={clearError}
+            clearListErrors={clearListErrors}
+            focusLater={focusLater}
+          />
           <Field
-            id={fieldId("slug")}
-            label="Short name"
-            hint="Lower-case letters, numbers and hyphens. Agents and addresses use it."
-            error={errors.slug}
-          >
-            <Input
-              value={draft.slug}
-              maxLength={60}
-              autoCapitalize="none"
-              spellCheck={false}
-              onChange={(e) => {
-                set("slug", e.target.value);
-                clearError("slug");
-              }}
-            />
-          </Field>
-          <Field id={fieldId("category")} label="Category" hint="For example, outdoor apparel." error={errors.category}>
-            <Input
-              value={draft.category}
-              maxLength={80}
-              onChange={(e) => {
-                set("category", e.target.value);
-                clearError("category");
-              }}
-            />
-          </Field>
-          <Field
-            id={fieldId("description")}
-            label="Description"
-            hint="One or two sentences. Up to 500 characters."
-            error={errors.description}
-            className="md:col-span-2"
+            id={fieldId("voiceNotes")}
+            label="Voice notes"
+            hint="Anything a writer should know. Up to 2,000 characters."
+            error={errors.voiceNotes}
           >
             <Textarea
               rows={3}
-              value={draft.description}
+              value={draft.voiceNotes}
               onChange={(e) => {
-                set("description", e.target.value);
-                clearError("description");
+                set("voiceNotes", e.target.value);
+                clearError("voiceNotes");
               }}
             />
           </Field>
-        </div>
-      </Section>
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ListField
+              field="doRules"
+              label="Do"
+              itemLabel="Do rule"
+              hint="Up to 20 rules, 300 characters each."
+              max={20}
+              long
+              rows={draft.doRules}
+              errors={errors}
+              onChange={(v) => set("doRules", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+            <ListField
+              field="dontRules"
+              label="Don't"
+              itemLabel="Don't rule"
+              hint="Up to 20 rules, 300 characters each."
+              max={20}
+              long
+              rows={draft.dontRules}
+              errors={errors}
+              onChange={(v) => set("dontRules", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
+            />
+          </div>
+        </Section>
 
-      <Section id="voice" title="Voice" intro="How the brand sounds, and what it always or never does.">
-        <ListField
-          field="toneWords"
-          label="Tone words"
-          itemLabel="Tone word"
-          hint="Up to 12 words, 30 characters each."
-          max={12}
-          rows={draft.toneWords}
-          errors={errors}
-          onChange={(v) => set("toneWords", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-        <Field
-          id={fieldId("voiceNotes")}
-          label="Voice notes"
-          hint="Anything a writer should know. Up to 2,000 characters."
-          error={errors.voiceNotes}
-        >
-          <Textarea
-            rows={4}
-            value={draft.voiceNotes}
-            onChange={(e) => {
-              set("voiceNotes", e.target.value);
-              clearError("voiceNotes");
-            }}
+        <Section id="visual" title="Visual" intro="The colours and type every design uses.">
+          <PaletteField
+            colours={draft.palette}
+            errors={errors}
+            onChange={(v) => set("palette", v)}
+            clearError={clearError}
+            clearListErrors={clearListErrors}
+            focusLater={focusLater}
           />
-        </Field>
-        <ListField
-          field="doRules"
-          label="Do"
-          itemLabel="Do rule"
-          hint="Up to 20 rules, 300 characters each."
-          max={20}
-          long
-          rows={draft.doRules}
-          errors={errors}
-          onChange={(v) => set("doRules", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-        <ListField
-          field="dontRules"
-          label="Don't"
-          itemLabel="Don't rule"
-          hint="Up to 20 rules, 300 characters each."
-          max={20}
-          long
-          rows={draft.dontRules}
-          errors={errors}
-          onChange={(v) => set("dontRules", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-      </Section>
+          {/* Answer B1: the two fonts share a row at every width. */}
+          <div className="grid grid-cols-2 gap-3 sm:gap-6">
+            <Field id={fieldId("fontPrimary")} label="Primary font" hint="For headings." error={errors.fontPrimary}>
+              <Input
+                value={draft.fontPrimary}
+                maxLength={80}
+                onChange={(e) => {
+                  set("fontPrimary", e.target.value);
+                  clearError("fontPrimary");
+                }}
+              />
+            </Field>
+            <Field id={fieldId("fontSecondary")} label="Secondary font" hint="For body text." error={errors.fontSecondary}>
+              <Input
+                value={draft.fontSecondary}
+                maxLength={80}
+                onChange={(e) => {
+                  set("fontSecondary", e.target.value);
+                  clearError("fontSecondary");
+                }}
+              />
+            </Field>
+          </div>
+        </Section>
 
-      <Section id="visual" title="Visual" intro="The colours and type every design uses.">
-        <PaletteField
-          colours={draft.palette}
-          errors={errors}
-          onChange={(v) => set("palette", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-        <div className="grid gap-6 md:grid-cols-2">
-          <Field id={fieldId("fontPrimary")} label="Primary font" hint="For headings." error={errors.fontPrimary}>
-            <Input
-              value={draft.fontPrimary}
-              maxLength={80}
-              onChange={(e) => {
-                set("fontPrimary", e.target.value);
-                clearError("fontPrimary");
-              }}
+        <Section id="legal" title="Legal" intro="What must always appear, what must never appear, and what needs proof.">
+          <ListField
+            field="legalLines"
+            label="Required legal lines"
+            itemLabel="Legal line"
+            hint="Up to 20 lines, 500 characters each."
+            max={20}
+            long
+            rows={draft.legalLines}
+            errors={errors}
+            onChange={(v) => set("legalLines", v)}
+            clearError={clearError}
+            clearListErrors={clearListErrors}
+            focusLater={focusLater}
+          />
+          <div className="grid gap-5 lg:grid-cols-2">
+            <ListField
+              field="bannedTerms"
+              label="Banned terms"
+              itemLabel="Banned term"
+              hint="Words or phrases agents must never use. Up to 50, 80 characters each."
+              max={50}
+              rows={draft.bannedTerms}
+              errors={errors}
+              onChange={(v) => set("bannedTerms", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
             />
-          </Field>
-          <Field id={fieldId("fontSecondary")} label="Secondary font" hint="For body text." error={errors.fontSecondary}>
-            <Input
-              value={draft.fontSecondary}
-              maxLength={80}
-              onChange={(e) => {
-                set("fontSecondary", e.target.value);
-                clearError("fontSecondary");
-              }}
+            <ListField
+              field="evidenceClaims"
+              label="Claims that need evidence"
+              itemLabel="Claim"
+              hint="Claims agents may only make with proof, such as “lightest”. Up to 20, 120 characters each."
+              max={20}
+              rows={draft.evidenceClaims}
+              errors={errors}
+              onChange={(v) => set("evidenceClaims", v)}
+              clearError={clearError}
+              clearListErrors={clearListErrors}
+              focusLater={focusLater}
             />
-          </Field>
-        </div>
-      </Section>
+          </div>
+        </Section>
+      </form>
 
-      <Section id="legal" title="Legal" intro="What must always appear, what must never appear, and what needs proof.">
-        <ListField
-          field="legalLines"
-          label="Required legal lines"
-          itemLabel="Legal line"
-          hint="Up to 20 lines, 500 characters each."
-          max={20}
-          long
-          rows={draft.legalLines}
-          errors={errors}
-          onChange={(v) => set("legalLines", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-        <ListField
-          field="bannedTerms"
-          label="Banned terms"
-          itemLabel="Banned term"
-          hint="Words or phrases agents must never use. Up to 50, 80 characters each."
-          max={50}
-          rows={draft.bannedTerms}
-          errors={errors}
-          onChange={(v) => set("bannedTerms", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-        <ListField
-          field="evidenceClaims"
-          label="Claims that need evidence"
-          itemLabel="Claim"
-          hint="Claims agents may only make with proof, such as “lightest”. Up to 20, 120 characters each."
-          max={20}
-          rows={draft.evidenceClaims}
-          errors={errors}
-          onChange={(v) => set("evidenceClaims", v)}
-          clearError={clearError}
-          clearListErrors={clearListErrors}
-          focusLater={focusLater}
-        />
-      </Section>
-
-      {/* Stays in view while editing on wider screens; on a phone it would hide
-          too much of the form, so it sits at the end. */}
-      <div className="z-10 flex flex-col gap-3 rounded-card bg-surface p-4 shadow-lg ring-1 shadow-ink/10 ring-line sm:sticky sm:bottom-3 sm:flex-row sm:items-center sm:px-6">
-        <div className="min-w-0 flex-1 text-sm">
+      {/* Stays in view while editing, at every width (U10-1). On a phone it is
+          one short line of status above the buttons, so it hides little of the form. */}
+      <div data-save-bar="" className="sticky bottom-3 z-10 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-card bg-surface px-4 py-3 shadow-lg ring-1 shadow-ink/10 ring-line sm:flex-nowrap sm:p-4 sm:px-6">
+        <div className="min-w-0 basis-full text-sm sm:flex-1 sm:basis-auto">
           {formError ? (
             <p id="form-error" role="alert" className="font-medium text-attention-ink">
               {formError}
@@ -383,19 +428,21 @@ export function BrandEditor({ brandId, initial }: { brandId: string; initial: Br
           )}
         </div>
         <div className="flex flex-wrap gap-3">
-          <Button disabled={saving}>{saving ? "Saving…" : "Save brand kit"}</Button>
+          <Button type="submit" form={formId} disabled={saving}>
+            {saving ? "Saving…" : "Save brand kit"}
+          </Button>
           <ButtonLink href={`/brands/${brandId}`} variant="quiet">
             Cancel
           </ButtonLink>
         </div>
       </div>
-    </form>
+    </div>
   );
 }
 
 function Section({ id, title, intro, children }: { id: string; title: string; intro: string; children: React.ReactNode }) {
   return (
-    <Card as="section" aria-labelledby={id} className="space-y-6">
+    <Card as="section" aria-labelledby={id} className="space-y-4">
       <div>
         <h2 id={id} className="text-2xl font-strong tracking-tight">
           {title}
@@ -444,25 +491,26 @@ function ListField({
       id={fieldId(field)}
       tabIndex={-1}
       aria-describedby={cx(`${field}-hint`, listError && `${field}-error`)}
-      className="min-w-0 space-y-3"
+      className="min-w-0 space-y-2"
     >
       <legend className="font-semibold">{label}</legend>
-      <p id={`${field}-hint`} className="-mt-1.5 text-sm text-ink-2">
+      <p id={`${field}-hint`} className="-mt-1 text-sm text-ink-2">
         {hint}
       </p>
       {items.length === 0 && <p className="text-ink-2">None yet.</p>}
-      <ol className="space-y-3">
+      {/* Answer B1: compact rows. Short items size to their words and share a row; rules and legal lines take one each. */}
+      <ol className={long ? "space-y-2" : "flex flex-wrap gap-2"}>
         {items.map((row, i) => {
           const path = `${field}.${i}`;
           const id = fieldId(path);
           const err = errors[path];
           const Control = long ? Textarea : Input;
           return (
-            <li key={row.key} className="min-w-0">
-              <div className="flex items-start gap-2">
+            <li key={row.key} className={long ? "min-w-0" : "max-w-full min-w-0"}>
+              <div className="flex items-start gap-1.5">
                 <Control
                   id={id}
-                  {...(long ? { rows: 1, className: "min-h-11 field-sizing-content" } : {})}
+                  {...(long ? { rows: 1, className: "min-h-11 field-sizing-content" } : { className: "w-auto! min-w-16 field-sizing-content" })}
                   aria-label={`${itemLabel} ${i + 1}`}
                   aria-invalid={err ? true : undefined}
                   aria-describedby={err ? `${id}-error` : undefined}
@@ -540,7 +588,7 @@ function PaletteField({
         Up to 12 colours, each with a name and a hex value such as #3F5B3A.
       </p>
       {colours.length === 0 && <p className="text-ink-2">None yet.</p>}
-      <ol className="space-y-3">
+      <ol className="grid gap-2 lg:grid-cols-2">
         {colours.map((c, i) => {
           const nameId = fieldId(`palette.${i}.name`);
           const hexId = fieldId(`palette.${i}.hex`);
@@ -548,17 +596,17 @@ function PaletteField({
           const hexErr = errors[`palette.${i}.hex`];
           return (
             <li key={c.key} className="min-w-0">
-              <div className="flex items-start gap-2">
+              <div className="flex items-start gap-1.5">
                 {/* The swatch shows the brand's own colour, which is data, not a design token. */}
                 <span
                   aria-hidden
                   className={cx(
-                    "mt-0.5 size-10 shrink-0 rounded-field ring-1 ring-line ring-inset",
+                    "size-11 shrink-0 rounded-field ring-1 ring-line ring-inset",
                     !HEX.test(c.hex.trim()) && "bg-surface-2",
                   )}
                   style={HEX.test(c.hex.trim()) ? { backgroundColor: c.hex.trim() } : undefined}
                 />
-                <div className="grid min-w-0 flex-1 gap-2 sm:grid-cols-2">
+                <div className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_minmax(0,6.5rem)] gap-1.5">
                   <Input
                     id={nameId}
                     aria-label={`Colour ${i + 1} name`}
@@ -597,12 +645,12 @@ function PaletteField({
                 />
               </div>
               {nameErr && (
-                <p id={`${nameId}-error`} role="alert" className="mt-1.5 pl-12 text-sm font-medium text-attention-ink">
+                <p id={`${nameId}-error`} role="alert" className="mt-1.5 pl-12.5 text-sm font-medium text-attention-ink">
                   {nameErr}
                 </p>
               )}
               {hexErr && (
-                <p id={`${hexId}-error`} role="alert" className="mt-1.5 pl-12 text-sm font-medium text-attention-ink">
+                <p id={`${hexId}-error`} role="alert" className="mt-1.5 pl-12.5 text-sm font-medium text-attention-ink">
                   {hexErr}
                 </p>
               )}
@@ -630,11 +678,18 @@ function PaletteField({
   );
 }
 
+/** A compact remove control beside its row (answer B1): a cross on screen, "Remove <label>" to a screen reader. */
 function RemoveButton({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <Button type="button" variant="quiet" size="sm" className="mt-1 px-3" onClick={onClick}>
-      Remove<span className="sr-only"> {label}</span>
-    </Button>
+    <button
+      type="button"
+      title={`Remove ${label}`}
+      onClick={onClick}
+      className="mt-1 inline-flex size-9 shrink-0 items-center justify-center rounded-full bg-primary-soft text-lg leading-none font-semibold text-ink transition-colors hover:bg-primary-soft/60 motion-reduce:transition-none"
+    >
+      <span aria-hidden>×</span>
+      <span className="sr-only">Remove {label}</span>
+    </button>
   );
 }
 

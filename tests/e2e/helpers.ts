@@ -1,7 +1,7 @@
 // Shared steps for the end-to-end specs.
 import { existsSync, readFileSync } from "node:fs";
 import AxeBuilder from "@axe-core/playwright";
-import { expect, test, type APIRequestContext, type BrowserContext, type Page } from "@playwright/test";
+import { expect, test, type APIRequestContext, type BrowserContext, type Locator, type Page } from "@playwright/test";
 
 /**
  * Captions in the recordings (decision 0021): when videos are recorded (in CI,
@@ -187,6 +187,7 @@ export async function expectedStops(page: Page): Promise<number> {
     let n = 0;
     for (const el of Array.from(document.querySelectorAll<HTMLElement>(sel))) {
       if (el.getClientRects().length === 0) continue; // not rendered
+      if (el.getAttribute("tabindex") === "-1") continue; // a roving tabindex's other tabs (U10-7): Tab skips them
       const closed = el.closest("details:not([open])");
       if (closed && el.tagName !== "SUMMARY") continue;
       if (el.closest("[popover]:not(:popover-open)")) continue;
@@ -223,21 +224,113 @@ export async function settle(page: Page) {
   await page.evaluate(() => document.fonts.ready.then(() => undefined));
 }
 
-/** Writes a brief for a demo brand from /campaigns (mock Brief agent) and waits for version 1. Returns the campaign's path. */
+// ---------------------------------------------------------------- U10-2: the campaign in stages
+// A campaign is an overview (/campaigns/<id>) and five stage pages, reached
+// through the stage bar ([data-stage-bar], tests/e2e/campaign-stages.spec.ts
+// has the interface). The helpers below take a campaign's path (the overview's,
+// as newCampaign returns it, or any of its stage pages') and go through the bar,
+// so the specs that walk a campaign change here, in one place.
+
+export type Stage = "brief" | "audience" | "creative" | "launch" | "performance";
+
+const CAMPAIGN_PATH = /^\/campaigns\/([0-9a-f-]{36})(?:\/(brief|audience|creative|launch|performance))?\/?$/;
+
+/** The campaign's overview path from any of its pages' paths or URLs (query and fragment dropped). */
+export function overviewPath(pathOrUrl: string): string {
+  const path = new URL(pathOrUrl, "http://x").pathname;
+  const m = CAMPAIGN_PATH.exec(path);
+  if (!m) throw new Error(`${pathOrUrl} isn't a campaign's page`);
+  return `/campaigns/${m[1]}`;
+}
+
+/** A stage page's path: /campaigns/<id>/<stage>. */
+export function stagePath(path: string, stage: Stage): string {
+  return `${overviewPath(path)}/${stage}`;
+}
+
+/**
+ * Opens a stage of a campaign through the stage bar, as a person does: from the
+ * page that is open when it is one of the campaign's, else from its overview
+ * (`path` names the campaign; without it, the open page must be one of its).
+ * Always a fresh load of the stage, so its controls are current.
+ */
+export async function openStage(page: Page, stage: Stage, path?: string) {
+  const open = new URL(page.url()).pathname;
+  const target = stagePath(path ?? open, stage);
+  if (open === target) {
+    await page.reload();
+    await settle(page);
+    return;
+  }
+  if (!CAMPAIGN_PATH.test(open) || overviewPath(open) !== overviewPath(target)) {
+    await page.goto(overviewPath(target));
+    await settle(page);
+  }
+  await page.locator("[data-stage-bar]").filter({ visible: true }).locator(`a[data-stage="${stage}"]`).click();
+  await page.waitForURL((u) => u.pathname === target);
+  await settle(page);
+}
+
+// ---------------------------------------------------------------- U10-5: the approvals inbox
+// Each inbox card carries data-campaign (sign-offs and launches) and links to
+// the stage where its decision is made, not the overview; a sign-off card keeps
+// its personas and test plan in a closed <details data-signoff-reviews>
+// (tests/e2e/home-work.spec.ts has the interface). Specs find a campaign's card
+// and open its reviews here, so they change in one place.
+
+/** A campaign's card in the approvals inbox, by kind; `path` is any of the campaign's pages. */
+export function inboxCard(page: Page, kind: "brief_signoff" | "launch", path: string): Locator {
+  const id = overviewPath(path).split("/").pop()!;
+  return page.locator(`[data-inbox-item="${kind}"][data-campaign="${id}"]`).filter({ visible: true });
+}
+
+/** Opens a sign-off card's personas and test plan in place (a no-op when they are open). */
+export async function openSignoffReviews(card: Locator) {
+  const details = card.locator("details[data-signoff-reviews]");
+  if ((await details.getAttribute("open")) === null) await details.locator(":scope > summary").click();
+  await expect(details).toHaveAttribute("open", "");
+}
+
+/** Opens a collapsed history line in place (versions on Brief; discarded and runs on Creative), if it is closed. */
+export async function openHistory(page: Page, kind: "versions" | "discarded" | "runs") {
+  const details = page.locator(`details[data-history="${kind}"]`).filter({ visible: true });
+  if ((await details.getAttribute("open")) === null) await details.locator("summary").click();
+  await expect(details).toHaveAttribute("open", "");
+}
+
+/** Opens a campaign's Launch stage and waits for its Launch (simulated) panel. */
+export async function openLaunch(page: Page, path?: string) {
+  await openStage(page, "launch", path);
+  const panel = page.locator("[data-launch-panel]");
+  await expect(panel.getByRole("heading", { name: "Launch (simulated)" })).toBeVisible({ timeout: 60_000 });
+  await panel.scrollIntoViewIfNeeded();
+}
+
+/**
+ * Writes a brief for a demo brand from /campaigns (mock Brief agent) and waits
+ * for version 1 on the Brief stage. Returns the campaign's overview path
+ * (/campaigns/<id>); the page is left on its Brief stage.
+ */
 export async function newCampaign(page: Page, brand: "Fernhollow Outfitters" | "Quillmoor Money", objective: string): Promise<string> {
   await demoBrandId(page, brand);
   await page.goto("/campaigns");
   await settle(page);
-  await page.getByLabel("Brand").selectOption({ label: brand });
-  await page.getByLabel("Objective").fill(objective);
-  await page.getByRole("button", { name: "Write the brief" }).click();
+  // U10-8: the list's filters have a Brand too, so the form is found by its region.
+  const form = page.getByRole("region", { name: "New campaign" });
+  await form.getByLabel("Brand").selectOption({ label: brand });
+  await form.getByLabel("Objective").fill(objective);
+  await form.getByRole("button", { name: "Write the brief" }).click();
+  // A new campaign opens on its overview (U10-2, answer Q2).
   await page.waitForURL(/\/campaigns\/[0-9a-f-]{36}$/);
-  await expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 60_000 });
-  return new URL(page.url()).pathname;
+  const path = new URL(page.url()).pathname;
+  await openStage(page, "brief", path);
+  await untilShown(page, () => expect(page.getByRole("heading", { name: "The brief", exact: true })).toBeVisible({ timeout: 10_000 }), 60_000);
+  return path;
 }
 
-/** Sends a brief version for sign-off and approves it, as the owner, from the campaign page. */
+/** Sends a brief version for sign-off and approves it, as the owner, from the campaign's Brief stage. */
 export async function signOffVersion(page: Page, version: number) {
+  if (!/\/campaigns\/[0-9a-f-]{36}\/brief$/.test(new URL(page.url()).pathname)) await openStage(page, "brief");
   const panel = page.locator("[data-signoff-panel]").filter({ visible: true });
   await panel.getByRole("button", { name: `Send version ${version} for sign-off` }).click();
   await expect(page.locator("[data-toast]").filter({ hasText: "Sent for sign-off" })).toBeVisible();
@@ -263,23 +356,26 @@ export async function untilShown(page: Page, check: () => Promise<void>, timeout
   }).toPass({ timeout, intervals: [5_000, 10_000, 15_000] });
 }
 
-/** Presses Make creative on a signed-off brief and waits for the gallery to hold `count` ads. */
+/** Presses Make creative on a signed-off brief's Creative stage and waits for the gallery to hold `count` ads. */
 export async function makeCreative(page: Page, count: number) {
-  // Read the signed-off page afresh, so the Make creative button is the current one.
-  await page.reload();
-  await settle(page);
+  // Open the Creative stage afresh, so the Make creative button is the current one.
+  await openStage(page, "creative");
   await page.locator("[data-creative]").getByRole("button", { name: /^Make creative/ }).click();
   await expect(page.locator("[data-creative]").getByRole("button", { name: /^Making creative/ })).toBeVisible({ timeout: 30_000 });
   await untilShown(page, () => expect(page.locator("[data-gallery] > li")).toHaveCount(count, { timeout: 10_000 }));
+  // U10-3: every ad shown, as the specs that follow work on any of them (a group shows six until Show all, or three each with several audiences).
+  await showAllAds(page);
 }
 
 /**
- * C8-1: on a campaign's page, accepts each of the brand's don't rules for
- * every picked ad ("Accept for every picked ad"), one rule at a time as a
- * person does, waiting for each to show as decided.
+ * C8-1: on a campaign's Creative stage, accepts each of the brand's don't
+ * rules for every picked ad ("Accept for every picked ad"), one rule at a time
+ * as a person does, waiting for each to show as decided.
  */
 export async function acceptDontRulesForPicked(page: Page) {
+  if (!/\/campaigns\/[0-9a-f-]{36}\/creative$/.test(new URL(page.url()).pathname)) await openStage(page, "creative");
   await settle(page);
+  await openPickedChecks(page);
   await expect(page.locator("[data-bulk-dont-rule]").first()).toBeVisible({ timeout: 60_000 });
   const open = page.locator('[data-bulk-dont-rule]:not([data-open="0"])');
   for (let n = await open.count(); n > 0; n--) {
@@ -288,10 +384,81 @@ export async function acceptDontRulesForPicked(page: Page) {
   }
 }
 
-/** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is). */
+/** C8-1: draws an ad in a layout from its card in the gallery (a no-op when it already is); U10-3: from the card's Edit menu. */
 export async function drawInLayout(page: Page, adNumber: number, layout: "Full bleed" | "Split" | "Card") {
-  const button = page.getByRole("button", { name: `${layout} layout for ad ${adNumber}`, exact: true });
+  const name = `${layout} layout for ad ${adNumber}`;
+  const card = page.locator("[data-gallery] > li[data-ad]").filter({ visible: true }).filter({ has: page.locator(`button[aria-label="${name}"]`) });
+  await openAdMenu(card, "edit");
+  const button = card.getByRole("button", { name, exact: true });
   if ((await button.getAttribute("aria-pressed")) === "true") return;
   await button.click();
   await expect(button).toHaveAttribute("aria-pressed", "true", { timeout: 30_000 });
+}
+
+// ---------------------------------------------------------------- U10-3: the ad card's menus
+// A gallery card shows the ad, its number and headline, its state and its
+// scores, with Pick on its face; its tools open from "Edit" or "More" on the
+// card (tests/e2e/creative-gallery.spec.ts has the interface). Specs that use a
+// card's tools go through adTool(), so they change here, in one place.
+
+export type AdMenu = "edit" | "more";
+
+/** Where each of today's card tools lives after U10-3: on the card's face, or in one of its two menus. */
+export const AD_TOOLS = {
+  pick: { menu: null, role: "button", name: /^(Pick|Unpick) ad \d+$/ },
+  layout: { menu: "edit", role: "button", name: /^(Full bleed|Split|Card) layout for ad \d+$/ },
+  redraw: { menu: "edit", role: "button", name: /^Redraw ad \d+ with the current kit/ },
+  "new-picture": { menu: "edit", role: "button", name: /^(New picture for|Drawing a new picture for) ad \d+/ },
+  "new-words": { menu: "edit", role: "button", name: /^(New words for|Writing new words for) ad \d+/ },
+  "edit-words": { menu: "edit", role: "button", name: /^Edit the words for ad \d+$/ },
+  discard: { menu: "more", role: "button", name: /^Discard ad \d+$/ },
+  sizes: { menu: "more", role: "link", name: /^Sizes of ad \d+$/ },
+  compliance: { menu: "more", role: "link", name: /^Compliance of ad \d+$/ },
+  translate: { menu: "more", role: "button", name: /^(Translate|Translating)/ },
+} as const satisfies Record<string, { menu: AdMenu | null; role: "button" | "link"; name: RegExp }>;
+export type AdToolName = keyof typeof AD_TOOLS;
+
+/** A gallery card by its ad's id. */
+export function adCard(page: Page, variantId: string): Locator {
+  return page.locator(`[data-gallery] > li[data-ad="${variantId}"]`).filter({ visible: true });
+}
+
+/** Opens one of a card's menus (a no-op when it is open) and returns the menu. */
+export async function openAdMenu(card: Locator, menu: AdMenu): Promise<Locator> {
+  const trigger = card.locator(`button[data-ad-menu-button="${menu}"]`);
+  if ((await trigger.getAttribute("aria-expanded")) !== "true") await trigger.click();
+  await expect(trigger).toHaveAttribute("aria-expanded", "true");
+  const panel = card.locator(`[data-ad-menu="${menu}"]`);
+  await expect(panel).toBeVisible();
+  return panel;
+}
+
+/** One of today's tools on a card, its menu opened first when it lives in one. */
+export async function adTool(card: Locator, tool: AdToolName): Promise<Locator> {
+  const t = AD_TOOLS[tool];
+  const where = t.menu ? await openAdMenu(card, t.menu) : card;
+  return where.getByRole(t.role, { name: t.name });
+}
+
+// ---------------------------------------------------------------- U10-3: the Creative stage's length (Rory's choices a and b)
+// The checks on the picked ads (compliance, languages, pre-test, picture
+// checks, the launch pack) fold into one <details data-picked-checks>, and
+// each audience shows its first six ads (three each with several audiences)
+// until "Show all N ads" ([data-show-all-ads]). Specs that use what is folded
+// or past the first few ads open it here first (tests/e2e/creative-gallery.spec.ts has the interface).
+
+/** Opens the checks on the picked ads on the Creative stage (a no-op when they are open). */
+export async function openPickedChecks(page: Page) {
+  const details = page.locator("details[data-picked-checks]").filter({ visible: true });
+  if ((await details.getAttribute("open")) === null) await details.locator(":scope > summary").click();
+  await expect(details).toHaveAttribute("open", "");
+}
+
+/** Shows every ad in every audience group on the Creative stage (presses each "Show all N ads"). */
+export async function showAllAds(page: Page) {
+  const buttons = page.locator("button[data-show-all-ads]").filter({ visible: true });
+  for (let n = await buttons.count(); n > 0; n--) {
+    await buttons.first().click();
+    await expect(buttons).toHaveCount(n - 1);
+  }
 }

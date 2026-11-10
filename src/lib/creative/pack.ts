@@ -164,8 +164,10 @@ export type PackPlan = {
     id: string;
     objective: string;
     brandName: string;
-    /** One of the simulated demo brands (brands.is_simulated): the README says the brand is fictional only then. */
+    /** The brand's data is simulated (brands.is_simulated). */
     brandSimulated: boolean;
+    /** D-2 (decision 0029): the brand is invented (brands.is_fictional, the demo brands): the README says it is fictional only then. */
+    brandFictional: boolean;
     briefTitle: string | null;
     briefVersion: number;
     signedOffAt: Date | null;
@@ -213,7 +215,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
 
   return asUserIn(inTx, userId, async (tx) => {
     const [c] = await tx`
-      select c.objective, c.approved_at, c.brand_id, b.name as brand_name, b.slug as brand_slug, b.is_simulated as brand_simulated,
+      select c.objective, c.approved_at, c.brand_id, b.name as brand_name, b.slug as brand_slug, b.is_simulated as brand_simulated, b.is_fictional as brand_fictional,
         bv.brief ->> 'title' as brief_title
       from public.campaigns c join public.brands b on b.id = c.brand_id
       left join public.brief_versions bv on bv.campaign_id = c.id and bv.version = c.approved_version
@@ -239,13 +241,14 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
     const brandLanguages = await brandLanguagesIn(tx, c.brand_id as string);
     const brandSlug = c.brand_slug as string;
     const brandSimulated = c.brand_simulated === true;
+    const brandFictional = c.brand_fictional === true;
     // Q4 and rule 1: a translation's legal lines are a snapshot. They are marked as written for the demo when the
     // language's lines are still the ones written for the demo, or when they are the demo brand's own demo lines
     // (a language edited or removed since keeps its old translations, still marked).
     const demoLegal = (lang: Lang, lines: string[]) => {
       const now = brandLanguages.find((l) => l.lang === lang);
       if (now?.writtenForDemo && sameLines(lines, now.legalLines)) return true;
-      return brandSimulated && isDemoSlug(brandSlug) && lines.length > 0 && sameLines(lines, DEMO_LANGUAGES[brandSlug][lang].legalLines);
+      return brandFictional && isDemoSlug(brandSlug) && lines.length > 0 && sameLines(lines, DEMO_LANGUAGES[brandSlug][lang].legalLines);
     };
     const logos = new Map<string, Buffer | null>();
 
@@ -363,6 +366,7 @@ export async function planPack(userId: string, campaignId: string, given?: Creat
         objective: c.objective as string,
         brandName: c.brand_name as string,
         brandSimulated,
+        brandFictional,
         briefTitle: (c.brief_title as string | null) ?? null,
         briefVersion: view.version!,
         signedOffAt: (c.approved_at as Date | null) ?? null,
@@ -718,7 +722,7 @@ export function readme(plan: PackPlan, drawn: DrawnItem[], leftOut: PackLeftOut[
       `- ${notes.join("; ")}: ${upscaled.length} ${upscaled.length === 1 ? "file enlarges its picture" : "files enlarge their pictures"} more than 1.1 times to fill the size, so ${upscaled.length === 1 ? "it" : "they"} may look soft. The manifests give each file's picture size and upscale factor. New pictures are drawn at 2K.`,
     );
   } else lines.push("- No picture is enlarged more than 1.1 times. The manifests give each file's picture size and upscale factor.");
-  lines.push("", plan.campaign.brandSimulated ? "Studio is a working title. The brand in this pack is fictional." : "Studio is a working title.", "");
+  lines.push("", plan.campaign.brandFictional ? "Studio is a working title. The brand in this pack is fictional." : "Studio is a working title.", "");
   return lines.join("\r\n");
 }
 
