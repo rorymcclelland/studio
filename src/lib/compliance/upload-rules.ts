@@ -1,6 +1,6 @@
 import { refusableNames } from "@/lib/brands/own-names";
 import { COMPLIANCE } from "@/config/compliance";
-import { containsTerm } from "@/lib/brief/checks";
+import { containsName } from "@/lib/brief/checks";
 import { foldText } from "@/lib/creative/copy-rules";
 import { AA_TEXT, contrastRatio, parseHex, type PaletteColour } from "@/lib/creative/render/colour";
 import { normaliseText } from "@/lib/creative/render/fit";
@@ -125,7 +125,7 @@ export function uploadLegalRule(words: Word[], kitLines: string[] | null, englis
 export function namedCompanies(words: Word[], realNames: string[]): string[] {
   // A possessive is the name too ("Brightwell's"): the word matcher would read it as another word.
   const text = foldText(allText(words)).replace(/(\p{L})'s(?![\p{L}\p{N}])/gu, "$1");
-  return [...new Set(realNames.filter((n) => normaliseText(n).length >= 2 && containsTerm(text, foldText(n))))];
+  return [...new Set(realNames.filter((n) => normaliseText(n).length >= 2 && containsName(text, foldText(n))))];
 }
 
 /**

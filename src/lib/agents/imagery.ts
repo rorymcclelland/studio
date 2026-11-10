@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { containsTerm } from "@/lib/brief/checks";
+import { containsName } from "@/lib/brief/checks";
 import { withoutNames } from "@/lib/brief/gather";
 import type { ImageInput } from "@/lib/models/generate";
 import { mockBehaviour } from "@/lib/models/mock";
@@ -205,15 +205,15 @@ export function promptProblems(input: ImageryInput, p: ImageryOutput["prompts"][
   const asked = [...new Set([...p.prompt.matchAll(TEXT_WORDS)].map((m) => m[1].toLowerCase()))];
   for (const w of asked) problems.push(`${where} uses the word "${w}"; never ask the image model for text, letters, numbers, logos, signs or brands, or for things that carry words`);
   for (const name of input.realNames) {
-    if (name.trim().length >= 2 && containsTerm(both, name)) problems.push(`${where} names "${name}", a real company from the market notes`);
+    if (name.trim().length >= 2 && containsName(both, name)) problems.push(`${where} names "${name}", a real company from the market notes`);
   }
-  const brand = input.brandName.trim() ? (brandNameIn(both, input.brandName, colourWordsOf(input)) ?? (containsTerm(both, input.brandName) ? input.brandName : null)) : null;
+  const brand = input.brandName.trim() ? (brandNameIn(both, input.brandName, colourWordsOf(input)) ?? (containsName(both, input.brandName) ? input.brandName : null)) : null;
   if (brand) problems.push(`${where} names the brand ("${brand}"); a picture never shows the brand's name, so leave it out`);
   // D-2: the brand's own names, such as a parent brand's, are kept out like its name (rule 8).
   const ownFound: string[] = [];
   for (const own of input.ownNames ?? []) {
     if (!own.trim()) continue;
-    const found = brandNameIn(both, own, colourWordsOf(input)) ?? (containsTerm(both, own) ? own : null);
+    const found = brandNameIn(both, own, colourWordsOf(input)) ?? (containsName(both, own) ? own : null);
     if (found) {
       ownFound.push(own.toLowerCase());
       problems.push(`${where} names "${own}", one of the brand's own names; a picture never shows the brand's names, so leave it out`);
