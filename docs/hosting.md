@@ -117,6 +117,8 @@ Everything from here down is a record of what was done, kept for reference. It i
 
 ## Cutover: production data from Supabase to Neon (Sprint 6, N-6)
 
+**Finished.** The 14 days ended on 12 November 2026 (N-7a): the Action, its two scripts and their test were removed, and Supabase's projects, variables and the `cutover` environment were deleted, so the way back below no longer exists. The steps are kept as a record.
+
 Done once. Production's data moves from Supabase into the Neon `production` branch with every id unchanged, through the **Copy production data** Action (`.github/workflows/copy-production-data.yml`), so no connection string reaches chat or a laptop. The Action, its two scripts and their test are removed once the cutover is checked, and the `cutover` environment with its two secrets is deleted then.
 
 - `scripts/copy-data.mjs --from NAME --to NAME` copies `auth.users` (id, email and created_at only) and then every table in `public` except `schema_migrations`, in foreign-key order. It reads Supabase in one read-only snapshot and writes Neon in one transaction, as the table owner, with each table's own triggers (the guards) switched off during the copy and on again before it commits. If anything fails, nothing is kept. It refuses unless the target has every migration in `db/migrations` and holds no rows, unless both sides have the same tables and columns, and unless every `auth.users` email on Supabase is already lower-case and trimmed (sign-in looks people up by lower-cased address; it reports how many are not, never the addresses). It prints row counts, never rows.
