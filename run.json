@@ -1,0 +1,11 @@
+{
+  "source": "ci",
+  "runId": "43190420334",
+  "runAttempt": "1",
+  "runUrl": "https://github.com/rorymcclelland/studio/actions/runs/43190420334",
+  "repository": "rorymcclelland/studio",
+  "commit": "3745abe4839f05b321b3f4d5c224acccd2285f70",
+  "branch": "remove-supabase",
+  "date": "2026-11-12T10:04:53.072Z",
+  "checksJob": "success"
+}
